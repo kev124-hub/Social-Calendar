@@ -205,8 +205,14 @@ export async function syncGoogleCalendar() {
         .filter((r) => r.starts_at)
 
       if (rows.length) {
-        await supabase.from('calendar_events').upsert(rows, { onConflict: 'external_id' })
-        totalUpserted += rows.length
+        const { error, count } = await supabase
+          .from('calendar_events')
+          .upsert(rows, { onConflict: 'external_id', count: 'exact' })
+        if (error) {
+          console.error('Upsert error:', error)
+          throw new Error(`Failed to upsert events: ${error.message}`)
+        }
+        totalUpserted += count ?? rows.length
       }
     } while (pageToken)
   }
