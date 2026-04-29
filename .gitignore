@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# personal / context files
+MJ_Master_Context.md
+MJ_Instagram_Growth_Plan.docx
