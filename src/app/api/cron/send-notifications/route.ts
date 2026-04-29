@@ -5,13 +5,7 @@ import { sendNotificationEmail } from '@/lib/email'
 // Called by Vercel Cron every 15 minutes
 // vercel.json: { "crons": [{ "path": "/api/cron/send-notifications", "schedule": "*/15 * * * *" }] }
 
-export async function GET(request: Request) {
-  // Verify this is called by Vercel Cron (not a public request)
-  const authHeader = request.headers.get('authorization')
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+export async function GET() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
