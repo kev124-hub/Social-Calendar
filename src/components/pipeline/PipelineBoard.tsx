@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Plus, ExternalLink, LayoutGrid, Columns } from 'lucide-react'
 import { format, parseISO, isBefore, isToday, addDays } from 'date-fns'
 import { Button } from '@/components/ui/button'
@@ -41,10 +42,24 @@ export function PipelineBoard() {
   const [defaultStage, setDefaultStage] = useState<PostStage>('idea')
   const [filterPlatform, setFilterPlatform] = useState<Platform | 'all'>('all')
   const [viewMode, setViewMode] = useState<ViewMode>('kanban')
+  const searchParams = useSearchParams()
+  const openedFromUrl = useRef(false)
 
   const supabase = createClient()
 
   useEffect(() => { loadPosts() }, [])
+
+  // Auto-open dialog when navigated from calendar with ?post=<id>
+  useEffect(() => {
+    if (loading || openedFromUrl.current) return
+    const postId = searchParams.get('post')
+    if (!postId) return
+    const post = posts.find((p) => p.id === postId)
+    if (post) {
+      openedFromUrl.current = true
+      openEdit(post)
+    }
+  }, [loading, posts])
 
   async function loadPosts() {
     setLoading(true)

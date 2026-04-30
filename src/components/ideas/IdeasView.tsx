@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Plus, ArrowRight } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { Button } from '@/components/ui/button'
@@ -23,10 +24,24 @@ export function IdeasView() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingIdea, setEditingIdea] = useState<Idea | null>(null)
   const [filterPlatform, setFilterPlatform] = useState<Platform | 'all'>('all')
+  const searchParams = useSearchParams()
+  const openedFromUrl = useRef(false)
 
   const supabase = createClient()
 
   useEffect(() => { loadIdeas() }, [])
+
+  // Auto-open dialog when navigated from calendar with ?idea=<id>
+  useEffect(() => {
+    if (loading || openedFromUrl.current) return
+    const ideaId = searchParams.get('idea')
+    if (!ideaId) return
+    const idea = ideas.find((i) => i.id === ideaId)
+    if (idea) {
+      openedFromUrl.current = true
+      openEdit(idea)
+    }
+  }, [loading, ideas])
 
   async function loadIdeas() {
     setLoading(true)

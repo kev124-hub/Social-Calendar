@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   format,
   startOfMonth,
@@ -359,24 +360,47 @@ function eventCoversDay(event: CalendarEvent, day: Date): boolean {
 // Post + Idea chips for calendar cells
 // ─────────────────────────────────────────────
 function PostChip({ post }: { post: SocialPost }) {
+  const router = useRouter()
   const color = PLATFORM_COLORS[post.platform]
   return (
-    <div
-      className="w-full flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium truncate"
-      style={{ backgroundColor: color + '18', color }}
+    <button
+      onClick={(e) => { e.stopPropagation(); router.push(`/pipeline?post=${post.id}`) }}
+      className="w-full flex items-center gap-1.5 text-xs rounded font-medium overflow-hidden hover:opacity-80 transition-opacity"
+      style={{ backgroundColor: color + '15' }}
     >
-      <PlatformIcon platform={post.platform} size={12} />
-      <span className="truncate capitalize">{post.post_type}{post.title ? ' — ' + post.title : ''}</span>
-    </div>
+      {/* Thumbnail or platform icon */}
+      <div className="relative shrink-0 w-7 h-7">
+        {post.media_url ? (
+          <img src={post.media_url} alt="" className="w-7 h-7 object-cover" />
+        ) : (
+          <div className="w-7 h-7 flex items-center justify-center" style={{ backgroundColor: color + '30' }}>
+            <PlatformIcon platform={post.platform} size={14} />
+          </div>
+        )}
+        {/* Platform badge over thumbnail */}
+        {post.media_url && (
+          <span className="absolute bottom-0 right-0">
+            <PlatformIcon platform={post.platform} size={10} />
+          </span>
+        )}
+      </div>
+      <span className="truncate pr-1 capitalize" style={{ color }}>
+        {post.title ?? post.post_type}
+      </span>
+    </button>
   )
 }
 
 function IdeaChip({ idea }: { idea: Idea }) {
+  const router = useRouter()
   return (
-    <div className="w-full flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium truncate border border-dashed border-amber-300 text-amber-700 bg-amber-50">
+    <button
+      onClick={(e) => { e.stopPropagation(); router.push(`/ideas?idea=${idea.id}`) }}
+      className="w-full flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium truncate border border-dashed border-amber-300 text-amber-700 bg-amber-50 hover:opacity-80 transition-opacity"
+    >
       <span>💡</span>
       <span className="truncate">{idea.title}</span>
-    </div>
+    </button>
   )
 }
 
