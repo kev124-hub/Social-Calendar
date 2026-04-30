@@ -11,10 +11,19 @@ async function getUserFromRequest(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7)
+    // Check permanent extension API key first (never expires)
+    const { data: integration } = await admin
+      .from('user_integrations')
+      .select('id')
+      .eq('provider', 'extension')
+      .eq('access_token', token)
+      .maybeSingle()
+    if (integration) return { id: 'extension', email: null } as { id: string; email: string | null }
+    // Fall back to Supabase JWT (direct API calls)
     const { data: { user } } = await admin.auth.getUser(token)
     return user
   }
-  // Fall back to session cookie (for in-app use)
+  // Session cookie (in-app use)
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   return user

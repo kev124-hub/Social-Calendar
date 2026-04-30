@@ -1,26 +1,36 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useEffect, useState, useCallback } from 'react'
 
 export default function ExtensionAuthPage() {
   const [token, setToken] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [regenerating, setRegenerating] = useState(false)
 
-  useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getSession().then(({ data }) => {
-      setToken(data.session?.access_token ?? null)
-      setLoading(false)
-    })
+  const fetchKey = useCallback(async () => {
+    const res = await fetch('/api/extension-key')
+    if (res.status === 401) { setToken(null); setLoading(false); return }
+    const { key } = await res.json()
+    setToken(key ?? null)
+    setLoading(false)
   }, [])
+
+  useEffect(() => { fetchKey() }, [fetchKey])
 
   async function copy() {
     if (!token) return
     await navigator.clipboard.writeText(token)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function regenerate() {
+    setRegenerating(true)
+    const res = await fetch('/api/extension-key', { method: 'POST' })
+    const { key } = await res.json()
+    setToken(key)
+    setRegenerating(false)
   }
 
   if (loading) return (
@@ -45,11 +55,11 @@ export default function ExtensionAuthPage() {
 
       <div className="text-center space-y-1">
         <h1 className="text-xl font-semibold">Extension Setup</h1>
-        <p className="text-sm text-muted-foreground">Copy your API token and paste it into the MJ Clipper extension settings.</p>
+        <p className="text-sm text-muted-foreground">Copy your API key and paste it into the MJ Clipper extension settings.</p>
       </div>
 
       <div className="w-full space-y-3">
-        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Your API Token</label>
+        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Your API Key</label>
         <div className="flex gap-2">
           <input
             type="password"
@@ -69,16 +79,24 @@ export default function ExtensionAuthPage() {
           </button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Token expires with your session (~7 days). Return here to get a fresh one if the extension stops working.
+          This key never expires. If you lose it or suspect it&apos;s compromised, use Regenerate below.
         </p>
       </div>
 
       <ol className="w-full text-sm text-muted-foreground space-y-2 border border-border rounded-lg p-4">
-        <li className="flex gap-3"><span className="font-semibold text-foreground shrink-0">1.</span>Copy the token above</li>
+        <li className="flex gap-3"><span className="font-semibold text-foreground shrink-0">1.</span>Copy the key above</li>
         <li className="flex gap-3"><span className="font-semibold text-foreground shrink-0">2.</span>Click the MJ Clipper icon in Chrome → gear icon → Settings</li>
-        <li className="flex gap-3"><span className="font-semibold text-foreground shrink-0">3.</span>Paste the token and click Save</li>
+        <li className="flex gap-3"><span className="font-semibold text-foreground shrink-0">3.</span>Paste the key and click Save</li>
         <li className="flex gap-3"><span className="font-semibold text-foreground shrink-0">4.</span>Right-click any image → &quot;Save to MJ Inspiration&quot;</li>
       </ol>
+
+      <button
+        onClick={regenerate}
+        disabled={regenerating}
+        className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors disabled:opacity-50"
+      >
+        {regenerating ? 'Regenerating…' : 'Regenerate key'}
+      </button>
     </div>
   )
 }
