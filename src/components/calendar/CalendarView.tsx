@@ -19,13 +19,14 @@ import {
   eachDayOfInterval,
   parseISO,
 } from 'date-fns'
-import { ChevronLeft, ChevronRight, Plus, Settings2, Eye, EyeOff, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Settings2, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase/client'
 import type { CalendarEvent, Calendar } from '@/types/database'
 import { EventDialog } from './EventDialog'
 import { CalendarManageDialog } from './CalendarManageDialog'
+import { AIEventInput, type ParsedEvent } from './AIEventInput'
 import { cn } from '@/lib/utils'
 
 type ViewMode = 'month' | 'week' | 'day' | 'list'
@@ -117,6 +118,28 @@ export function CalendarView() {
     await loadData()
   }
 
+  async function handleAIEvent(parsed: ParsedEvent) {
+    const defaultCalendar = calendars.find((c) => c.source === 'app') ?? calendars[0]
+    const toISO = (s: string, isEnd?: boolean) => {
+      if (parsed.all_day) {
+        const d = new Date(s + (isEnd ? 'T23:59:59' : 'T00:00:00'))
+        return d.toISOString()
+      }
+      return new Date(s).toISOString()
+    }
+    await supabase.from('calendar_events').insert({
+      title: parsed.title,
+      description: parsed.description,
+      location: parsed.location,
+      starts_at: toISO(parsed.starts_at),
+      ends_at: parsed.ends_at ? toISO(parsed.ends_at, true) : null,
+      all_day: parsed.all_day,
+      calendar_id: defaultCalendar?.id ?? null,
+      source: 'app' as const,
+    })
+    await loadData()
+  }
+
   return (
     <div className="flex h-full">
       {/* Calendar management panel */}
@@ -205,6 +228,7 @@ export function CalendarView() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <AIEventInput onEventParsed={handleAIEvent} />
             <div className="hidden sm:flex rounded-md border border-border overflow-hidden">
               {(['month', 'week', 'day', 'list'] as ViewMode[]).map((v) => (
                 <button
