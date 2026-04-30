@@ -24,10 +24,11 @@ import { ChevronLeft, ChevronRight, Plus, Settings2, PanelLeftClose, PanelLeftOp
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase/client'
-import type { CalendarEvent, Calendar } from '@/types/database'
+import type { CalendarEvent, Calendar, SocialPost, Idea } from '@/types/database'
 import { EventDialog } from './EventDialog'
 import { CalendarManageDialog } from './CalendarManageDialog'
 import { AIEventInput, type ParsedEvent } from './AIEventInput'
+import { PlatformIcon, PLATFORM_COLORS } from '@/components/ui/PlatformIcon'
 import { cn } from '@/lib/utils'
 
 type ViewMode = 'month' | 'week' | 'day' | 'list'
@@ -37,6 +38,8 @@ export function CalendarView() {
   const [view, setView] = useState<ViewMode>('month')
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [calendars, setCalendars] = useState<Calendar[]>([])
+  const [posts, setPosts] = useState<SocialPost[]>([])
+  const [ideas, setIdeas] = useState<Idea[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
@@ -51,17 +54,38 @@ export function CalendarView() {
 
   async function loadData() {
     setLoading(true)
-    const [{ data: calData }, { data: evtData }] = await Promise.all([
+    const rangeStart = startOfMonth(subMonths(currentDate, 1)).toISOString()
+    const rangeEnd = endOfMonth(addMonths(currentDate, 1)).toISOString()
+    const dateStart = rangeStart.slice(0, 10)
+    const dateEnd = rangeEnd.slice(0, 10)
+
+    const [{ data: calData }, { data: evtData }, { data: postData }, { data: ideaData }] = await Promise.all([
       supabase.from('calendars').select('*').order('name'),
       supabase
         .from('calendar_events')
         .select('*, calendar:calendars(*)')
-        .gte('starts_at', startOfMonth(subMonths(currentDate, 1)).toISOString())
-        .lte('starts_at', endOfMonth(addMonths(currentDate, 1)).toISOString())
+        .gte('starts_at', rangeStart)
+        .lte('starts_at', rangeEnd)
         .order('starts_at'),
+      supabase
+        .from('social_posts')
+        .select('*')
+        .not('scheduled_at', 'is', null)
+        .gte('scheduled_at', rangeStart)
+        .lte('scheduled_at', rangeEnd)
+        .order('scheduled_at'),
+      supabase
+        .from('ideas')
+        .select('*')
+        .not('date_start', 'is', null)
+        .gte('date_start', dateStart)
+        .lte('date_start', dateEnd)
+        .order('date_start'),
     ])
     if (calData) setCalendars(calData)
     if (evtData) setEvents(evtData as CalendarEvent[])
+    if (postData) setPosts(postData)
+    if (ideaData) setIdeas(ideaData)
     setLoading(false)
   }
 
@@ -270,6 +294,8 @@ export function CalendarView() {
             <MonthGrid
               currentDate={currentDate}
               events={visibleEvents}
+              posts={posts}
+              ideas={ideas}
               onDayClick={openNewEvent}
               onEventClick={openEditEvent}
             />
@@ -278,6 +304,8 @@ export function CalendarView() {
             <WeekGrid
               currentDate={currentDate}
               events={visibleEvents}
+              posts={posts}
+              ideas={ideas}
               onDayClick={openNewEvent}
               onEventClick={openEditEvent}
             />
@@ -286,12 +314,14 @@ export function CalendarView() {
             <DayView
               currentDate={currentDate}
               events={visibleEvents.filter((e) => eventCoversDay(e, currentDate))}
+              posts={posts.filter((p) => p.scheduled_at && isSameDay(parseISO(p.scheduled_at), currentDate))}
+              ideas={ideas.filter((i) => i.date_start && isSameDay(parseISO(i.date_start), currentDate))}
               onEventClick={openEditEvent}
               onAddClick={() => openNewEvent(currentDate)}
             />
           )}
           {view === 'list' && (
-            <ListView events={visibleEvents} onEventClick={openEditEvent} />
+            <ListView events={visibleEvents} posts={posts} ideas={ideas} onEventClick={openEditEvent} />
           )}
         </div>
       </div>
@@ -326,13 +356,40 @@ function eventCoversDay(event: CalendarEvent, day: Date): boolean {
 }
 
 // ─────────────────────────────────────────────
+// Post + Idea chips for calendar cells
+// ─────────────────────────────────────────────
+function PostChip({ post }: { post: SocialPost }) {
+  const color = PLATFORM_COLORS[post.platform]
+  return (
+    <div
+      className="w-full flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium truncate"
+      style={{ backgroundColor: color + '18', color }}
+    >
+      <PlatformIcon platform={post.platform} size={12} />
+      <span className="truncate capitalize">{post.post_type}{post.title ? ' — ' + post.title : ''}</span>
+    </div>
+  )
+}
+
+function IdeaChip({ idea }: { idea: Idea }) {
+  return (
+    <div className="w-full flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium truncate border border-dashed border-amber-300 text-amber-700 bg-amber-50">
+      <span>💡</span>
+      <span className="truncate">{idea.title}</span>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────
 // Month Grid
 // ─────────────────────────────────────────────
 function MonthGrid({
-  currentDate, events, onDayClick, onEventClick,
+  currentDate, events, posts, ideas, onDayClick, onEventClick,
 }: {
   currentDate: Date
   events: CalendarEvent[]
+  posts: SocialPost[]
+  ideas: Idea[]
   onDayClick: (d: Date) => void
   onEventClick: (e: CalendarEvent) => void
 }) {
@@ -352,8 +409,18 @@ function MonthGrid({
       <div className="flex-1 grid grid-cols-7 auto-rows-fr">
         {days.map((day) => {
           const dayEvents = events.filter((e) => eventCoversDay(e, day))
+          const dayPosts = posts.filter((p) => p.scheduled_at && isSameDay(parseISO(p.scheduled_at), day))
+          const dayIdeas = ideas.filter((i) => i.date_start && isSameDay(parseISO(i.date_start), day))
           const outside = !isSameMonth(day, currentDate)
           const today = isToday(day)
+          const allItems = dayEvents.length + dayPosts.length + dayIdeas.length
+          const maxShow = 3
+          const shown = { events: Math.min(dayEvents.length, maxShow), posts: 0, ideas: 0 }
+          let remaining = maxShow - shown.events
+          shown.posts = Math.min(dayPosts.length, remaining); remaining -= shown.posts
+          shown.ideas = Math.min(dayIdeas.length, remaining)
+          const overflow = allItems - shown.events - shown.posts - shown.ideas
+
           return (
             <div
               key={day.toISOString()}
@@ -364,7 +431,7 @@ function MonthGrid({
                 {format(day, 'd')}
               </div>
               <div className="space-y-0.5">
-                {dayEvents.slice(0, 3).map((event) => (
+                {dayEvents.slice(0, shown.events).map((event) => (
                   <button
                     key={event.id}
                     onClick={(e) => { e.stopPropagation(); onEventClick(event) }}
@@ -375,8 +442,14 @@ function MonthGrid({
                     {event.title}
                   </button>
                 ))}
-                {dayEvents.length > 3 && (
-                  <p className="text-xs text-muted-foreground px-1">+{dayEvents.length - 3} more</p>
+                {dayPosts.slice(0, shown.posts).map((post) => (
+                  <PostChip key={post.id} post={post} />
+                ))}
+                {dayIdeas.slice(0, shown.ideas).map((idea) => (
+                  <IdeaChip key={idea.id} idea={idea} />
+                ))}
+                {overflow > 0 && (
+                  <p className="text-xs text-muted-foreground px-1">+{overflow} more</p>
                 )}
               </div>
             </div>
@@ -391,10 +464,12 @@ function MonthGrid({
 // Week Grid
 // ─────────────────────────────────────────────
 function WeekGrid({
-  currentDate, events, onDayClick, onEventClick,
+  currentDate, events, posts, ideas, onDayClick, onEventClick,
 }: {
   currentDate: Date
   events: CalendarEvent[]
+  posts: SocialPost[]
+  ideas: Idea[]
   onDayClick: (d: Date) => void
   onEventClick: (e: CalendarEvent) => void
 }) {
@@ -416,8 +491,10 @@ function WeekGrid({
       <div className="grid grid-cols-7 flex-1">
         {days.map((day) => {
           const dayEvents = events.filter((e) => eventCoversDay(e, day))
+          const dayPosts = posts.filter((p) => p.scheduled_at && isSameDay(parseISO(p.scheduled_at), day))
+          const dayIdeas = ideas.filter((i) => i.date_start && isSameDay(parseISO(i.date_start), day))
           return (
-            <div key={day.toISOString()} className="border-r border-border p-2 space-y-1">
+            <div key={day.toISOString()} className="border-r border-border p-2 space-y-1 overflow-y-auto">
               {dayEvents.map((event) => (
                 <button
                   key={event.id}
@@ -429,6 +506,8 @@ function WeekGrid({
                   {event.title}
                 </button>
               ))}
+              {dayPosts.map((post) => <PostChip key={post.id} post={post} />)}
+              {dayIdeas.map((idea) => <IdeaChip key={idea.id} idea={idea} />)}
             </div>
           )
         })}
@@ -441,37 +520,57 @@ function WeekGrid({
 // Day View
 // ─────────────────────────────────────────────
 function DayView({
-  currentDate, events, onEventClick, onAddClick,
+  currentDate, events, posts, ideas, onEventClick, onAddClick,
 }: {
   currentDate: Date
   events: CalendarEvent[]
+  posts: SocialPost[]
+  ideas: Idea[]
   onEventClick: (e: CalendarEvent) => void
   onAddClick: () => void
 }) {
+  const isEmpty = events.length === 0 && posts.length === 0 && ideas.length === 0
   return (
     <div className="p-6 space-y-3">
-      {events.length === 0 ? (
+      {isEmpty ? (
         <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
-          <p className="text-sm mb-3">No events today</p>
+          <p className="text-sm mb-3">Nothing scheduled today</p>
           <Button variant="outline" size="sm" onClick={onAddClick}>
             <Plus size={14} className="mr-1" /> Add event
           </Button>
         </div>
       ) : (
-        events.map((event) => (
-          <button key={event.id} onClick={() => onEventClick(event)} className="w-full text-left border border-border rounded-lg p-4 hover:bg-accent/30 transition-colors">
-            <div className="flex items-start gap-3">
-              <div className="w-1 self-stretch rounded-full mt-0.5" style={{ backgroundColor: (event.calendar as Calendar | undefined)?.color ?? '#6366f1' }} />
-              <div>
-                <p className="font-medium text-sm">{event.title}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {event.all_day ? 'All day' : format(parseISO(event.starts_at), 'h:mm a') + (event.ends_at ? ' – ' + format(parseISO(event.ends_at), 'h:mm a') : '')}
-                </p>
-                {event.location && <p className="text-xs text-muted-foreground">{event.location}</p>}
+        <>
+          {events.map((event) => (
+            <button key={event.id} onClick={() => onEventClick(event)} className="w-full text-left border border-border rounded-lg p-4 hover:bg-accent/30 transition-colors">
+              <div className="flex items-start gap-3">
+                <div className="w-1 self-stretch rounded-full mt-0.5" style={{ backgroundColor: (event.calendar as Calendar | undefined)?.color ?? '#6366f1' }} />
+                <div>
+                  <p className="font-medium text-sm">{event.title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {event.all_day ? 'All day' : format(parseISO(event.starts_at), 'h:mm a') + (event.ends_at ? ' – ' + format(parseISO(event.ends_at), 'h:mm a') : '')}
+                  </p>
+                  {event.location && <p className="text-xs text-muted-foreground">{event.location}</p>}
+                </div>
+              </div>
+            </button>
+          ))}
+          {posts.map((post) => (
+            <div key={post.id} className="border border-border rounded-lg p-4 flex items-start gap-3" style={{ borderLeftColor: PLATFORM_COLORS[post.platform], borderLeftWidth: 3 }}>
+              <PlatformIcon platform={post.platform} size={24} />
+              <div className="min-w-0">
+                <p className="font-medium text-sm truncate">{post.title ?? `${post.platform} ${post.post_type}`}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 capitalize">{post.post_type} · {post.stage} · {post.scheduled_at ? format(parseISO(post.scheduled_at), 'h:mm a') : ''}</p>
               </div>
             </div>
-          </button>
-        ))
+          ))}
+          {ideas.map((idea) => (
+            <div key={idea.id} className="border border-dashed border-amber-300 bg-amber-50/50 rounded-lg p-4">
+              <p className="font-medium text-sm">{idea.title}</p>
+              {idea.platform && <p className="text-xs text-muted-foreground mt-0.5 capitalize">{idea.platform} idea</p>}
+            </div>
+          ))}
+        </>
       )}
     </div>
   )
@@ -480,16 +579,26 @@ function DayView({
 // ─────────────────────────────────────────────
 // List View
 // ─────────────────────────────────────────────
-function ListView({ events, onEventClick }: { events: CalendarEvent[]; onEventClick: (e: CalendarEvent) => void }) {
-  const grouped = events.reduce<Record<string, CalendarEvent[]>>((acc, event) => {
-    const key = format(parseISO(event.starts_at), 'yyyy-MM-dd')
-    if (!acc[key]) acc[key] = []
-    acc[key].push(event)
-    return acc
-  }, {})
-  const sortedDays = Object.keys(grouped).sort()
+function ListView({ events, posts, ideas, onEventClick }: {
+  events: CalendarEvent[]
+  posts: SocialPost[]
+  ideas: Idea[]
+  onEventClick: (e: CalendarEvent) => void
+}) {
+  type DayItem =
+    | { kind: 'event'; data: CalendarEvent; time: string }
+    | { kind: 'post'; data: SocialPost; time: string }
+    | { kind: 'idea'; data: Idea; time: string }
 
-  if (sortedDays.length === 0) return <div className="p-8 text-center text-muted-foreground text-sm">No upcoming events</div>
+  const grouped: Record<string, DayItem[]> = {}
+  const add = (key: string, item: DayItem) => { if (!grouped[key]) grouped[key] = []; grouped[key].push(item) }
+
+  events.forEach((e) => add(format(parseISO(e.starts_at), 'yyyy-MM-dd'), { kind: 'event', data: e, time: e.starts_at }))
+  posts.forEach((p) => { if (p.scheduled_at) add(format(parseISO(p.scheduled_at), 'yyyy-MM-dd'), { kind: 'post', data: p, time: p.scheduled_at }) })
+  ideas.forEach((i) => { if (i.date_start) add(i.date_start, { kind: 'idea', data: i, time: i.date_start }) })
+
+  const sortedDays = Object.keys(grouped).sort()
+  if (sortedDays.length === 0) return <div className="p-8 text-center text-muted-foreground text-sm">Nothing upcoming</div>
 
   return (
     <div className="p-6 space-y-6">
@@ -497,18 +606,42 @@ function ListView({ events, onEventClick }: { events: CalendarEvent[]; onEventCl
         <div key={dateKey}>
           <h3 className="text-sm font-semibold text-muted-foreground mb-2">{format(parseISO(dateKey), 'EEEE, MMMM d')}</h3>
           <div className="space-y-2">
-            {grouped[dateKey].map((event) => (
-              <button key={event.id} onClick={() => onEventClick(event)} className="w-full text-left border border-border rounded-lg p-3 hover:bg-accent/30 transition-colors flex items-center gap-3">
-                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: (event.calendar as Calendar | undefined)?.color ?? '#6366f1' }} />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{event.title}</p>
-                  {event.location && <p className="text-xs text-muted-foreground truncate">{event.location}</p>}
+            {grouped[dateKey].sort((a, b) => a.time.localeCompare(b.time)).map((item) => {
+              if (item.kind === 'event') {
+                const event = item.data
+                return (
+                  <button key={event.id} onClick={() => onEventClick(event)} className="w-full text-left border border-border rounded-lg p-3 hover:bg-accent/30 transition-colors flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: (event.calendar as Calendar | undefined)?.color ?? '#6366f1' }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{event.title}</p>
+                      {event.location && <p className="text-xs text-muted-foreground truncate">{event.location}</p>}
+                    </div>
+                    <span className="text-xs text-muted-foreground shrink-0">{event.all_day ? 'All day' : format(parseISO(event.starts_at), 'h:mm a')}</span>
+                  </button>
+                )
+              }
+              if (item.kind === 'post') {
+                const post = item.data
+                return (
+                  <div key={post.id} className="border border-border rounded-lg p-3 flex items-center gap-3" style={{ borderLeftColor: PLATFORM_COLORS[post.platform], borderLeftWidth: 3 }}>
+                    <PlatformIcon platform={post.platform} size={20} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{post.title ?? `${post.platform} ${post.post_type}`}</p>
+                      <p className="text-xs text-muted-foreground capitalize">{post.post_type} · {post.stage}</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground shrink-0">{post.scheduled_at ? format(parseISO(post.scheduled_at), 'h:mm a') : ''}</span>
+                  </div>
+                )
+              }
+              const idea = item.data
+              return (
+                <div key={idea.id} className="border border-dashed border-amber-300 bg-amber-50/50 rounded-lg p-3 flex items-center gap-3">
+                  <span className="text-base">💡</span>
+                  <p className="font-medium text-sm truncate flex-1">{idea.title}</p>
+                  {idea.platform && <span className="text-xs text-muted-foreground capitalize shrink-0">{idea.platform}</span>}
                 </div>
-                <span className="text-xs text-muted-foreground shrink-0">
-                  {event.all_day ? 'All day' : format(parseISO(event.starts_at), 'h:mm a')}
-                </span>
-              </button>
-            ))}
+              )
+            })}
           </div>
         </div>
       ))}
