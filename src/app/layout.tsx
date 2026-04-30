@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { PWAInit } from "@/components/PWAInit";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,6 +17,21 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Mustache Journey — Social Calendar",
   description: "Content planning, UGC tracking, and calendar for Mustache Journey",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "MJ Calendar",
+    statusBarStyle: "default",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0a0a0a",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -28,7 +44,11 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+      </head>
       <body className="min-h-full flex flex-col">
+        <PWAInit />
         <TooltipProvider>{children}</TooltipProvider>
       </body>
     </html>

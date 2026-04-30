@@ -66,8 +66,20 @@ export default async function SettingsPage({
         </section>
 
         <section className="border border-border rounded-lg p-5 space-y-3">
+          <h2 className="font-semibold text-sm">Install on iPhone</h2>
+          <p className="text-sm text-muted-foreground">Add this app to your home screen for a full-screen experience with no browser chrome.</p>
+          <ol className="text-sm text-muted-foreground space-y-1.5 list-none">
+            <li className="flex gap-2"><span className="font-medium text-foreground shrink-0">1.</span>Open this site in <strong className="text-foreground">Safari</strong> (not Chrome)</li>
+            <li className="flex gap-2"><span className="font-medium text-foreground shrink-0">2.</span>Tap the <strong className="text-foreground">Share</strong> button <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">⎙</span> at the bottom of the screen</li>
+            <li className="flex gap-2"><span className="font-medium text-foreground shrink-0">3.</span>Scroll down and tap <strong className="text-foreground">Add to Home Screen</strong></li>
+            <li className="flex gap-2"><span className="font-medium text-foreground shrink-0">4.</span>Tap <strong className="text-foreground">Add</strong> — the MJ Calendar icon will appear on your home screen</li>
+          </ol>
+          <p className="text-xs text-muted-foreground">Must use Safari on iOS for true standalone mode. Chrome on iOS opens in a browser tab.</p>
+        </section>
+
+        <section className="border border-border rounded-lg p-5 space-y-3">
           <h2 className="font-semibold text-sm">Claude AI Event Entry</h2>
-          <p className="text-sm text-muted-foreground">Natural language calendar event creation — Phase 2</p>
+          <p className="text-sm text-muted-foreground">Type any event in natural language in the Calendar header — it&apos;s parsed instantly by Claude and added to your calendar.</p>
         </section>
       </div>
     </div>
