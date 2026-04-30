@@ -13,6 +13,7 @@ import {
   subWeeks,
   addDays,
   subDays,
+  startOfDay,
   isSameMonth,
   isSameDay,
   isToday,
@@ -284,7 +285,7 @@ export function CalendarView() {
           {view === 'day' && (
             <DayView
               currentDate={currentDate}
-              events={visibleEvents.filter((e) => isSameDay(parseISO(e.starts_at), currentDate))}
+              events={visibleEvents.filter((e) => eventCoversDay(e, currentDate))}
               onEventClick={openEditEvent}
               onAddClick={() => openNewEvent(currentDate)}
             />
@@ -316,6 +317,14 @@ export function CalendarView() {
   )
 }
 
+// Returns true if the event covers the given day (handles multi-day spans)
+function eventCoversDay(event: CalendarEvent, day: Date): boolean {
+  const start = startOfDay(parseISO(event.starts_at))
+  const end = event.ends_at ? startOfDay(parseISO(event.ends_at)) : start
+  const d = startOfDay(day)
+  return d >= start && d <= end
+}
+
 // ─────────────────────────────────────────────
 // Month Grid
 // ─────────────────────────────────────────────
@@ -342,7 +351,7 @@ function MonthGrid({
       </div>
       <div className="flex-1 grid grid-cols-7 auto-rows-fr">
         {days.map((day) => {
-          const dayEvents = events.filter((e) => isSameDay(parseISO(e.starts_at), day))
+          const dayEvents = events.filter((e) => eventCoversDay(e, day))
           const outside = !isSameMonth(day, currentDate)
           const today = isToday(day)
           return (
@@ -406,7 +415,7 @@ function WeekGrid({
       </div>
       <div className="grid grid-cols-7 flex-1">
         {days.map((day) => {
-          const dayEvents = events.filter((e) => isSameDay(parseISO(e.starts_at), day))
+          const dayEvents = events.filter((e) => eventCoversDay(e, day))
           return (
             <div key={day.toISOString()} className="border-r border-border p-2 space-y-1">
               {dayEvents.map((event) => (
