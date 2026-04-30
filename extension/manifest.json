@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "MJ Inspiration Clipper",
+  "version": "1.0.0",
+  "description": "Clip pages and images to your Mustache Journey Inspiration Board",
+  "permissions": ["activeTab", "contextMenus", "storage", "notifications"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "48": "icon-48.png",
+      "128": "icon-128.png"
+    },
+    "default_title": "MJ Inspiration Clipper"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "icons": {
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  }
+}

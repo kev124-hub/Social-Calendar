@@ -78,6 +78,26 @@ export default async function SettingsPage({
         </section>
 
         <section className="border border-border rounded-lg p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-sm">Chrome Extension</h2>
+            <a
+              href="/extension-auth"
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Get API token →
+            </a>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Right-click any image or page in Chrome to save it directly to your Inspiration Board.
+          </p>
+          <ol className="text-sm text-muted-foreground space-y-1 list-none">
+            <li className="flex gap-2"><span className="font-medium text-foreground shrink-0">1.</span>Load the <code className="text-xs bg-muted px-1.5 py-0.5 rounded">extension/</code> folder in Chrome (chrome://extensions → Load unpacked)</li>
+            <li className="flex gap-2"><span className="font-medium text-foreground shrink-0">2.</span>Click <strong className="text-foreground">Get API token</strong> above, copy your token</li>
+            <li className="flex gap-2"><span className="font-medium text-foreground shrink-0">3.</span>Paste into the extension settings → Save</li>
+          </ol>
+        </section>
+
+        <section className="border border-border rounded-lg p-5 space-y-3">
           <h2 className="font-semibold text-sm">Claude AI Event Entry</h2>
           <p className="text-sm text-muted-foreground">Type any event in natural language in the Calendar header — it&apos;s parsed instantly by Claude and added to your calendar.</p>
         </section>

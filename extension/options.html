@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>MJ Clipper — Settings</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 520px; margin: 48px auto; padding: 0 24px; color: #0a0a0a; line-height: 1.5; }
+    h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 10px; }
+    .logo { width: 28px; height: 28px; background: #0a0a0a; border-radius: 5px; display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: 700; font-family: Georgia, serif; }
+    .subtitle { color: #71717a; font-size: 13px; margin-bottom: 32px; }
+    .card { border: 1px solid #e4e4e7; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+    .card h2 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .card p { font-size: 13px; color: #71717a; margin-bottom: 14px; }
+    label { font-size: 12px; font-weight: 500; color: #52525b; display: block; margin-bottom: 5px; }
+    input { width: 100%; padding: 9px 12px; border: 1px solid #e4e4e7; border-radius: 7px; font-size: 13px; font-family: inherit; outline: none; }
+    input:focus { border-color: #0a0a0a; box-shadow: 0 0 0 2px rgba(10,10,10,0.08); }
+    .save-btn { background: #0a0a0a; color: white; border: none; padding: 9px 20px; border-radius: 7px; font-size: 13px; font-weight: 500; cursor: pointer; margin-top: 14px; }
+    .save-btn:hover { opacity: 0.85; }
+    .status { font-size: 13px; margin-top: 10px; min-height: 20px; }
+    .status.ok { color: #16a34a; }
+    .status.err { color: #dc2626; }
+    .steps { list-style: none; counter-reset: steps; display: flex; flex-direction: column; gap: 10px; }
+    .steps li { counter-increment: steps; display: flex; gap: 12px; font-size: 13px; color: #3f3f46; }
+    .steps li::before { content: counter(steps); background: #f4f4f5; color: #0a0a0a; font-weight: 600; font-size: 12px; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    a { color: #0a0a0a; font-weight: 500; }
+  </style>
+</head>
+<body>
+  <h1><div class="logo">MJ</div> Inspiration Clipper</h1>
+  <p class="subtitle">Settings — connect to your MJ Social Calendar</p>
+
+  <div class="card">
+    <h2>How to connect</h2>
+    <p>Get your API token from the app, then paste it below.</p>
+    <ol class="steps">
+      <li>Open <a href="https://claude-social-calendar.vercel.app/extension-auth" target="_blank">claude-social-calendar.vercel.app/extension-auth</a></li>
+      <li>Sign in if prompted, then copy your API token</li>
+      <li>Paste the token into the field below and click Save</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>API Token</h2>
+    <p>Your personal token from the app's Extension Setup page.</p>
+    <div style="margin-bottom:12px">
+      <label>Token</label>
+      <input id="token" type="password" placeholder="Paste your token here">
+    </div>
+    <button class="save-btn" id="save">Save</button>
+    <div class="status" id="status"></div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

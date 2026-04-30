@@ -33,6 +33,7 @@ export async function proxy(request: NextRequest) {
   const isPublicPath =
     request.nextUrl.pathname.startsWith('/_next') ||
     request.nextUrl.pathname.startsWith('/api/auth') ||
+    request.nextUrl.pathname.startsWith('/api/inspirations') ||
     request.nextUrl.pathname.startsWith('/auth/callback')
 
   if (!isPublicPath && !isAuthPage && !user) {

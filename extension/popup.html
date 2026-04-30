@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; width: 320px; background: #fff; color: #0a0a0a; }
+    .header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #e5e5e5; }
+    .header-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+    .logo { width: 22px; height: 22px; background: #0a0a0a; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; font-size: 9px; font-weight: 700; font-family: Georgia, serif; flex-shrink: 0; }
+    .btn-icon { background: none; border: none; cursor: pointer; color: #71717a; padding: 4px; border-radius: 4px; display: flex; align-items: center; }
+    .btn-icon:hover { background: #f4f4f5; color: #0a0a0a; }
+    .form { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+    .type-tabs { display: flex; gap: 4px; background: #f4f4f5; padding: 3px; border-radius: 8px; }
+    .type-tab { flex: 1; padding: 5px 0; font-size: 11px; font-weight: 500; border: none; background: none; cursor: pointer; border-radius: 5px; color: #71717a; transition: all 0.15s; }
+    .type-tab.active { background: white; color: #0a0a0a; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    label { font-size: 11px; font-weight: 500; color: #52525b; display: block; margin-bottom: 3px; }
+    input, textarea, select { width: 100%; padding: 7px 10px; border: 1px solid #e4e4e7; border-radius: 6px; font-size: 13px; font-family: inherit; color: #0a0a0a; background: white; outline: none; }
+    input:focus, textarea:focus { border-color: #0a0a0a; box-shadow: 0 0 0 2px rgba(10,10,10,0.08); }
+    textarea { resize: none; min-height: 64px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .save-btn { background: #0a0a0a; color: white; border: none; padding: 9px; border-radius: 7px; font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity 0.15s; }
+    .save-btn:hover { opacity: 0.85; }
+    .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .status { font-size: 12px; text-align: center; padding: 4px 0; min-height: 20px; }
+    .status.ok { color: #16a34a; }
+    .status.err { color: #dc2626; }
+    .setup { padding: 24px 20px; text-align: center; display: flex; flex-direction: column; gap: 12px; align-items: center; }
+    .setup p { font-size: 13px; color: #71717a; line-height: 1.5; }
+    .setup-btn { background: #0a0a0a; color: white; border: none; padding: 9px 20px; border-radius: 7px; font-size: 13px; font-weight: 500; cursor: pointer; }
+    #setup { display: none; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-title">
+      <div class="logo">MJ</div>
+      Inspiration Clipper
+    </div>
+    <button class="btn-icon" id="options-btn" title="Settings">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
+
+  <!-- Not configured -->
+  <div id="setup" class="setup">
+    <div class="logo" style="width:40px;height:40px;font-size:16px;border-radius:8px;">MJ</div>
+    <p>Connect to your MJ Calendar to start clipping pages and images.</p>
+    <button class="setup-btn" id="go-options">Open Settings</button>
+  </div>
+
+  <!-- Main form -->
+  <div id="main" class="form">
+    <div class="type-tabs">
+      <button class="type-tab active" data-type="url_clip">URL</button>
+      <button class="type-tab" data-type="video_link">Video</button>
+      <button class="type-tab" data-type="text_note">Note</button>
+    </div>
+
+    <div>
+      <label>Title</label>
+      <input id="title" type="text" placeholder="Page title">
+    </div>
+
+    <div id="url-field">
+      <label>URL</label>
+      <input id="url" type="url" placeholder="https://...">
+    </div>
+
+    <div>
+      <label>Notes <span style="color:#a1a1aa;font-weight:400">(optional)</span></label>
+      <textarea id="notes" placeholder="What caught your eye?"></textarea>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Tags</label>
+        <input id="tags" type="text" placeholder="f1, travel">
+      </div>
+      <div>
+        <label>Trip</label>
+        <input id="trip" type="text" placeholder="Monaco GP">
+      </div>
+    </div>
+
+    <button class="save-btn" id="save">Save to Board</button>
+    <div class="status" id="status"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
