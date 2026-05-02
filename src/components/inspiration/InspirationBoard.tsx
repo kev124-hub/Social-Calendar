@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Inspiration, InspirationItemType } from '@/types/database'
 import { InspirationDialog } from './InspirationDialog'
 import { format } from 'date-fns'
+import { cn } from '@/lib/utils'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 
@@ -43,7 +44,7 @@ function InspirationCard({ item, onDelete }: { item: Inspiration; onDelete: () =
   const ytId = item.type === 'video_link' && item.source_url ? getYouTubeId(item.source_url) : null
 
   return (
-    <div className="group relative rounded-xl border border-border overflow-hidden bg-card break-inside-avoid mb-4">
+    <div className="group relative rounded-[24px] border border-[#d6d6d6] overflow-hidden bg-white break-inside-avoid mb-4 shadow-[rgba(0,0,0,0.04)_0px_8px_16px_0px]">
       {/* Image */}
       {item.type === 'image' && item.image_path && (
         <img
@@ -101,9 +102,9 @@ function InspirationCard({ item, onDelete }: { item: Inspiration; onDelete: () =
 
       {/* Text note header */}
       {item.type === 'text_note' && (
-        <div className="bg-amber-50 border-b border-amber-100 px-4 py-2.5 flex items-center gap-2">
-          <FileText size={13} className="text-amber-600" />
-          <span className="text-xs font-medium text-amber-700">Note</span>
+        <div className="bg-[#fffdf5] border-b border-[#f5f2f0] px-4 py-2.5 flex items-center gap-2">
+          <FileText size={13} className="text-[#b08020]" />
+          <span className="text-xs font-semibold text-[#b08020] uppercase tracking-widest">Note</span>
         </div>
       )}
 
@@ -121,7 +122,7 @@ function InspirationCard({ item, onDelete }: { item: Inspiration; onDelete: () =
         {item.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 pt-0.5">
             {item.tags.map((tag) => (
-              <span key={tag} className="text-xs bg-muted px-1.5 py-0.5 rounded-full text-muted-foreground">
+              <span key={tag} className="text-xs bg-[#f5f2f0] px-2 py-0.5 rounded-[10px] text-[#7b7b7b] border border-[#d6d6d6]">
                 {tag}
               </span>
             ))}
@@ -187,11 +188,10 @@ export function InspirationBoard() {
               <button
                 key={f.value}
                 onClick={() => setTypeFilter(f.value as InspirationItemType | 'all')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  typeFilter === f.value
-                    ? 'bg-foreground text-background'
-                    : 'bg-muted text-muted-foreground hover:text-foreground'
-                }`}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-[42px] text-xs font-medium transition-colors',
+                  typeFilter === f.value ? 'bg-black text-white' : 'text-[#7b7b7b] hover:text-black'
+                )}
               >
                 {f.icon}{f.label}
               </button>

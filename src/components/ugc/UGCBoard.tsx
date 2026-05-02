@@ -11,14 +11,14 @@ import { UGCDialog } from './UGCDialog'
 import { cn } from '@/lib/utils'
 
 const STAGES: { key: UGCStage; label: string; color: string }[] = [
-  { key: 'lead', label: 'Lead', color: 'bg-slate-100 border-slate-200' },
-  { key: 'pitched', label: 'Pitched', color: 'bg-blue-50 border-blue-100' },
-  { key: 'negotiating', label: 'Negotiating', color: 'bg-amber-50 border-amber-100' },
-  { key: 'contract_signed', label: 'Contract', color: 'bg-purple-50 border-purple-100' },
-  { key: 'shooting', label: 'Shooting', color: 'bg-pink-50 border-pink-100' },
-  { key: 'delivered', label: 'Delivered', color: 'bg-cyan-50 border-cyan-100' },
-  { key: 'invoice_sent', label: 'Invoice Sent', color: 'bg-orange-50 border-orange-100' },
-  { key: 'paid', label: 'Paid', color: 'bg-green-50 border-green-100' },
+  { key: 'lead',            label: 'Lead',         color: 'bg-[#fafafa] border-[#d6d6d6]' },
+  { key: 'pitched',         label: 'Pitched',      color: 'bg-[#fafafa] border-[#d6d6d6]' },
+  { key: 'negotiating',     label: 'Negotiating',  color: 'bg-[#f0faff] border-[#c0eaff]' },
+  { key: 'contract_signed', label: 'Contract',     color: 'bg-[#f0faff] border-[#c0eaff]' },
+  { key: 'shooting',        label: 'Shooting',     color: 'bg-[#fdf4ff] border-[#e8c0ff]' },
+  { key: 'delivered',       label: 'Delivered',    color: 'bg-[#fdf4ff] border-[#e8c0ff]' },
+  { key: 'invoice_sent',    label: 'Invoice Sent', color: 'bg-[#fdf4ff] border-[#e8c0ff]' },
+  { key: 'paid',            label: 'Paid',         color: 'bg-[#f0fdf0] border-[#bbf7d0]' },
 ]
 
 type ViewMode = 'kanban' | 'list'
@@ -85,24 +85,22 @@ export function UGCBoard() {
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border">
         <div>
-          <h1 className="text-xl font-semibold">UGC Tracker</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Pipeline: <strong>${totalPipeline.toLocaleString()}</strong>
+          <h1 className="font-heading text-2xl font-normal tracking-tight">UGC Tracker</h1>
+          <p className="text-xs text-[#7b7b7b] mt-0.5">
+            Pipeline: <strong className="text-black">${totalPipeline.toLocaleString()}</strong>
             {' · '}
-            Paid: <strong>${totalPaid.toLocaleString()}</strong>
+            Paid: <strong className="text-black">${totalPaid.toLocaleString()}</strong>
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex rounded-md border border-border overflow-hidden">
+          <div className="flex gap-0.5">
             {(['kanban', 'list'] as ViewMode[]).map((v) => (
               <button
                 key={v}
                 onClick={() => setViewMode(v)}
                 className={cn(
-                  'px-3 py-1.5 text-xs font-medium capitalize transition-colors',
-                  viewMode === v
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-background text-muted-foreground hover:bg-accent'
+                  'px-3 py-1.5 text-xs font-medium capitalize transition-colors rounded-[42px]',
+                  viewMode === v ? 'bg-black text-white' : 'text-[#7b7b7b] hover:text-black'
                 )}
               >
                 {v}
@@ -124,7 +122,7 @@ export function UGCBoard() {
               const stageTotal = stageProjects.reduce((s, p) => s + (p.rate ?? 0), 0)
 
               return (
-                <div key={key} className={cn('flex flex-col w-60 rounded-xl border', color)}>
+                <div key={key} className={cn('flex flex-col w-60 rounded-[24px] border', color)}>
                   <div className="flex items-center justify-between px-3 py-3 border-b border-inherit">
                     <div>
                       <div className="flex items-center gap-2">
@@ -189,7 +187,7 @@ function UGCCard({
 
   return (
     <div
-      className="bg-white rounded-lg border border-border p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+      className="bg-white rounded-[16px] border border-[#d6d6d6] p-3 shadow-[rgba(0,0,0,0.04)_0px_8px_16px_0px] hover:shadow-md transition-shadow cursor-pointer"
       onClick={onEdit}
     >
       <p className="text-sm font-semibold truncate">{project.brand_name}</p>
@@ -216,7 +214,7 @@ function UGCCard({
         <div className="mt-2 pt-2 border-t border-border/50" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => onMove(nextStage.key)}
-            className="text-xs text-primary hover:underline font-medium"
+            className="text-xs text-[#7b7b7b] hover:text-black hover:underline font-medium"
           >
             → {nextStage.label}
           </button>
@@ -229,15 +227,15 @@ function UGCCard({
 function UGCListView({ projects, onEdit }: { projects: UGCProject[]; onEdit: (p: UGCProject) => void }) {
   return (
     <div className="flex-1 overflow-y-auto p-6">
-      <div className="rounded-lg border border-border overflow-hidden">
+      <div className="rounded-[24px] border border-[#d6d6d6] overflow-hidden shadow-[rgba(0,0,0,0.04)_0px_8px_16px_0px]">
         <table className="w-full text-sm">
-          <thead className="bg-muted/40 border-b border-border">
+          <thead className="bg-[#fafafa] border-b border-[#d6d6d6]">
             <tr>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground">Brand</th>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground">Stage</th>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground">Rate</th>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground">Deadline</th>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground">Contact</th>
+              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#bcbcbc] uppercase tracking-widest">Brand</th>
+              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#bcbcbc] uppercase tracking-widest">Stage</th>
+              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#bcbcbc] uppercase tracking-widest">Rate</th>
+              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#bcbcbc] uppercase tracking-widest">Deadline</th>
+              <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#bcbcbc] uppercase tracking-widest">Contact</th>
             </tr>
           </thead>
           <tbody>
@@ -252,7 +250,7 @@ function UGCListView({ projects, onEdit }: { projects: UGCProject[]; onEdit: (p:
               >
                 <td className="px-4 py-3 font-medium">{p.brand_name}</td>
                 <td className="px-4 py-3">
-                  <Badge variant="outline" className="capitalize text-xs">
+                  <Badge variant="outline" className="rounded-[10px] border-[#d6d6d6] text-[#333] capitalize text-xs">
                     {p.stage.replace('_', ' ')}
                   </Badge>
                 </td>

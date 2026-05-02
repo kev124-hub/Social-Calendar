@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import type { CalendarEvent, Calendar } from '@/types/database'
+import { cn } from '@/lib/utils'
 
 interface Props {
   open: boolean
@@ -23,13 +24,13 @@ interface Props {
   calendars: Calendar[]
 }
 
-function toDatetimeLocal(iso: string) {
-  return iso.slice(0, 16)
-}
+const inputClass =
+  'w-full px-3.5 py-2.5 rounded-[10px] border border-[#d6d6d6] bg-white text-[13px] text-[#333] focus:outline-none focus:ring-2 focus:ring-[#f1ccff] focus:border-[#f1ccff] transition-colors'
 
-function toDateLocal(iso: string) {
-  return iso.slice(0, 10)
-}
+const labelClass = 'text-[13px] font-medium text-[#333] block mb-1.5 tracking-tight'
+
+function toDatetimeLocal(iso: string) { return iso.slice(0, 16) }
+function toDateLocal(iso: string) { return iso.slice(0, 10) }
 
 export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDate, calendars }: Props) {
   const [title, setTitle] = useState('')
@@ -45,7 +46,6 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
 
   useEffect(() => {
     if (!open) return
-
     if (event) {
       setTitle(event.title)
       setDescription(event.description ?? '')
@@ -69,7 +69,6 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
   async function handleSave() {
     if (!title.trim() || !startsAt) return
     setSaving(true)
-
     const payload = {
       title: title.trim(),
       description: description || null,
@@ -80,13 +79,11 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
       calendar_id: calendarId || null,
       source: 'app' as const,
     }
-
     if (event) {
       await supabase.from('calendar_events').update(payload).eq('id', event.id)
     } else {
       await supabase.from('calendar_events').insert(payload)
     }
-
     setSaving(false)
     onSave()
   }
@@ -95,86 +92,95 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{event ? 'Edit Event' : 'New Event'}</DialogTitle>
+          <DialogTitle className="font-heading text-[22px] font-normal tracking-tight">
+            {event ? 'Edit Event' : 'New Event'}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           <div>
-            <label className="text-sm font-medium block mb-1">Title *</label>
+            <label className={labelClass}>Title *</label>
             <input
               autoFocus
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={inputClass}
               placeholder="Event title"
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* All-day toggle */}
+          <label className="flex items-center gap-2.5 cursor-pointer">
             <input
-              id="allday"
               type="checkbox"
               checked={allDay}
               onChange={(e) => setAllDay(e.target.checked)}
-              className="rounded"
+              className="sr-only"
             />
-            <label htmlFor="allday" className="text-sm font-medium">All day</label>
-          </div>
+            <div className={cn(
+              'w-9 h-5 rounded-full transition-colors relative',
+              allDay ? 'bg-[#f1ccff]' : 'bg-[#d6d6d6]'
+            )}>
+              <div className={cn(
+                'absolute top-0.5 w-4 h-4 rounded-full bg-black transition-transform',
+                allDay ? 'translate-x-4' : 'translate-x-0.5'
+              )} />
+            </div>
+            <span className="text-[13px] font-medium text-[#333] tracking-tight">All day</span>
+          </label>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm font-medium block mb-1">Start *</label>
+              <label className={labelClass}>Start *</label>
               <input
                 type={allDay ? 'date' : 'datetime-local'}
                 value={startsAt}
                 onChange={(e) => setStartsAt(e.target.value)}
-                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={inputClass}
               />
             </div>
             <div>
-              <label className="text-sm font-medium block mb-1">End</label>
+              <label className={labelClass}>End</label>
               <input
                 type={allDay ? 'date' : 'datetime-local'}
                 value={endsAt}
                 onChange={(e) => setEndsAt(e.target.value)}
-                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={inputClass}
               />
             </div>
           </div>
 
           <div>
-            <label className="text-sm font-medium block mb-1">Location</label>
+            <label className={labelClass}>Location</label>
             <input
               value={location}
               onChange={(e) => setLocation(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={inputClass}
               placeholder="Optional"
             />
           </div>
 
           <div>
-            <label className="text-sm font-medium block mb-1">Notes</label>
+            <label className={labelClass}>Notes</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              className={inputClass + ' resize-none'}
               placeholder="Optional"
             />
           </div>
 
           {calendars.length > 1 && (
             <div>
-              <label className="text-sm font-medium block mb-1">Calendar</label>
+              <label className={labelClass}>Calendar</label>
               <select
                 value={calendarId}
                 onChange={(e) => setCalendarId(e.target.value)}
-                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={inputClass}
               >
                 {calendars.map((cal) => (
-                  <option key={cal.id} value={cal.id}>
-                    {cal.name}
-                  </option>
+                  <option key={cal.id} value={cal.id}>{cal.name}</option>
                 ))}
               </select>
             </div>
@@ -183,18 +189,12 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
 
         <DialogFooter className="gap-2">
           {event && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => onDelete(event.id)}
-            >
+            <Button variant="destructive" size="sm" className="rounded-[10px]" onClick={() => onDelete(event.id)}>
               Delete
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={handleSave} disabled={saving || !title.trim()}>
+          <Button variant="outline" size="sm" className="rounded-[10px]" onClick={onClose}>Cancel</Button>
+          <Button size="sm" className="rounded-[10px]" onClick={handleSave} disabled={saving || !title.trim()}>
             {saving ? 'Saving…' : 'Save'}
           </Button>
         </DialogFooter>

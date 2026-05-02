@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import type { SocialPost, PostStage, Platform, PostType } from '@/types/database'
+import { cn } from '@/lib/utils'
 
 interface Props {
   open: boolean
@@ -19,13 +20,19 @@ interface Props {
   onDelete: (id: string) => void
   post: SocialPost | null
   defaultStage: PostStage
+  defaultScheduledAt?: string
 }
 
 const PLATFORMS: Platform[] = ['instagram', 'tiktok', 'linkedin']
 const POST_TYPES: PostType[] = ['reel', 'carousel', 'story', 'static', 'video', 'article']
 const STAGES: PostStage[] = ['idea', 'scripted', 'shot', 'editing', 'scheduled', 'published']
 
-export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage }: Props) {
+const inputClass =
+  'w-full px-3.5 py-2.5 rounded-[10px] border border-[#d6d6d6] bg-white text-[13px] text-[#333] focus:outline-none focus:ring-2 focus:ring-[#f1ccff] focus:border-[#f1ccff] transition-colors'
+
+const labelClass = 'text-[13px] font-medium text-[#333] block mb-1.5 tracking-tight'
+
+export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage, defaultScheduledAt }: Props) {
   const [platform, setPlatform] = useState<Platform>('instagram')
   const [postType, setPostType] = useState<PostType | ''>('')
   const [stage, setStage] = useState<PostStage>(defaultStage)
@@ -59,10 +66,10 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
       setCaption('')
       setHashtags('')
       setMediaUrl('')
-      setScheduledAt('')
+      setScheduledAt(defaultScheduledAt ?? '')
       setNotes('')
     }
-  }, [open, post, defaultStage])
+  }, [open, post, defaultStage, defaultScheduledAt])
 
   async function handleSave() {
     setSaving(true)
@@ -77,13 +84,11 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
       scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null,
       notes: notes || null,
     }
-
     if (post) {
       await supabase.from('social_posts').update(payload).eq('id', post.id)
     } else {
       await supabase.from('social_posts').insert(payload)
     }
-
     setSaving(false)
     onSave()
   }
@@ -92,109 +97,128 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{post ? 'Edit Post' : 'New Post'}</DialogTitle>
+          <DialogTitle className="font-heading text-[22px] font-normal tracking-tight">
+            {post ? 'Edit Post' : 'New Post'}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium block mb-1">Platform *</label>
-              <select
-                value={platform}
-                onChange={(e) => setPlatform(e.target.value as Platform)}
-                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring capitalize"
-              >
-                {PLATFORMS.map((p) => (
-                  <option key={p} value={p} className="capitalize">{p}</option>
-                ))}
-              </select>
+          {/* Platform segmented control */}
+          <div>
+            <label className={labelClass}>Platform *</label>
+            <div className="flex gap-1 flex-wrap">
+              {PLATFORMS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPlatform(p)}
+                  className={cn(
+                    'px-3 py-1.5 text-xs font-medium rounded-[10px] transition-colors capitalize',
+                    platform === p
+                      ? 'bg-[#f1ccff] text-black'
+                      : 'bg-[#f5f2f0] text-[#7b7b7b] hover:text-black border border-[#d6d6d6]'
+                  )}
+                >
+                  {p}
+                </button>
+              ))}
             </div>
-            <div>
-              <label className="text-sm font-medium block mb-1">Type</label>
-              <select
-                value={postType}
-                onChange={(e) => setPostType(e.target.value as PostType | '')}
-                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring capitalize"
-              >
-                <option value="">Select type</option>
-                {POST_TYPES.map((t) => (
-                  <option key={t} value={t} className="capitalize">{t}</option>
-                ))}
-              </select>
+          </div>
+
+          {/* Stage segmented control */}
+          <div>
+            <label className={labelClass}>Stage</label>
+            <div className="flex gap-1 flex-wrap">
+              {STAGES.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStage(s)}
+                  className={cn(
+                    'px-3 py-1.5 text-xs font-medium rounded-[10px] transition-colors capitalize',
+                    stage === s
+                      ? 'bg-[#f1ccff] text-black'
+                      : 'bg-[#f5f2f0] text-[#7b7b7b] hover:text-black border border-[#d6d6d6]'
+                  )}
+                >
+                  {s}
+                </button>
+              ))}
             </div>
           </div>
 
           <div>
-            <label className="text-sm font-medium block mb-1">Stage</label>
+            <label className={labelClass}>Type</label>
             <select
-              value={stage}
-              onChange={(e) => setStage(e.target.value as PostStage)}
-              className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring capitalize"
+              value={postType}
+              onChange={(e) => setPostType(e.target.value as PostType | '')}
+              className={inputClass + ' capitalize'}
             >
-              {STAGES.map((s) => (
-                <option key={s} value={s} className="capitalize">{s}</option>
+              <option value="">Select type</option>
+              {POST_TYPES.map((t) => (
+                <option key={t} value={t} className="capitalize">{t}</option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="text-sm font-medium block mb-1">Title</label>
+            <label className={labelClass}>Title</label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={inputClass}
               placeholder="Short working title"
             />
           </div>
 
           <div>
-            <label className="text-sm font-medium block mb-1">Caption</label>
+            <label className={labelClass}>Caption</label>
             <textarea
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
               rows={4}
-              className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              className={inputClass + ' resize-none'}
               placeholder="Write your caption here…"
             />
           </div>
 
           <div>
-            <label className="text-sm font-medium block mb-1">Hashtags <span className="text-muted-foreground font-normal">(max 5)</span></label>
+            <label className={labelClass}>Hashtags <span className="text-[#7b7b7b] font-normal">(max 5)</span></label>
             <input
               value={hashtags}
               onChange={(e) => setHashtags(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={inputClass}
               placeholder="#luxury #travel #f1"
             />
           </div>
 
           <div>
-            <label className="text-sm font-medium block mb-1">Media link</label>
+            <label className={labelClass}>Media link</label>
             <input
               value={mediaUrl}
               onChange={(e) => setMediaUrl(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={inputClass}
               placeholder="Dropbox or Google Drive URL"
             />
           </div>
 
           <div>
-            <label className="text-sm font-medium block mb-1">Scheduled date</label>
+            <label className={labelClass}>Scheduled date</label>
             <input
               type="datetime-local"
               value={scheduledAt}
               onChange={(e) => setScheduledAt(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={inputClass}
             />
           </div>
 
           <div>
-            <label className="text-sm font-medium block mb-1">Notes</label>
+            <label className={labelClass}>Notes</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              className={inputClass + ' resize-none'}
               placeholder="Optional notes"
             />
           </div>
@@ -202,14 +226,12 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
 
         <DialogFooter className="gap-2">
           {post && (
-            <Button variant="destructive" size="sm" onClick={() => onDelete(post.id)}>
+            <Button variant="destructive" size="sm" className="rounded-[10px]" onClick={() => onDelete(post.id)}>
               Delete
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={handleSave} disabled={saving}>
+          <Button variant="outline" size="sm" className="rounded-[10px]" onClick={onClose}>Cancel</Button>
+          <Button size="sm" className="rounded-[10px]" onClick={handleSave} disabled={saving}>
             {saving ? 'Saving…' : 'Save'}
           </Button>
         </DialogFooter>

@@ -12,19 +12,19 @@ import { PostDialog } from './PostDialog'
 import { cn } from '@/lib/utils'
 
 const STAGES: { key: PostStage; label: string; color: string; dot: string }[] = [
-  { key: 'idea',      label: 'Idea',      color: 'bg-slate-100 border-slate-200',  dot: 'bg-slate-400' },
-  { key: 'scripted',  label: 'Scripted',  color: 'bg-blue-50 border-blue-100',    dot: 'bg-blue-400' },
-  { key: 'shot',      label: 'Shot',      color: 'bg-purple-50 border-purple-100', dot: 'bg-purple-400' },
-  { key: 'editing',   label: 'Editing',   color: 'bg-amber-50 border-amber-100',   dot: 'bg-amber-400' },
-  { key: 'scheduled', label: 'Scheduled', color: 'bg-green-50 border-green-100',   dot: 'bg-green-500' },
-  { key: 'published', label: 'Published', color: 'bg-emerald-50 border-emerald-100', dot: 'bg-emerald-500' },
+  { key: 'idea',      label: 'Idea',      color: 'bg-[#fafafa] border-[#d6d6d6]',  dot: 'bg-[#d6d6d6]' },
+  { key: 'scripted',  label: 'Scripted',  color: 'bg-[#fafafa] border-[#d6d6d6]',  dot: 'bg-[#d6d6d6]' },
+  { key: 'shot',      label: 'Shot',      color: 'bg-[#f0faff] border-[#c0eaff]',  dot: 'bg-[#91e0ff]' },
+  { key: 'editing',   label: 'Editing',   color: 'bg-[#f0faff] border-[#c0eaff]',  dot: 'bg-[#91e0ff]' },
+  { key: 'scheduled', label: 'Scheduled', color: 'bg-[#fdf4ff] border-[#e8c0ff]',  dot: 'bg-[#f1ccff]' },
+  { key: 'published', label: 'Published', color: 'bg-[#fdf4ff] border-[#e8c0ff]',  dot: 'bg-[#c080e0]' },
 ]
 
 const PLATFORM_CONFIG: Record<Platform, { label: string; color: string }> = {
-  instagram: { label: 'IG', color: 'bg-pink-100 text-pink-700' },
-  tiktok:    { label: 'TT', color: 'bg-slate-100 text-slate-700' },
-  linkedin:  { label: 'LI', color: 'bg-blue-100 text-blue-700' },
-  any:       { label: 'Any', color: 'bg-gray-100 text-gray-700' },
+  instagram: { label: 'IG', color: 'bg-[#f1ccff] text-black' },
+  tiktok:    { label: 'TT', color: 'bg-[#f0f0f0] text-[#333]' },
+  linkedin:  { label: 'LI', color: 'bg-[#e8f0ff] text-[#1d4ed8]' },
+  any:       { label: 'Any', color: 'bg-[#f0f0f0] text-[#7b7b7b]' },
 }
 
 const POST_TYPE_LABELS: Record<string, string> = {
@@ -100,17 +100,17 @@ export function PipelineBoard() {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border gap-2">
-        <h1 className="text-xl font-semibold">Content Pipeline</h1>
+        <h1 className="font-heading text-2xl font-normal tracking-tight">Content Pipeline</h1>
         <div className="flex items-center gap-2">
           {/* Platform filter */}
-          <div className="flex rounded-md border border-border overflow-hidden">
+          <div className="flex gap-0.5">
             {(['all', 'instagram', 'tiktok', 'linkedin'] as const).map((p) => (
               <button
                 key={p}
                 onClick={() => setFilterPlatform(p)}
                 className={cn(
-                  'px-2.5 py-1.5 text-xs font-medium transition-colors',
-                  filterPlatform === p ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-accent'
+                  'px-3 py-1.5 text-xs font-medium transition-colors rounded-[42px]',
+                  filterPlatform === p ? 'bg-[#f1ccff] text-black' : 'text-[#7b7b7b] hover:text-black'
                 )}
               >
                 {p === 'all' ? 'All' : p === 'instagram' ? 'IG' : p === 'tiktok' ? 'TT' : 'LI'}
@@ -119,18 +119,18 @@ export function PipelineBoard() {
           </div>
 
           {/* View toggle */}
-          <div className="flex rounded-md border border-border overflow-hidden">
+          <div className="flex gap-0.5">
             <button
               onClick={() => setViewMode('kanban')}
               title="Kanban"
-              className={cn('px-2.5 py-1.5 transition-colors', viewMode === 'kanban' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-accent')}
+              className={cn('px-2.5 py-1.5 rounded-[42px] transition-colors', viewMode === 'kanban' ? 'bg-black text-white' : 'text-[#7b7b7b] hover:text-black')}
             >
               <Columns size={14} />
             </button>
             <button
               onClick={() => setViewMode('grid')}
               title="Grid preview"
-              className={cn('px-2.5 py-1.5 transition-colors', viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-accent')}
+              className={cn('px-2.5 py-1.5 rounded-[42px] transition-colors', viewMode === 'grid' ? 'bg-black text-white' : 'text-[#7b7b7b] hover:text-black')}
             >
               <LayoutGrid size={14} />
             </button>
@@ -186,7 +186,7 @@ function KanbanView({
         {stages.map(({ key, label, color }) => {
           const stagePosts = filtered.filter((p) => p.stage === key)
           return (
-            <div key={key} className={cn('flex flex-col w-64 rounded-xl border', color)}>
+            <div key={key} className={cn('flex flex-col w-64 rounded-[24px] border', color)}>
               <div className="flex items-center justify-between px-3 py-3 border-b border-inherit">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold">{label}</span>
@@ -279,7 +279,7 @@ function GridCard({ post, onEdit }: { post: SocialPost; onEdit: () => void }) {
   return (
     <div
       onClick={onEdit}
-      className="group cursor-pointer rounded-xl border border-border bg-card hover:shadow-md transition-all overflow-hidden"
+      className="group cursor-pointer rounded-[16px] border border-[#d6d6d6] bg-white hover:shadow-[rgba(0,0,0,0.04)_0px_8px_16px_0px] transition-all overflow-hidden"
     >
       {/* Thumbnail placeholder / media indicator */}
       <div className="aspect-square bg-muted/50 relative flex items-center justify-center">
@@ -308,7 +308,7 @@ function GridCard({ post, onEdit }: { post: SocialPost; onEdit: () => void }) {
           {post.title || post.caption?.slice(0, 40) || 'Untitled'}
         </p>
         <div className="flex items-center justify-between mt-1.5 gap-1">
-          <span className={cn('text-xs font-semibold px-1 py-0.5 rounded', platform.color)}>
+          <span className={cn('text-xs font-semibold px-1.5 py-0.5 rounded-[10px]', platform.color)}>
             {platform.label}
           </span>
           {post.scheduled_at ? (
@@ -337,12 +337,12 @@ function PostCard({
 }) {
   const platform = PLATFORM_CONFIG[post.platform]
   return (
-    <div className="bg-white rounded-lg border border-border p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={onEdit}>
+    <div className="bg-white rounded-[16px] border border-[#d6d6d6] p-3 shadow-[rgba(0,0,0,0.04)_0px_8px_16px_0px] hover:shadow-md transition-shadow cursor-pointer" onClick={onEdit}>
       <div className="flex items-start justify-between gap-2 mb-2">
         <p className="text-sm font-medium leading-snug flex-1 min-w-0">
           {post.title || post.caption?.slice(0, 50) || 'Untitled post'}
         </p>
-        <span className={cn('text-xs font-semibold px-1.5 py-0.5 rounded shrink-0', platform.color)}>
+        <span className={cn('text-xs font-semibold px-1.5 py-0.5 rounded-[10px] shrink-0', platform.color)}>
           {platform.label}
         </span>
       </div>
@@ -361,7 +361,7 @@ function PostCard({
       <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-border/50" onClick={(e) => e.stopPropagation()}>
         <p className="text-xs text-muted-foreground">Move:</p>
         {stages.filter((s) => s.key !== post.stage).map((s) => (
-          <button key={s.key} onClick={() => onMove(s.key)} className="text-xs text-muted-foreground hover:text-primary underline">
+          <button key={s.key} onClick={() => onMove(s.key)} className="text-xs text-[#7b7b7b] hover:text-black hover:underline">
             {s.label}
           </button>
         ))}

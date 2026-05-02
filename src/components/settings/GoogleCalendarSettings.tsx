@@ -67,7 +67,7 @@ export function GoogleCalendarSettings({ connected: initialConnected, lastSynced
   }
 
   return (
-    <section className="border border-border rounded-lg p-5 space-y-4">
+    <section className="border border-[#d6d6d6] rounded-[24px] p-6 space-y-4 bg-white shadow-[rgba(0,0,0,0.04)_0px_8px_16px_0px]">
       <div className="flex items-start justify-between">
         <div>
           <h2 className="font-semibold text-sm flex items-center gap-2">
@@ -79,7 +79,7 @@ export function GoogleCalendarSettings({ connected: initialConnected, lastSynced
           </p>
         </div>
         {connected ? (
-          <span className="flex items-center gap-1.5 text-xs text-green-700 bg-green-50 px-2 py-1 rounded-full border border-green-200 font-medium">
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-[#166534] bg-[#f0fdf0] px-3 py-1 rounded-[10px] border border-[#bbf7d0]">
             <Check size={10} /> Connected
           </span>
         ) : null}
@@ -125,7 +125,7 @@ export function GoogleCalendarSettings({ connected: initialConnected, lastSynced
 
           {/* Sync controls */}
           <div className="flex items-center gap-3">
-            <Button size="sm" onClick={handleSync} disabled={syncing}>
+            <Button size="sm" className="rounded-[10px]" onClick={handleSync} disabled={syncing}>
               <RefreshCw size={13} className={cn('mr-1.5', syncing && 'animate-spin')} />
               {syncing ? 'Syncing…' : 'Sync now'}
             </Button>

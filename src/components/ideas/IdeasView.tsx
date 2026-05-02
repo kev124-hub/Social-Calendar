@@ -12,10 +12,10 @@ import { IdeaDialog } from './IdeaDialog'
 import { cn } from '@/lib/utils'
 
 const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
-  instagram: { label: 'IG', color: 'bg-pink-100 text-pink-700' },
-  tiktok: { label: 'TT', color: 'bg-slate-100 text-slate-700' },
-  linkedin: { label: 'LI', color: 'bg-blue-100 text-blue-700' },
-  any: { label: 'Any', color: 'bg-gray-100 text-gray-700' },
+  instagram: { label: 'IG', color: 'bg-[#f1ccff] text-black' },
+  tiktok:    { label: 'TT', color: 'bg-[#f0f0f0] text-[#333]' },
+  linkedin:  { label: 'LI', color: 'bg-[#e8f0ff] text-[#1d4ed8]' },
+  any:       { label: 'Any', color: 'bg-[#f0f0f0] text-[#7b7b7b]' },
 }
 
 export function IdeasView() {
@@ -103,20 +103,18 @@ export function IdeasView() {
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border">
         <div>
-          <h1 className="text-xl font-semibold">Ideas</h1>
+          <h1 className="font-heading text-2xl font-normal tracking-tight">Ideas</h1>
           <p className="text-xs text-muted-foreground mt-0.5">{ideas.length} captured</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex rounded-md border border-border overflow-hidden">
+          <div className="flex gap-0.5">
             {(['all', 'instagram', 'tiktok', 'linkedin'] as const).map((p) => (
               <button
                 key={p}
                 onClick={() => setFilterPlatform(p)}
                 className={cn(
-                  'px-3 py-1.5 text-xs font-medium capitalize transition-colors',
-                  filterPlatform === p
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-background text-muted-foreground hover:bg-accent'
+                  'px-3 py-1.5 text-xs font-medium capitalize transition-colors rounded-[42px]',
+                  filterPlatform === p ? 'bg-[#f1ccff] text-black' : 'text-[#7b7b7b] hover:text-black'
                 )}
               >
                 {p === 'all' ? 'All' : p === 'instagram' ? 'IG' : p === 'tiktok' ? 'TT' : 'LI'}
@@ -178,12 +176,12 @@ function IdeaCard({
 
   return (
     <div
-      className="bg-card border border-border rounded-xl p-4 hover:shadow-md transition-shadow cursor-pointer group"
+      className="bg-white border border-[#d6d6d6] rounded-[24px] p-6 shadow-[rgba(0,0,0,0.04)_0px_8px_16px_0px] hover:shadow-md transition-shadow cursor-pointer group"
       onClick={onEdit}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <h3 className="text-sm font-semibold leading-snug flex-1">{idea.title}</h3>
-        <span className={cn('text-xs font-semibold px-1.5 py-0.5 rounded shrink-0', platform.color)}>
+        <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-[10px] shrink-0', platform.color)}>
           {platform.label}
         </span>
       </div>
@@ -199,7 +197,7 @@ function IdeaCard({
         </p>
       )}
 
-      <div className="flex items-center justify-between mt-auto pt-2 border-t border-border/50">
+      <div className="flex items-center justify-between mt-auto pt-2 border-t border-[#f0f0f0]">
         <span className="text-xs text-muted-foreground">
           {format(parseISO(idea.created_at), 'MMM d')}
         </span>
@@ -208,7 +206,7 @@ function IdeaCard({
             e.stopPropagation()
             onPromote()
           }}
-          className="text-xs text-primary hover:underline font-medium flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="text-xs text-black font-medium flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
         >
           Promote to pipeline
           <ArrowRight size={11} />
