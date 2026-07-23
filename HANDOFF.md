@@ -125,6 +125,18 @@ made zero code changes. The repo state (branch history on `main`, 20 commits):
 3. **No web push** — email only. Partially addressed by B5 (email first, push later).
 4. **Mobile week view broken** — see Workstream A bug table below.
 5. No test suite exists at all. Scripts: `npm run dev` / `build` / `start` / `lint`.
+6. **Vercel PREVIEW deployments fail for every branch** (diagnosed from build
+   logs, PR #1): `Error: supabaseUrl is required.` during page-data collection
+   for `/api/extension-key`. Cause: `src/app/api/extension-key/route.ts:5-8`
+   creates the Supabase admin client at module scope, and the Supabase env vars
+   (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) are only configured
+   for the Production environment in Vercel — not Preview. **Fix (Kevin, ~2 min,
+   no code):** Vercel dashboard → claude-social-calendar → Settings → Environment
+   Variables → enable the Supabase (and other) vars for the Preview environment.
+   Optional hardening for the build session: lazy-init that admin client inside
+   the handler so builds never require env at module-eval time — but the env-var
+   fix is still required for previews to actually run. Until fixed, expect red
+   Vercel checks on all PRs; they do not indicate broken code.
 
 ### Mobile bug → root cause map (verified against source)
 
