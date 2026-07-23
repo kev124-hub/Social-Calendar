@@ -1,5 +1,9 @@
 # Session Handoff — Social Calendar: Mobile Fixes + 2K Auto-Publish Pipeline
 
+**Handoff written: July 23, 2026.** (Do not infer the date from git history —
+the repo's original build commits are from late April 2026; this document and
+its plan are from July 23, 2026, and reflect the repo's state as of that day.)
+
 > **How to use this file:** Start a new Claude Code session on this repo and say
 > "Read HANDOFF.md and begin." Everything needed — context, decisions, exact plan,
 > file/line references, complexity ratings, and model guidance — is in this one file.
