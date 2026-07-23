@@ -45,6 +45,9 @@ export const viewport: Viewport = {
   themeColor: "#0a0a0a",
   width: "device-width",
   initialScale: 1,
+  // Extend under the notch/home indicator in installed PWA (standalone) mode;
+  // components add env(safe-area-inset-*) padding to stay clear of them.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

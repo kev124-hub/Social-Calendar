@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -126,6 +126,14 @@ export function WeeklyBoard({
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const [activeId, setActiveId] = useState<string | null>(null)
 
+  // Horizontal scroll-snap board (mobile) — bring today's column into view on
+  // mount and whenever the visible week changes.
+  const todayColRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.innerWidth >= 640) return
+    todayColRef.current?.scrollIntoView({ inline: 'start', block: 'nearest' })
+  }, [weekStart])
+
   // Ordered item IDs per column date key
   const [colOrder, setColOrder] = useState<Record<string, string[]>>({})
 
@@ -162,7 +170,9 @@ export function WeeklyBoard({
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
+    // Press-and-hold to drag on touch, so horizontal swipes scroll the board
+    // (added in A2) instead of picking up cards.
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
   )
 
   function handleDragStart({ active }: DragStartEvent) {
@@ -232,7 +242,7 @@ export function WeeklyBoard({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="h-full flex overflow-hidden bg-gray-50/50">
+      <div className="h-full flex bg-gray-50/50 overflow-x-auto overflow-y-hidden snap-x snap-mandatory sm:overflow-hidden">
         {days.map((day) => {
           const dateKey = format(day, 'yyyy-MM-dd')
           const dayPosts = posts.filter(
@@ -252,8 +262,10 @@ export function WeeklyBoard({
           return (
             <div
               key={day.toISOString()}
+              ref={todayCol ? todayColRef : undefined}
               className={cn(
-                'flex flex-col min-w-0 flex-1',
+                // Mobile: ~2 columns visible with scroll-snap; desktop: 7 even columns
+                'flex flex-col min-w-[44vw] shrink-0 snap-start sm:min-w-0 sm:flex-1 sm:shrink',
                 todayCol ? 'bg-white' : 'bg-transparent'
               )}
             >
@@ -265,7 +277,8 @@ export function WeeklyBoard({
                     todayCol ? 'text-blue-600' : 'text-gray-800'
                   )}
                 >
-                  {format(day, 'EEEE')}
+                  <span className="sm:hidden">{format(day, 'EEE')}</span>
+                  <span className="hidden sm:inline">{format(day, 'EEEE')}</span>
                 </p>
                 <p
                   className={cn(

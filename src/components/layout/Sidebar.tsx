@@ -214,9 +214,11 @@ export function Sidebar() {
         {desktopContent}
       </aside>
 
-      {/* Mobile top bar */}
+      {/* Mobile top bar — grows by the top safe-area inset so its content
+          clears the notch in standalone (installed PWA) mode */}
       <div className={cn(
-        'md:hidden fixed top-0 left-0 right-0 z-40 h-14',
+        'md:hidden fixed top-0 left-0 right-0 z-40',
+        'h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)]',
         'flex items-center justify-between px-4',
         'bg-white/90 backdrop-blur-xl',
         'border-b border-[#d6d6d6]',
