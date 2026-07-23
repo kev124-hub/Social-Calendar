@@ -259,14 +259,21 @@ export function CalendarView() {
       setCurrentDate(direction === 1 ? addDays(currentDate, 1) : subDays(currentDate, 1))
   }
 
-  function getHeaderLabel() {
-    if (view === 'month') return format(currentDate, 'MMMM yyyy')
+  function getHeaderLabel(short = false) {
+    if (view === 'month') return format(currentDate, short ? 'MMM yyyy' : 'MMMM yyyy')
     if (view === 'week') {
       const s = startOfWeek(currentDate, { weekStartsOn: 0 })
       const e = endOfWeek(currentDate, { weekStartsOn: 0 })
+      if (short) {
+        // Compact mobile label: drop the year, elide the month when both
+        // ends share it → "Jul 19–25", else "Jul 28 – Aug 3".
+        return isSameMonth(s, e)
+          ? `${format(s, 'MMM d')}–${format(e, 'd')}`
+          : `${format(s, 'MMM d')} – ${format(e, 'MMM d')}`
+      }
       return `${format(s, 'MMM d')} – ${format(e, 'MMM d, yyyy')}`
     }
-    return format(currentDate, 'EEEE, MMMM d, yyyy')
+    return format(currentDate, short ? 'EEE, MMM d' : 'EEEE, MMMM d, yyyy')
   }
 
   const visibleCalendarIds = new Set(calendars.filter((c) => c.is_visible).map((c) => c.id))
@@ -378,100 +385,109 @@ export function CalendarView() {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-        {/* Top bar */}
-        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-background shrink-0">
+        {/* Top bar — stacks into two rows below sm: so nothing clips on phones;
+            wraps (rather than overlapping) at cramped narrow-desktop widths */}
+        <div className="flex flex-col gap-2 px-4 py-2.5 border-b border-border bg-background shrink-0 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-2">
 
-          {/* Date label + picker */}
-          <div className="relative">
-            <button
-              onClick={() => setDatePickerOpen(!datePickerOpen)}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-accent/50 transition-colors group"
-            >
-              <span className="font-heading text-xl font-normal tracking-tight text-foreground">{getHeaderLabel()}</span>
-              <ChevronDown
-                size={13}
-                className={cn(
-                  'text-muted-foreground transition-transform duration-150',
-                  datePickerOpen && 'rotate-180'
-                )}
-              />
-            </button>
-
-            {datePickerOpen && (
-              <DatePickerPopup
-                currentDate={currentDate}
-                onDaySelect={(day) => setCurrentDate(day)}
-                onClose={() => setDatePickerOpen(false)}
-              />
-            )}
-          </div>
-
-          {/* Week navigation */}
-          <div className="flex items-center gap-0.5">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(-1)}>
-              <ChevronLeft size={14} />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 text-xs rounded-[10px] border-[#d6d6d6] text-[#333]"
-              onClick={() => setCurrentDate(new Date())}
-            >
-              Today
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(1)}>
-              <ChevronRight size={14} />
-            </Button>
-          </div>
-
-          {/* View switcher */}
-          <div className="hidden sm:flex gap-0.5">
-            {(['week', 'month', 'day', 'list'] as ViewMode[]).map((v) => (
+          {/* Row 1: date label + picker + week navigation */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="relative">
               <button
-                key={v}
-                onClick={() => setView(v)}
-                className={cn(
-                  'px-3 py-1.5 text-xs font-medium capitalize transition-colors rounded-[42px]',
-                  view === v
-                    ? 'bg-black text-white'
-                    : 'text-[#7b7b7b] hover:text-black'
-                )}
+                onClick={() => setDatePickerOpen(!datePickerOpen)}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-accent/50 transition-colors group"
               >
-                {v}
+                <span className="font-heading font-normal tracking-tight text-foreground whitespace-nowrap text-base sm:text-xl">
+                  <span className="sm:hidden">{getHeaderLabel(true)}</span>
+                  <span className="hidden sm:inline">{getHeaderLabel(false)}</span>
+                </span>
+                <ChevronDown
+                  size={13}
+                  className={cn(
+                    'shrink-0 text-muted-foreground transition-transform duration-150',
+                    datePickerOpen && 'rotate-180'
+                  )}
+                />
               </button>
-            ))}
+
+              {datePickerOpen && (
+                <DatePickerPopup
+                  currentDate={currentDate}
+                  onDaySelect={(day) => setCurrentDate(day)}
+                  onClose={() => setDatePickerOpen(false)}
+                />
+              )}
+            </div>
+
+            {/* Week navigation */}
+            <div className="flex items-center gap-0.5 shrink-0">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(-1)}>
+                <ChevronLeft size={14} />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs rounded-[10px] border-[#d6d6d6] text-[#333]"
+                onClick={() => setCurrentDate(new Date())}
+              >
+                Today
+              </Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(1)}>
+                <ChevronRight size={14} />
+              </Button>
+            </div>
           </div>
 
-          {/* Mobile view select */}
-          <select
-            className="sm:hidden px-2 py-1 text-xs rounded-md border border-border bg-background"
-            value={view}
-            onChange={(e) => setView(e.target.value as ViewMode)}
-          >
-            {(['week', 'month', 'day', 'list'] as ViewMode[]).map((v) => (
-              <option key={v} value={v}>{v}</option>
-            ))}
-          </select>
+          {/* Row 2: view switcher + AI + New Event + panel toggle */}
+          <div className="flex items-center gap-1.5 sm:ml-auto">
+            {/* View switcher (desktop) */}
+            <div className="hidden sm:flex gap-0.5">
+              {(['week', 'month', 'day', 'list'] as ViewMode[]).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  className={cn(
+                    'px-3 py-1.5 text-xs font-medium capitalize transition-colors rounded-[42px]',
+                    view === v
+                      ? 'bg-black text-white'
+                      : 'text-[#7b7b7b] hover:text-black'
+                  )}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
 
-          <div className="ml-auto flex items-center gap-1.5">
-            <AIEventInput onEventParsed={handleAIEvent} />
-            <Button size="sm" className="h-7 px-2 text-xs rounded-[10px]" onClick={() => openNewEvent(new Date())}>
-              <Plus size={12} className="mr-1" />
-              <span className="hidden sm:inline">New Event</span>
-              <span className="sm:hidden">New</span>
-            </Button>
-
-            {/* Right panel toggle */}
-            <button
-              onClick={() => setRightOpen(!rightOpen)}
-              className={cn(
-                'p-1.5 rounded text-muted-foreground hover:text-foreground transition-colors',
-                rightOpen && 'text-primary'
-              )}
-              title="Toggle time grid"
+            {/* Mobile view select */}
+            <select
+              className="sm:hidden px-2 py-1 text-xs rounded-md border border-border bg-background"
+              value={view}
+              onChange={(e) => setView(e.target.value as ViewMode)}
             >
-              {rightOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
-            </button>
+              {(['week', 'month', 'day', 'list'] as ViewMode[]).map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+
+            <div className="ml-auto flex items-center gap-1.5 sm:ml-0">
+              <AIEventInput onEventParsed={handleAIEvent} />
+              <Button size="sm" className="h-7 px-2 text-xs rounded-[10px]" onClick={() => openNewEvent(new Date())}>
+                <Plus size={12} className="mr-1" />
+                <span className="hidden sm:inline">New Event</span>
+                <span className="sm:hidden">New</span>
+              </Button>
+
+              {/* Right panel toggle (hidden below md: — panel is desktop-only chrome) */}
+              <button
+                onClick={() => setRightOpen(!rightOpen)}
+                className={cn(
+                  'hidden md:inline-flex p-1.5 rounded text-muted-foreground hover:text-foreground transition-colors',
+                  rightOpen && 'text-primary'
+                )}
+                title="Toggle time grid"
+              >
+                {rightOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -523,9 +539,10 @@ export function CalendarView() {
         </div>
       </div>
 
-      {/* Right panel */}
+      {/* Right panel — desktop-only chrome; hidden below md: so it never
+          squeezes the calendar on phones */}
       {rightOpen && (
-        <div className="w-[268px] shrink-0 overflow-hidden flex flex-col h-full">
+        <div className="hidden md:flex w-[268px] shrink-0 overflow-hidden flex-col h-full">
           <RightPanel
             events={visibleEvents}
             onEventClick={openEditEvent}
