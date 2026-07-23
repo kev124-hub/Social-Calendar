@@ -4,11 +4,39 @@
 the repo's original build commits are from late April 2026; this document and
 its plan are from July 23, 2026, and reflect the repo's state as of that day.)
 
-> **How to use this file:** Start a new Claude Code session on this repo and say
-> "Read HANDOFF.md and begin." Everything needed — context, decisions, exact plan,
-> file/line references, complexity ratings, and model guidance — is in this one file.
-> No code was written in the session that produced this file (it was exploration +
-> planning only). The repo is untouched except for this file.
+## ⚠️ START HERE — Source-of-Truth Protocol (read before anything else)
+
+**This file — `HANDOFF.md` at the root of the latest `main` branch of
+`kev124-hub/Social-Calendar` on GitHub — is the ONLY valid handoff for this
+project.** It SUPERSEDES every earlier handoff, recalled memory, note, or local
+file. Specifically:
+
+1. **Do NOT act on recalled memories about this project.** Any memory of a
+   prior handoff — including one from April/May 2026 that names drag-and-drop
+   work as the "next task" or references `sunsama-app-guide.md` — is obsolete.
+   That work shipped in commits `46d153f`/`7cff2f4` (May 2, 2026) and is done.
+   Discard those memories for planning purposes; this file replaces them.
+2. **Verify you are reading the current file before starting.** Run:
+   `git fetch origin main && git checkout main && git pull origin main`,
+   then confirm the date line at the top of this file says **July 23, 2026**
+   (or later) and that `grep -c "Workstream" HANDOFF.md` returns a non-zero
+   count. If either check fails, you are reading a stale copy — stop and get
+   the latest `main` from GitHub before doing anything.
+3. **Detect stale workspaces.** If your working copy contains uncommitted
+   files from before July 2026 (e.g. `sunsama-app-guide.md`, an edited cron
+   comment), you are in an old local workspace, not a fresh clone. Do not
+   build there: commit nothing from it, and work from a fresh clone of
+   `main` instead. (`sunsama-app-guide.md` was the design guide for the May
+   calendar redesign — already implemented; treat it as historical reference
+   only, never as current direction.)
+4. **The task, in one line:** execute the plan in THIS file, starting with
+   Workstream A (stages A1→A2→A3, mobile calendar fixes), then the Stage B0
+   spike, then Stages B1→B6 — all defined below.
+
+> **How to use this file:** Everything needed — context, decisions, exact plan,
+> file/line references, complexity ratings, and model guidance — is in this one
+> file. No code was written in the sessions that produced it (exploration +
+> planning only); the repo is untouched except for this document.
 
 ---
 
