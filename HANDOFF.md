@@ -240,6 +240,55 @@ still functional.
 - If rejected: fallback decision is already made — one high-bitrate 1080p
   transcode from the 2K master, done by us. Pipeline design is unchanged.
 
+#### Stage B0 — RESULTS (run 2026-07-23, ~15:50 UTC)
+
+**Bottom line: the 2K auto-publish path works end-to-end with no re-encode
+middleman. (a) is answered YES. The fallback 1080p transcode is NOT needed.**
+
+Run against the live MJ account, Graph API `v21.0`:
+
+- **Egress:** confirmed. `graph.facebook.com/v21.0/` reachable through the
+  session proxy (returned a well-formed Graph API JSON error unauthenticated).
+- **Token:** short-lived user token; `me/permissions` showed all four required
+  scopes `granted` — `instagram_basic`, `instagram_content_publish`,
+  `pages_show_list`, `pages_read_engagement` (+ `public_profile`).
+- **Account:** `GET /17841455072367303?fields=id,username,followers_count,media_count`
+  → `mustache.journey`, 410 followers, 373 media. (Gotcha for B4: the
+  `account_type` field is **not** valid on the IG user node in v21.0 — a request
+  including it 400s with code 100. Don't query it.)
+- **Test file:** `Edits_Depreciating_Asset_20260723_182253.mp4` (an Edits ~2K
+  9:16 export), served from Dropbox via a direct-download link (`dl=1`). This
+  confirms the B2 approach: a Dropbox direct URL is ingested fine as `video_url`
+  (`files/get_temporary_link` will yield an equivalent direct URL).
+- **Container:** `POST /17841455072367303/media` with `media_type=REELS`,
+  `video_url=<dropbox dl=1 link>`, `caption="B0 spike test - archiving"`
+  → container id `18030592784835746` (HTTP 200).
+- **Processing:** `GET /{container-id}?fields=status_code,status` polled every
+  20s → `IN_PROGRESS` → **`FINISHED`** within ~a few minutes. IG accepted the
+  ~2K file and its server-side transcode completed — no resolution/codec
+  rejection.
+- **Publish:** `POST /17841455072367303/media_publish` (`creation_id=<container>`)
+  → media id `18118150840893323`. `media_product_type=REELS`, `media_type=VIDEO`,
+  permalink **https://www.instagram.com/reel/DbJBleDD-BU/**, timestamp
+  `2026-07-23T15:50:38+0000`. (Kevin confirmed publish; post can be archived.)
+
+**(a) Did IG accept the 2K file? → YES.** Container reached `FINISHED` and
+published cleanly. No transcode of ours required; Workstream B proceeds as
+designed (auto-publish from the untouched 2K master).
+
+**(b) Served quality vs. a native Edits upload → PENDING Kevin's visual check.**
+This is inherently subjective — the Graph API exposes no served bitrate/resolution
+field, so it needs a human side-by-side. Kevin to open the permalink above on his
+phone and compare sharpness/detail against a native Edits post of the same clip,
+then this line gets updated with the verdict. (If it matches native → default
+Reels to `auto`; if softer → note the caveat but pipeline is unchanged; the
+1080p fallback is only relevant if the *API* rejects a file, which it did not.)
+
+**Notes for B4:** pin an explicit Graph API version (`v21.0` used here); a
+container stays publishable ~24h after `FINISHED`; the container lifecycle
+(create → poll `status_code` → publish) is exactly the state machine B4 must
+resume across cron runs.
+
 ### Stage B1 — Cron foundation + auth (also fixes broken notifications)
 **Complexity 1/5 · Sonnet/Haiku-capable · ~half day**
 - Add `CRON_SECRET` env var; all `/api/cron/*` routes check
@@ -386,8 +435,11 @@ suggestion.
 
 ## Open Questions
 
-1. **B0 spike outcome** — does the Reels API accept ~2K files, and does served
-   quality match native Edits uploads? (Fallback already decided if not.)
+1. **B0 spike outcome** — RESOLVED for acceptance: the Reels API **accepts ~2K
+   files** (spike run 2026-07-23, see "Stage B0 — RESULTS" above; reel
+   `DbJBleDD-BU` published from a 2K Edits export). Still open: does served
+   quality match native Edits uploads? — pending Kevin's visual side-by-side.
+   (Fallback already decided and unneeded for acceptance.)
 2. Exact Edits export spec (container/codec/resolution) — confirm during B0 that
    it's MP4/MOV H.264 or HEVC + AAC (API requirement).
 3. Web push (VAPID) timing — deliberately deferred; email-first in B5.
