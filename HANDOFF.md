@@ -242,8 +242,12 @@ still functional.
 
 #### Stage B0 — RESULTS (run 2026-07-23, ~15:50 UTC)
 
-**Bottom line: the 2K auto-publish path works end-to-end with no re-encode
-middleman. (a) is answered YES. The fallback 1080p transcode is NOT needed.**
+**Bottom line: the 2K auto-publish path works end-to-end — (a) YES, IG accepts
+the file — but a side-by-side quality review (b) found the IG-served API version
+visibly WORSE than the final/native output. Quality parity is NOT confirmed. A
+controlled pre-transcode by us is now a LIKELY REQUIREMENT for parity (not merely
+the rejection fallback the plan assumed). Do NOT default Reels to raw-2K `auto`
+until the clean re-test in §(b) settles it.**
 
 Run against the live MJ account, Graph API `v21.0`:
 
@@ -273,16 +277,58 @@ Run against the live MJ account, Graph API `v21.0`:
   `2026-07-23T15:50:38+0000`. (Kevin confirmed publish; post can be archived.)
 
 **(a) Did IG accept the 2K file? → YES.** Container reached `FINISHED` and
-published cleanly. No transcode of ours required; Workstream B proceeds as
-designed (auto-publish from the untouched 2K master).
+published cleanly — no resolution/codec rejection. Acceptance is settled.
 
-**(b) Served quality vs. a native Edits upload → PENDING Kevin's visual check.**
-This is inherently subjective — the Graph API exposes no served bitrate/resolution
-field, so it needs a human side-by-side. Kevin to open the permalink above on his
-phone and compare sharpness/detail against a native Edits post of the same clip,
-then this line gets updated with the verdict. (If it matches native → default
-Reels to `auto`; if softer → note the caveat but pipeline is unchanged; the
-1080p fallback is only relevant if the *API* rejects a file, which it did not.)
+**(b) Served quality vs. the final/native output → GAP FOUND (side-by-side video
+analysis, 2026-07-23).** Comparing the API-published, IG-served reel (Video 1 =
+`DbJBleDD-BU`, the "B0 spike test - archiving" post) against the final output
+(Video 2), Video 1 scored consistently lower on every dimension:
+
+| Dimension | API-served (V1) | Final/native (V2) | Symptom on V1 |
+|---|---|---|---|
+| Exposure stability | 4/10 | 8/10 | Brightness drops at transitions (~00:02–03) |
+| Transition quality | 3/10 | 8/10 | Abrupt darkening + near-black blackout frame at end (~00:09–10) |
+| Color vibrancy | 5/10 | 7/10 | Muted blues / yellow trim, mild desaturation on pans |
+| Sharpness & detail | 5/10 | 7/10 | Mild compression softness on fine high-contrast edges (plate text, tire lettering) |
+
+(Scores were center-compressed per the tool's rubric; the *relative* gap, not the
+absolute numbers, is the signal.)
+
+**Read this before treating it as a clean "raw-2K API vs native" transcode verdict:**
+
+1. **The symptom profile is NOT ordinary transcode loss.** A generic server-side
+   re-encode produces fairly *uniform* softness / slight color shift — not
+   localized exposure dips and a blackout end frame. Those are the signature of
+   **dynamic tone-mapping / auto-exposure adaptation**, which strongly implies the
+   Edits export is **HDR** (HLG or Dolby Vision — the iPhone default) and IG's
+   transcode of the *API-ingested* file tone-mapped HDR→SDR badly. Native Edits
+   uploads go through Meta's own pipeline, which reads the source color metadata
+   correctly — hence no such artifacts on V2. **If this is the cause, the fix is
+   ours and may reach parity or better:** hand IG a properly prepared file
+   (correct HDR→SDR tone-map, or a clean rec.709 SDR master, with correct color
+   metadata) instead of the raw export.
+2. **Rule out a capture confound.** Confirm V1 and V2 were obtained the same way.
+   If V1 was screen-recorded off the IG app (extra playback compression) while V2
+   is the original export file, part of the gap is measurement, not the API path.
+   The valid comparison is *IG-served-via-API* vs *IG-served-via-native*, both
+   downloaded from their served reels the same way.
+
+**Follow-up before finalizing the B4 auto-vs-notify default:**
+- **Probe the source:** `ffprobe` the Edits export — is `color_transfer`
+  `arib-std-b67` (HLG) / `smpte2084` (PQ) and `color_primaries bt2020` = HDR, or
+  `bt709` = SDR? This one check likely explains the whole gap.
+- **Clean re-test:** publish the *same* master three ways and compare downloads of
+  the served results — (i) raw export via API, (ii) native via Edits, (iii) a
+  controlled SDR/tone-mapped transcode by us via API.
+- **Decision rule:** if (iii) matches native → make the controlled pre-transcode a
+  required pipeline step and Reels can still `auto`. If even (iii) lags native →
+  keep Reels on `notify` (native Edits upload) and reserve `auto` for formats
+  where the gap is acceptable.
+
+**Net effect on the plan:** the pre-transcode was scoped only as a *rejection*
+fallback ("file accepted, so not needed"). This result promotes it to a **likely
+positive requirement for quality parity**, independent of acceptance — the single
+most important thing to resolve before B4 locks the default publish mode.
 
 **Notes for B4:** pin an explicit Graph API version (`v21.0` used here); a
 container stays publishable ~24h after `FINISHED`; the container lifecycle
@@ -435,13 +481,17 @@ suggestion.
 
 ## Open Questions
 
-1. **B0 spike outcome** — RESOLVED for acceptance: the Reels API **accepts ~2K
-   files** (spike run 2026-07-23, see "Stage B0 — RESULTS" above; reel
-   `DbJBleDD-BU` published from a 2K Edits export). Still open: does served
-   quality match native Edits uploads? — pending Kevin's visual side-by-side.
-   (Fallback already decided and unneeded for acceptance.)
-2. Exact Edits export spec (container/codec/resolution) — confirm during B0 that
-   it's MP4/MOV H.264 or HEVC + AAC (API requirement).
+1. **B0 spike outcome** — acceptance RESOLVED (Reels API **accepts ~2K files**;
+   reel `DbJBleDD-BU`). Quality parity: **NOT met in the first check** — a
+   side-by-side found the IG-served API version visibly worse (exposure dips,
+   blackout end frame, muted color, softer edges). Prime suspect is **HDR
+   tone-mapping** on IG's transcode of the raw export; a controlled pre-transcode
+   by us may reach parity or better. Needs the clean re-test in "Stage B0 —
+   RESULTS" §(b) before choosing the Reels auto-vs-notify default.
+2. Exact Edits export spec (container/codec/resolution/**color transfer**) —
+   confirm MP4/MOV H.264 or HEVC + AAC, and critically **whether it's HDR
+   (HLG/PQ, bt2020) or SDR (bt709)**. The B0 §(b) quality gap points squarely at
+   HDR→SDR tone-mapping as the culprit; `ffprobe` on the export answers it.
 3. Web push (VAPID) timing — deliberately deferred; email-first in B5.
 4. Whether Kevin wants `auto` or `notify` as the default for Reels once trust is
    established (schema defaults to `notify` for safety).
