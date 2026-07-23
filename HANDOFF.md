@@ -242,13 +242,15 @@ still functional.
 
 #### Stage B0 — RESULTS (run 2026-07-23, ~15:50 UTC)
 
-**Bottom line: 2K auto-publish works end-to-end AND matches native quality.
-(a) YES — IG accepts the ~2K file. (b) YES — frame-level analysis of the
-IG-served API reel vs the IG-served native reel shows them visually near-
-indistinguishable (brightness, color, and sharpness all match on confound-
-controlled measurements; §(b) below). No pre-transcode needed — Reels are safe
-to auto-publish straight from the raw 2K master. Auto-vs-notify default is now a
-trust/control choice, not a quality one.**
+**Bottom line: (a) YES — IG accepts and publishes the ~2K file end-to-end.
+(b) UNRESOLVED — exposure and color match native, but the API/test reel was
+visibly SOFTER than the native reel (confirmed by 7 viewers + multi-frame pixel
+analysis). The cause is NOT isolated: the test reel also had far fewer views
+(12 vs 2.1K), was only ~12 min old when recorded, and was archived immediately —
+any of which makes IG serve a weaker rendition regardless of upload path. A
+maturity-matched A/B (§(b)) is required before trusting raw-2K `auto`. Until
+then keep the pre-transcode / `notify` fallbacks in play. Do NOT default Reels to
+`auto` yet.**
 
 Run against the live MJ account, Graph API `v21.0`:
 
@@ -280,51 +282,66 @@ Run against the live MJ account, Graph API `v21.0`:
 **(a) Did IG accept the 2K file? → YES.** Container reached `FINISHED` and
 published cleanly — no resolution/codec rejection. Acceptance is settled.
 
-**(b) Served quality vs. native Edits → PARITY CONFIRMED by frame-level analysis
-(2026-07-23).** Two rounds:
+**(b) Served quality vs. native Edits → a REAL on-screen difference exists, but its
+CAUSE is not yet isolated. Do NOT clear the API path on quality yet.** This went
+through three passes; the trail is kept because it's instructive (and because two
+earlier conclusions here were wrong and are retracted).
 
-*Round 1 (an automated "video technical analysis" report):* flagged the
-API-published reel as visibly worse — exposure dips at transitions, a blackout
-end frame, muted color, softer edges. **This did not survive verification and is
-retracted** (see below). It appears to have (mis)attributed source-edit features
-to the API path and confabulated specifics — a caution about trusting LLM
-"video analysis" prose over pixel measurements.
+*Pass 1 — automated "video technical analysis" report:* claimed exposure dips, a
+blackout end frame, muted color, and softer edges on the API reel. The exposure /
+blackout / color specifics are **FALSE and retracted** (contradicted by the pixel
+data below). Caution: LLM "video analysis" prose confabulated specifics.
 
-*Round 2 (pixel-level, the verdict of record):* Kevin supplied two iPhone screen
-recordings taken off IG a minute apart under identical conditions — the only
-variable being the delivery path: **API path** = Edits → direct export to Dropbox
-→ `POST /media` → publish (the `DbJBleDD-BU` "B0 spike test" reel, 12 views);
-**native path** = same Edits project → posted through the Edits app (the original,
-2.1K views). Both files ffprobe as HEVC / bt709 SDR / 1320×2868 (the phone tone-
-maps to SDR on capture, so both went through the *same* capture pipeline → any
-on-screen difference is a real served difference). Measured with `ffmpeg`
-`signalstats` / `edgedetect`:
+*Pass 2 — first pixel pass (single frame):* confirmed exposure & color are equal,
+but dismissed the sharpness gap as motion/UI confound and declared "parity."
+**That parity call was premature and is also retracted.**
 
-| Dimension | Method | API path | Native path | Verdict |
-|---|---|---|---|---|
-| Brightness | mean luma curve, 5 fps | tracks native within ~2–3/255 the whole clip | — | **Identical.** The "transition dip" (~4s, ~89→76) is in the **source edit** — present in *both*. Both end on a dark loop frame (API 42 vs native 34 — API actually brighter). No API-only blackout. |
-| Color | mean saturation | 18.69 | 18.42 | **Identical** (API marginally *higher*; ~1%). "Muted" claim not reproduced. |
-| Sharpness (moving car region) | edge energy | 4.22 | 5.01 | Native ~25% higher — but **confounded** by (i) native's extra IG UI chrome and (ii) motion-blur phase between two independently-started recordings. |
-| Sharpness (static burned-in caption text — confound-free) | edge energy | 6.96 | 7.33 | **~5%, visually indistinguishable.** "Buy the damn car" is equally crisp in both (verified by eye at 100% crop). The car-region gap was motion phase, not transcode softening. |
+*Pass 3 — Kevin + 7 viewers + multi-frame pixel analysis (the verdict of record):*
+there **is** a clear, human-visible difference — the API/test reel is softer, its
+burned-in caption reads dimmer (whites bleed to gray), and fine detail (e.g. the
+taillight louvres) is lost vs the native reel.
 
-**Conclusion: the IG-served API reel and the IG-served native reel are visually
-near-indistinguishable.** No exposure/tone-mapping breakage (brightness curves
-track through the transitions), no color loss, no real sharpness penalty. The
-earlier HDR-tone-mapping hypothesis is **not supported** — there's no artifact
-for it to explain.
+What holds vs what changed, measured on the two iPhone screen recordings (both
+ffprobe HEVC / bt709 SDR / 1320×2868 — identical capture pipeline, so on-screen
+differences are real served differences):
 
-**Caveats (honest scope of this test):** n=1 clip; comparison is via phone screen
-recordings (validates *displayed/served* parity as a viewer sees it — the thing
-that matters — but not the underlying served bitrate/resolution, which the API
-doesn't expose). Both captures are SDR, so a pure-HDR-playback advantage, if any
-existed, would be invisible here; but since they look the same on-device, the
-real-world outcome is equivalent.
+| Dimension | Method | Result | Verdict |
+|---|---|---|---|
+| Brightness | mean-luma curve | API tracks native within ~2–3/255 all clip | **EQUAL.** The "transition dip" (~4s) is a **source-edit** feature in *both*; both end on a dark loop frame. Pass-1 "exposure dip/blackout unique to API" stays retracted. |
+| Color | mean saturation | 18.42 (API) vs 18.69 (native) | **EQUAL** (~1%). Pass-1 "muted" stays retracted. |
+| Sharpness/detail | edge energy on the **static burned-in caption** (motion- & UI-free), over the whole window | API mean 3.44 vs native 3.94 (~10–15% lower); 3× zoom shows feathered, hazy letters on API vs crisp on native | **NOT equal — native is sharper.** Confirmed by 7/7 human viewers. |
 
-**Net effect on the plan:** **no pre-transcode required for quality.** It reverts
-to what the plan always assumed — an *acceptance* fallback only (and acceptance
-passed, so it's unused). From a quality standpoint Reels are safe to `auto`-publish
-straight from the raw 2K master. (Whether to *default* to `auto` vs `notify` is now
-purely a trust/control call for Kevin — Open Question #4 — not a quality one.)
+**But this comparison cannot attribute the softness to the API upload path**, because
+the test reel differed from the native reel in **four** ways at once:
+1. **upload path** (API vs native Edits) — the variable we actually care about;
+2. **views:** 12 vs ~2,100;
+3. **maturity:** the test reel was screen-recorded **~12 min after publishing**; the
+   native reel was **~2 days old**;
+4. **lifecycle:** archived immediately vs live.
+Any of #2–#4 makes Instagram serve a weaker rendition **independent of upload path.**
+IG is well-known to serve freshly-posted reels a lower-quality rendition for the
+first minutes-to-hours and upgrade later, and to tier quality by delivery context
+(evidence: the Graph API progressive `media_url` for *every* reel on the account —
+including the mature native one — is tagged the `C3.720` rendition, with an
+`asset_age_days` field; in-app DASH playback, which the screen recordings captured,
+differs from that). So **upload freshness/maturity is a strong candidate cause here,
+not necessarily the API path.** (The test reel is now archived, so its served file
+can't be re-fetched via the API to check directly — the screen recording is the
+only record.)
+
+**Definitive test — run before B4 picks the default (a maturity-matched A/B):**
+- Publish the **same 2K master twice at the same time**: once via API, once native
+  through Edits. **Leave both live** (do not archive).
+- Screen-record the API one immediately, then **again after several hours / next
+  day**, under the same conditions as native.
+- Compare API-*matured* vs native at matched age/views. Converge → API path is fine
+  and the softness was upload freshness. Still lags → a real API-path penalty.
+
+**Interim stance (conservative):** API served-quality is **UNCONFIRMED, with a real
+risk flagged.** Do **not** default Reels to raw-2K `auto` yet. Keep both mitigations
+ready until the A/B clears the path: (i) our own one-time high-bitrate transcode
+from the 2K master before upload; (ii) `notify` (native Edits) for anything where
+crispness is critical. Exposure and color parity, however, are settled.
 
 **Notes for B4:** pin an explicit Graph API version (`v21.0` used here); a
 container stays publishable ~24h after `FINISHED`; the container lifecycle
@@ -477,18 +494,20 @@ suggestion.
 
 ## Open Questions
 
-1. **B0 spike outcome** — RESOLVED. Acceptance: the Reels API **accepts ~2K files**
-   (reel `DbJBleDD-BU`). Quality: **parity confirmed** — frame-level analysis of
-   the IG-served API reel vs the IG-served native reel found them visually near-
-   indistinguishable in brightness, color, and sharpness (see "Stage B0 —
-   RESULTS" §(b); an earlier automated report claiming a gap was verified against
-   the pixels and retracted). No pre-transcode needed. Only remaining sub-question
-   is the *default* publish mode (auto vs notify) — a trust call, see #4.
-2. Exact Edits export spec (container/codec/resolution/color transfer) — largely
-   moot now that §(b) confirmed served-quality parity (no tone-mapping problem to
-   chase). Still worth a one-line `ffprobe` on a real export during B2/B4 to
-   confirm it's MP4/MOV H.264 or HEVC + AAC (the API's hard container/codec
-   requirement) before wiring the Dropbox→publish path.
+1. **B0 spike outcome** — acceptance RESOLVED (Reels API **accepts ~2K files**;
+   reel `DbJBleDD-BU`). Quality **PARTLY resolved**: exposure & color match native,
+   but the API/test reel was visibly **softer** (7 viewers + multi-frame pixel
+   analysis agree — "Stage B0 — RESULTS" §(b)). Cause not isolated — confounded
+   with view-count (12 vs 2.1K), maturity (~12 min vs 2 days) and immediate
+   archiving, all of which independently lower IG's served rendition. **Open
+   action:** the maturity-matched A/B in §(b) (same master, API vs native, both
+   left live, compare after the API one matures). Blocks the Reels auto-vs-notify
+   default and the pre-transcode decision.
+2. Exact Edits export spec (container/codec/resolution/color transfer) — `ffprobe`
+   a real export during the §(b) A/B and B2/B4: confirm MP4/MOV H.264 or HEVC + AAC
+   (the API's hard container/codec requirement), and capture its native resolution/
+   bitrate so the A/B can tell whether IG's served softness is a rendition/maturity
+   effect or a genuine downscale of the uploaded file.
 3. Web push (VAPID) timing — deliberately deferred; email-first in B5.
 4. Whether Kevin wants `auto` or `notify` as the default for Reels once trust is
    established (schema defaults to `notify` for safety).
