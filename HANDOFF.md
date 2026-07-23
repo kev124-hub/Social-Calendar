@@ -350,6 +350,20 @@ suggestion.
 4. Whether Kevin wants `auto` or `notify` as the default for Reels once trust is
    established (schema defaults to `notify` for safety).
 
+## Final Deliverable Reminder (Kevin's explicit request — do not drop)
+
+When both workstreams are complete, **write a highly detailed `README.md`** for
+this project, replacing the current create-next-app boilerplate. It should cover:
+what the app is and who it's for (single-user Mustache Journey planner), the full
+feature list (calendar + Google sync, pipeline, UGC tracker, ideas, inspiration
+board, Chrome extension, Claude AI entry, PWA, notifications, and the new
+publishing pipeline), architecture overview (Next.js/Supabase/Vercel/Dropbox/
+Meta Graph API), the complete env-var reference, local dev + deploy instructions,
+the cron/pinger setup, the Meta & Dropbox app setup steps (condensed from
+`docs/integrations.md`), how auto-publish vs notify-to-post works, and
+troubleshooting notes (token expiry, failed publishes, cron auth). Treat this as
+the closing stage of the project — it is part of "done."
+
 ## Next Steps (first actions for the new session)
 
 1. Read `AGENTS.md`, skim `docs/build-phases.md` and `docs/database-schema.md`,
