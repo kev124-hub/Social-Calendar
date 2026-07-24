@@ -1,11 +1,18 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { sendNotificationEmail } from '@/lib/email'
+import { checkCronAuth } from '@/lib/cron-auth'
 
-// Called by Vercel Cron every 15 minutes
-// vercel.json: { "crons": [{ "path": "/api/cron/send-notifications", "schedule": "*/15 * * * *" }] }
+// Cadence: pinged every 5 minutes by an external pinger (cron-job.org) that
+// sends `Authorization: Bearer <CRON_SECRET>`. Vercel Cron (vercel.json) also
+// hits this daily at 12:00 UTC as a backstop — on Hobby, daily is the finest
+// Vercel-native schedule allowed, which is why the external pinger drives the
+// real cadence. Both entry points authenticate with the same CRON_SECRET.
 
-export async function GET() {
+export async function GET(request: Request) {
+  const unauthorized = checkCronAuth(request)
+  if (unauthorized) return unauthorized
+
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!

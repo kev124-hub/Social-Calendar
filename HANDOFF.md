@@ -4,6 +4,12 @@
 the repo's original build commits are from late April 2026; this document and
 its plan are from July 23, 2026, and reflect the repo's state as of that day.)
 
+> **Updated July 24, 2026 — B0 spike executed.** Workstream A (mobile calendar
+> fixes) shipped and merged (PR #4). The B0 2K-acceptance spike has run: **B0(a)
+> is CLOSED (API accepts the 2K file)**; **B0(b) (served-quality parity) is still
+> OPEN** pending a fresh-vs-fresh experiment. See § Stage B0 "B0 results" and
+> § Open Questions #1 for the full findings and the deciding test.
+
 ## ⚠️ START HERE — Source-of-Truth Protocol (read before anything else)
 
 **This file — `HANDOFF.md` at the root of the latest `main` branch of
@@ -240,6 +246,54 @@ still functional.
 - If rejected: fallback decision is already made — one high-bitrate 1080p
   transcode from the 2K master, done by us. Pipeline design is unchanged.
 
+#### B0 results (executed July 23–24, 2026)
+Two reels of the **same** video on the live `mustache.journey` account: an API-path
+post from the 2K Dropbox master (`instagram.com/reel/DbJBleDD-BU/`, ~12 views, was
+archived then unarchived) vs. a native Edits-app post days earlier
+(`instagram.com/reel/DbEcIsFxsEE/`, ~2.1K views). Measured two ways; the
+**definitive** method was stream-level: pulling each post's DASH manifest
+(`video_dash_manifest`, embedded in the logged-in instagram.com page scripts —
+rung resolution/codec/bitrate). Frame-level screen-recording analysis is
+confounded by ABR/player state — **prefer the manifest method for all future
+measurements.**
+
+- **B0(a) — Does the Reels API accept the ~2K file? ✅ YES — CLOSED.** Container +
+  publish flow succeeded end-to-end; audio survived ingest (served HE-AAC 78 kbps,
+  same rendition as native). (A −91 dB "silent" screen recording was player mute
+  during capture, not a pipeline bug — confirmed via manifest.) **The 1080p-transcode
+  fallback is NOT needed on acceptance grounds.**
+- **B0(b) — Does served quality match a native upload? ⏳ STILL OPEN.** Served ladders
+  as of July 24: API test reel = **720×1280 H.264 @ 2.12 Mbps (only rung)**; native
+  reel = **1080×1920 VP9 @ 2.92 Mbps + 720×1280 VP9 @ 2.22 Mbps**. The API post is
+  ~19% softer as served — fully explained by the rung gap. **But attribution is
+  confounded:** H.264-single-rung is Meta's birth-tier encode (every fresh upload);
+  VP9 rungs are the promoted tier Meta generates for content that earns watch time.
+  The two arms differ in upload path AND age/views AND archive history at once. Two
+  live hypotheses — (1) benign: the test post is birth-tier because 12 views + archived,
+  and a fresh native upload would look identical on day one; (2) bad: API ingest caps
+  the ladder at 720p permanently. **Current data cannot distinguish these — do NOT record
+  B0(b) as failed and do NOT trigger the fallback transcode yet.**
+- **Additional finding:** archiving is NOT quality-neutral — it appears to freeze/demote
+  what's served. **Never archive a test post before measuring it** (also relevant to any
+  future "archive & restore" feature: quality may not survive the round trip).
+
+**Deciding experiment to close B0(b) (needs Kevin, ~15 min + ~1 h wait):** take one
+Edits 2K export; within minutes post it **twice, both fresh** — once via the API flow,
+once natively from Edits; caption both as tests; **do not archive.** At ~1 h old, pull
+both DASH manifests. Decision rule: if the fresh **native** post is **also 720p-only at
+birth** → **parity proven** (promotion is engagement-driven; open B4's gate); if fresh
+native gets **1080p immediately** and API doesn't → **API penalty is real** (enable the
+fallback 1080p transcode step in B4 and re-test). Archive/delete the test posts only
+**after** measurement. Passive corroboration: re-pull the live test reel `DbJBleDD-BU`
+manifest after 24–48 h of views — a 1080p VP9 rung appearing there directly supports
+hypothesis (1).
+
+**Build order impact:** B1 → B2 → B3 are unblocked (none depend on B0(b)); build them now,
+B1 first (it also fixes the broken notification cadence). B4 may be built, but its
+**done-gate stays closed until B0(b) resolves** — architecture is unchanged either way
+(worst case inserts one isolated high-bitrate 1080p transcode from the 2K master before
+upload).
+
 ### Stage B1 — Cron foundation + auth (also fixes broken notifications)
 **Complexity 1/5 · Sonnet/Haiku-capable · ~half day**
 - Add `CRON_SECRET` env var; all `/api/cron/*` routes check
@@ -386,8 +440,13 @@ suggestion.
 
 ## Open Questions
 
-1. **B0 spike outcome** — does the Reels API accept ~2K files, and does served
-   quality match native Edits uploads? (Fallback already decided if not.)
+1. **B0 spike outcome** — **PARTIALLY RESOLVED (July 24, 2026; see § Stage B0 "B0
+   results").** B0(a) **CLOSED** — the Reels API accepts the ~2K file (audio survives;
+   no fallback needed on acceptance grounds). B0(b) **STILL OPEN** — the API test reel
+   serves a 720p-only H.264 rung vs. the native reel's 1080p VP9 ladder, but attribution
+   is confounded (upload path vs. age/views vs. archive history). Close it with the
+   fresh-vs-fresh deciding experiment in § Stage B0; only then decide whether the 1080p
+   fallback transcode is needed. Do NOT treat B0(b) as failed yet.
 2. Exact Edits export spec (container/codec/resolution) — confirm during B0 that
    it's MP4/MOV H.264 or HEVC + AAC (API requirement).
 3. Web push (VAPID) timing — deliberately deferred; email-first in B5.
