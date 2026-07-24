@@ -26,6 +26,8 @@ interface Props {
 const PLATFORMS: Platform[] = ['instagram', 'tiktok', 'linkedin']
 const POST_TYPES: PostType[] = ['reel', 'carousel', 'story', 'static', 'video', 'article']
 const STAGES: PostStage[] = ['idea', 'scripted', 'shot', 'editing', 'scheduled', 'published']
+// Stages that a scheduled date auto-advances to 'scheduled' (never demote 'published')
+const STAGES_BEFORE_SCHEDULED: PostStage[] = ['idea', 'scripted', 'shot', 'editing']
 
 const inputClass =
   'w-full px-3.5 py-2.5 rounded-[10px] border border-[#d6d6d6] bg-white text-[13px] text-[#333] focus:outline-none focus:ring-2 focus:ring-[#f1ccff] focus:border-[#f1ccff] transition-colors'
@@ -108,16 +110,22 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
 
   async function handleSave() {
     setSaving(true)
+    const scheduledIso = scheduledAt ? new Date(scheduledAt).toISOString() : null
+    // Giving a post a scheduled date advances it to the "scheduled" stage
+    // (unless it's already further along), so it shows as scheduled on the
+    // calendar and the auto-publish worker can pick it up.
+    const effectiveStage: PostStage =
+      scheduledIso && STAGES_BEFORE_SCHEDULED.includes(stage) ? 'scheduled' : stage
     const payload = {
       platform,
       post_type: postType || null,
-      stage,
+      stage: effectiveStage,
       title: title || null,
       caption: caption || null,
       hashtags: hashtags || null,
       media_url: mediaUrl || null,
       media_dropbox_path: mediaDropboxPath,
-      scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+      scheduled_at: scheduledIso,
       notes: notes || null,
     }
     if (post) {
@@ -296,7 +304,11 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
             <input
               type="datetime-local"
               value={scheduledAt}
-              onChange={(e) => setScheduledAt(e.target.value)}
+              onChange={(e) => {
+                setScheduledAt(e.target.value)
+                // Reflect the auto-advance live so the Stage chip visibly moves
+                if (e.target.value && STAGES_BEFORE_SCHEDULED.includes(stage)) setStage('scheduled')
+              }}
               className={inputClass}
             />
           </div>
