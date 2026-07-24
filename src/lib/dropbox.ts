@@ -8,7 +8,7 @@
 const TOKEN_URL = 'https://api.dropboxapi.com/oauth2/token'
 const API = 'https://api.dropboxapi.com/2'
 
-const READY_FOLDER = (process.env.DROPBOX_READY_FOLDER ?? '/Social Calendar/Ready to Post').replace(/\/+$/, '')
+const READY_FOLDER = (process.env.DROPBOX_READY_FOLDER ?? '/Social Media/Ready to Post').replace(/\/+$/, '')
 
 // Video/media extensions we surface in the picker (Reels/feed sources).
 const MEDIA_EXT = /\.(mp4|mov|m4v|webm|jpg|jpeg|png|heic|heif)$/i
