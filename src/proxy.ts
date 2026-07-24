@@ -34,6 +34,10 @@ export async function proxy(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/_next') ||
     request.nextUrl.pathname.startsWith('/api/auth') ||
     request.nextUrl.pathname.startsWith('/api/inspirations') ||
+    // Cron routes have no user session; they authenticate with CRON_SECRET
+    // inside the handler (see src/lib/cron-auth.ts), so skip the login
+    // redirect here — otherwise the pinger/Vercel Cron gets bounced to /login.
+    request.nextUrl.pathname.startsWith('/api/cron') ||
     request.nextUrl.pathname.startsWith('/auth/callback')
 
   if (!isPublicPath && !isAuthPage && !user) {
