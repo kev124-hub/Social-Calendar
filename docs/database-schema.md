@@ -69,6 +69,14 @@ CREATE TABLE social_posts (
   notification_at TIMESTAMPTZ,
   notification_method TEXT CHECK (notification_method IN ('email', 'push', 'both')),
   promoted_from_idea UUID REFERENCES ideas(id),
+  -- Auto-publish pipeline (migration 005_publishing.sql)
+  media_dropbox_path TEXT,    -- path in the Dropbox "Ready to Post" folder; source of truth for publishing
+  publish_mode TEXT CHECK (publish_mode IN ('auto', 'notify')) DEFAULT 'notify',
+  publish_status TEXT CHECK (publish_status IN ('pending', 'processing', 'published', 'failed')),
+  ig_container_id TEXT,       -- IG media container id (created, then polled to FINISHED)
+  ig_media_id TEXT,           -- published IG media id (guards against double-publish)
+  ig_permalink TEXT,          -- public URL once published
+  publish_error TEXT,         -- last failure reason
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );

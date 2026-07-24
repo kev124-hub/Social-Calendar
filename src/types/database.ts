@@ -48,6 +48,9 @@ export interface CalendarEvent extends CalendarEventRow {
   calendar?: Calendar
 }
 
+export type PublishMode = 'auto' | 'notify'
+export type PublishStatus = 'pending' | 'processing' | 'published' | 'failed'
+
 export interface SocialPost {
   id: string
   platform: Platform
@@ -63,6 +66,14 @@ export interface SocialPost {
   notification_at: string | null
   notification_method: NotificationMethod | null
   promoted_from_idea: string | null
+  // Auto-publish pipeline (migration 005)
+  media_dropbox_path: string | null
+  publish_mode: PublishMode | null
+  publish_status: PublishStatus | null
+  ig_container_id: string | null
+  ig_media_id: string | null
+  ig_permalink: string | null
+  publish_error: string | null
   created_at: string
   updated_at: string
 }
