@@ -32,6 +32,14 @@ const inputClass =
 
 const labelClass = 'text-[13px] font-medium text-[#333] block mb-1.5 tracking-tight'
 
+type DropboxFile = { name: string; path: string; size: number; modified: string | null }
+
+function formatSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${bytes} B`
+}
+
 export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage, defaultScheduledAt }: Props) {
   const [platform, setPlatform] = useState<Platform>('instagram')
   const [postType, setPostType] = useState<PostType | ''>('')
@@ -44,7 +52,30 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // Dropbox "Ready to Post" media picker
+  const [mediaDropboxPath, setMediaDropboxPath] = useState<string | null>(null)
+  const [dropboxOpen, setDropboxOpen] = useState(false)
+  const [dropboxFiles, setDropboxFiles] = useState<DropboxFile[]>([])
+  const [dropboxLoading, setDropboxLoading] = useState(false)
+  const [dropboxError, setDropboxError] = useState<string | null>(null)
+
   const supabase = createClient()
+
+  async function loadDropbox() {
+    setDropboxOpen(true)
+    setDropboxLoading(true)
+    setDropboxError(null)
+    try {
+      const res = await fetch('/api/dropbox/ready')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to load Dropbox folder')
+      setDropboxFiles(data.files ?? [])
+    } catch (err) {
+      setDropboxError(err instanceof Error ? err.message : 'Failed to load Dropbox folder')
+    } finally {
+      setDropboxLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (!open) return
@@ -58,6 +89,8 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
       setMediaUrl(post.media_url ?? '')
       setScheduledAt(post.scheduled_at ? post.scheduled_at.slice(0, 16) : '')
       setNotes(post.notes ?? '')
+      setMediaDropboxPath(post.media_dropbox_path ?? null)
+      setDropboxOpen(false) // collapse the picker; files refresh on next open
     } else {
       setPlatform('instagram')
       setPostType('')
@@ -68,6 +101,8 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
       setMediaUrl('')
       setScheduledAt(defaultScheduledAt ?? '')
       setNotes('')
+      setMediaDropboxPath(null)
+      setDropboxOpen(false)
     }
   }, [open, post, defaultStage, defaultScheduledAt])
 
@@ -81,6 +116,7 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
       caption: caption || null,
       hashtags: hashtags || null,
       media_url: mediaUrl || null,
+      media_dropbox_path: mediaDropboxPath,
       scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null,
       notes: notes || null,
     }
@@ -200,6 +236,59 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
               className={inputClass}
               placeholder="Dropbox or Google Drive URL"
             />
+          </div>
+
+          {/* Dropbox source file (used by the auto-publish worker) */}
+          <div>
+            <label className={labelClass}>
+              Dropbox media <span className="text-[#7b7b7b] font-normal">(source file for auto-publish)</span>
+            </label>
+            {mediaDropboxPath ? (
+              <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-[10px] border border-[#d6d6d6] bg-[#f5f2f0]">
+                <span className="text-[13px] text-[#333] truncate flex-1" title={mediaDropboxPath}>
+                  {mediaDropboxPath.split('/').pop()}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMediaDropboxPath(null)}
+                  className="text-xs text-[#7b7b7b] hover:text-black shrink-0"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={loadDropbox}
+                className="w-full px-3.5 py-2.5 rounded-[10px] border border-dashed border-[#d6d6d6] bg-white text-[13px] text-[#7b7b7b] hover:text-black hover:border-[#bcbcbc] transition-colors"
+              >
+                Attach from Dropbox
+              </button>
+            )}
+
+            {dropboxOpen && !mediaDropboxPath && (
+              <div className="mt-2 border border-[#d6d6d6] rounded-[10px] max-h-48 overflow-y-auto divide-y divide-[#f0ede9]">
+                {dropboxLoading ? (
+                  <p className="px-3 py-3 text-[12px] text-[#7b7b7b]">Loading Ready to Post folder…</p>
+                ) : dropboxError ? (
+                  <p className="px-3 py-3 text-[12px] text-destructive">{dropboxError}</p>
+                ) : dropboxFiles.length === 0 ? (
+                  <p className="px-3 py-3 text-[12px] text-[#7b7b7b]">No media files in the Ready to Post folder.</p>
+                ) : (
+                  dropboxFiles.map((f) => (
+                    <button
+                      key={f.path}
+                      type="button"
+                      onClick={() => { setMediaDropboxPath(f.path); setDropboxOpen(false) }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[#f5f2f0] transition-colors"
+                    >
+                      <span className="text-[13px] text-[#333] truncate flex-1">{f.name}</span>
+                      <span className="text-[11px] text-[#bcbcbc] shrink-0">{formatSize(f.size)}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
           </div>
 
           <div>
