@@ -66,7 +66,7 @@ The auto-publish pipeline is LIVE and running unattended.**
 | Path | Evidence |
 |---|---|
 | Manual "Publish now" | Post `1bc953a2` → container `18030885791835746` → media `17871012090627085` → https://www.instagram.com/reel/DbON80djKs7/ — 1 attempt, no retries |
-| Automatic cron path | Post `52f959ab` ("I need a Minute") → `considered:1, created:1`, container `18030889445835746`, entirely unattended |
+| Automatic cron path | Post `52f959ab` ("I need a Minute") → run 1 `considered:1, created:1` (container `18030889445835746`) → run 2 `published:1`, media `18097399642995606`, https://www.instagram.com/reel/DbOQbNblyM7/ — **entirely unattended, no human step** |
 | Auth + config | Cron returns `{"ok":true,...,"token":{"status":"ok","daysLeft":59}}` — proves CRON_SECRET, all four Meta env vars, and a live `debug_token` round trip |
 | Dropbox picker | Confirmed listing real files in prod; `get_temporary_link` resolves the team-namespace path with **no** `Dropbox-API-Path-Root` header |
 | `app_credentials` | Token persisted with `expires_at` 2026-09-23, matching Meta's debugger exactly |
@@ -79,11 +79,23 @@ exercised against the live API. It is written to fail non-fatally, and a missing
 case is a manual rotation, not a lost post. **Do not describe it as tested.**
 
 ### Immediately outstanding
-1. **PR #12 is open and unmerged** (PWA manifest fix + doc updates). Merge it.
+1. **Branch cleanup (Kevin, ~30s).** Four stale branches remain on GitHub; this
+   environment's git proxy rejects delete-ref pushes and the GitHub MCP server has
+   no delete-branch tool, so they must be removed from the branches page by hand:
+   `claude/focused-proskuriakova-6e486a`,
+   `claude/github-repo-review-exploration-k8llxc`, `claude/romantic-yonath-c9a4bb`
+   (all merged into main), and `claude/workstream-b-stage-b0-u9z33l` (**not**
+   merged, but docs-only: four July 23 `HANDOFF.md` commits whose conclusions were
+   retracted in their own messages and superseded twice — deleting is correct, tip
+   is `f3d6c1d` if it ever needs restoring). Also worth enabling
+   **Settings → General → Automatically delete head branches**.
 2. **Re-measure the test reels' DASH manifests** a few hours after publish to
    confirm B0's async-promotion finding holds for app-published posts. **Never
    archive a test post before measuring** — archiving freezes rendition generation.
-3. Delete the leftover test posts once measurement is done.
+   The two live test reels are `DbON80djKs7` (manual publish) and `DbOQbNblyM7`
+   (automatic). Both should show a 1080p VP9 rung once Meta's async encode lands.
+3. Delete the leftover test posts once measurement is done. One unused test post
+   remains in the DB: `04d4cd61-6ce3-4001-af28-47f7a0e7d785` ("Need a Minute").
 4. **Undecided:** whether `/api/cron/publish-posts` should return **503** instead
    of 200 when `ok:false` (see Open Questions #7). Kevin has not chosen yet.
 
@@ -459,13 +471,19 @@ Update `src/types/database.ts` and `docs/database-schema.md` to match.
 > - `fb_exchange_token` refresh remains **unexercised** until that date — it is the
 >   one path in B4 no test has covered. It fails non-fatally by design.
 >
-> **The automatic path is verified too.** The cron-job.org pinger for
+> **The automatic path is verified end to end.** The cron-job.org pinger for
 > `/api/cron/publish-posts` is set up (every 5 min, `Authorization: Bearer
-> <CRON_SECRET>`), and post `52f959ab` was picked up unattended:
-> `considered:1, created:1`, container `18030889445835746`. That exercised the
-> candidate-selection query — `stage='scheduled'` + `publish_mode='auto'` +
-> `scheduled_at <= now()` + the status filter, backed by the partial index — which
-> manual "Publish now" bypasses entirely by looking a post up by id.
+> <CRON_SECRET>`), and post `52f959ab` went out with no human step at all:
+> - run 1 → `considered:1, created:1`, container `18030889445835746`
+> - run 2 → `published:1`, media `18097399642995606`,
+>   https://www.instagram.com/reel/DbOQbNblyM7/
+>
+> Run 1 is the important one: it exercised the candidate-selection query —
+> `stage='scheduled'` + `publish_mode='auto'` + `scheduled_at <= now()` + the
+> status filter, backed by the partial index — which manual "Publish now" bypasses
+> entirely by looking a post up by id. Run 2 then carried the same post through
+> poll → `media_publish` → permalink across a **separate serverless invocation**,
+> which is the resumption behaviour the whole state machine exists for.
 >
 > **Cron alerting:** both cron-job.org jobs should have *notify on failure* and
 > *notify when disabled* enabled (not notify-on-success — 288 emails/day). This is
