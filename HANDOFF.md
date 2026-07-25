@@ -747,12 +747,57 @@ Add Kevin's own daily browser use and the database sees traffic constantly. So
 either the notice isn't about this project, or something is stopping that traffic
 from counting. Diagnose before changing anything.
 
-**Hypotheses, most likely first:**
-1. **The notice is about a different Supabase project.** Orgs accumulate
-   half-finished projects, and the warning email names one specific project ref.
-   If that ref isn't the app's, the app's usage is irrelevant and there is nothing
-   to fix in code. **Check first — it's a 30-second check that could close this
-   entirely.**
+#### Diagnosis as of July 25, 2026 — narrowed to "wait one week", do NOT build a keepalive
+
+**Hypotheses 1 and 2 are both ruled out:**
+- **(1) Wrong project — RULED OUT.** Kevin has exactly one Supabase project, so
+  the notice is necessarily about this one.
+- **(2) Pinger 401ing — RULED OUT.** The cron returns
+  `{"ok":true,...,"token":{"status":"ok"}}` against both endpoints, so the
+  `CRON_SECRET` header is correct and every ping does real database work.
+
+**The finding that matters: the traffic is one day old.** B1's cron pinger shipped
+in `5cdb35c` on **July 24, 2026**. Supabase's inactivity window is *"the past
+week"*, so **every warning email received so far covers a week that was almost
+entirely before the pinger existed.** Before July 24 this project's only automated
+traffic was a single daily Vercel cron querying an empty `notifications` table
+(downgraded to daily in `fdb5d5e`, April 29) plus Kevin's sporadic browser use.
+Against Supabase's stated bar — *"typically a few user requests to the database
+each day over the previous week"* — the warnings were most likely **correct all
+along**, not a false alarm.
+
+**What the pinger now generates**, for comparison with that bar:
+
+| Endpoint | Runs/day | DB queries per run | Queries/day |
+|---|---|---|---|
+| `/api/cron/send-notifications` | 288 | `social_posts` select (B5) + `notifications` select | ~576 |
+| `/api/cron/publish-posts` | 288 | `app_credentials` select + `social_posts` select | ~576 |
+
+**≈1,150+ database queries per day**, two to three orders of magnitude above the
+documented threshold.
+
+**The decisive test is time, not code.** If a warning still arrives after the
+pinger has been running a full week — i.e. **after ~August 1, 2026** — then
+service-role PostgREST traffic genuinely isn't counted, and only then is there
+something to fix.
+
+**Corrected fix ladder** (the original "add a keepalive" branch below is wrong for
+this case and is kept only for provenance): if ~1,150 service-role queries/day do
+not register as activity, then **a keepalive cannot help either** — it would be
+more of exactly the same kind of traffic. The real options at that point are
+Supabase **Pro (~$25/mo, removes pausing entirely)** or accepting the risk.
+
+**Risk while waiting is bounded and visible, not silent.** If the project ever did
+pause, every DB query throws, the publish cron returns 500, and cron-job.org's
+failure alert emails Kevin — that is exactly the watchdog layer B4 was built with.
+A pause cannot silently swallow scheduled posts.
+
+**Original hypotheses (kept for provenance):**
+1. ~~**The notice is about a different Supabase project.**~~ Ruled out — one project.
+   Orgs accumulate half-finished projects, and the warning email names one specific
+   project ref. If that ref isn't the app's, the app's usage is irrelevant and there
+   is nothing to fix in code. **Check first — it's a 30-second check that could close
+   this entirely.**
 2. **The 5-minute pinger is 401ing.** `checkCronAuth` rejects before touching the
    database, so a stale/incorrect `Authorization: Bearer <CRON_SECRET>` at
    cron-job.org (e.g. after the secret was rotated) means every ping does *zero*
@@ -884,13 +929,17 @@ suggestion.
    env-only storage would mean a manual secret rotation every ~60 days or
    auto-publish silently stops. `INSTAGRAM_USER_ACCESS_TOKEN` stays as the
    bootstrap value; the first successful refresh writes the table, which wins after.
-6. **Why does Supabase warn weekly about archiving for inactivity?** Open — see
-   Stage B7 for the analysis and diagnostic sequence. Materially affects
-   auto-publish reliability, since a paused project means posts silently don't go out.
-   **Narrowed July 25, 2026:** hypothesis 2 (the pinger 401ing on a stale
-   `CRON_SECRET`) is **ruled out** — the secret is confirmed working against both
-   cron endpoints. Start from hypothesis 1: check whether the warning email even
-   names this project.
+6. **Why does Supabase warn weekly about archiving for inactivity?** **Narrowed to
+   a waiting test on July 25, 2026 — see § Stage B7 for the full analysis.** Both
+   leading hypotheses are ruled out: Kevin has only one Supabase project (so the
+   notice is about this one), and the pinger is confirmed authenticating and doing
+   real DB work. The likely answer is that **the warnings were simply correct**:
+   the 5-minute pinger only shipped July 24, so every warning so far measured a
+   week with almost no automated traffic. The project now generates ~1,150 DB
+   queries/day against a documented bar of "a few per day". **Decisive test: does a
+   warning still arrive after ~August 1, 2026?** If yes, service-role traffic isn't
+   counted and a keepalive would be pointless — the choice then is Supabase Pro
+   (~$25/mo) or accepting the risk. **Do not build anything before that date.**
 7. **Should `/api/cron/publish-posts` return 503 instead of 200 when `ok:false`?**
    ✅ **RESOLVED (July 25, 2026) — no. The app emails instead, and the route keeps
    returning 200.** The gap was real: an unconfigured integration (missing
