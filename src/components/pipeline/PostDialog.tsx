@@ -192,6 +192,12 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
 
   /** Write the form to the DB. Returns false if the write failed. */
   async function persist(): Promise<boolean> {
+    // Rescheduling into the future re-arms the notify-to-post reminder: a post
+    // that came due, got its email and slipped should be reminded about again at
+    // its new time. Saving a post whose time has already passed leaves the marker
+    // alone, so editing a caption after the reminder can't trigger a second one.
+    const reArmNotify = scheduledIso && new Date(scheduledIso).getTime() > Date.now()
+
     const payload = {
       platform,
       post_type: postType || null,
@@ -204,6 +210,7 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
       publish_mode: publishMode,
       scheduled_at: scheduledIso,
       notes: notes || null,
+      ...(reArmNotify ? { notified_at: null } : {}),
     }
     const { error } = post
       ? await supabase.from('social_posts').update(payload).eq('id', post.id)

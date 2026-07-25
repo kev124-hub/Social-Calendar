@@ -104,14 +104,18 @@ case is a manual rotation, not a lost post. **Do not describe it as tested.**
 3. ~~Delete the leftover test posts.~~ **Done (Kevin, July 25)** — including
    `04d4cd61-6ce3-4001-af28-47f7a0e7d785` ("Need a Minute").
 4. ~~**Undecided:** whether `/api/cron/publish-posts` should return 503~~
-   **Decided July 25: no — the app emails instead.** See Open Questions #7. With
-   that closed there are **no unresolved decisions** left in Workstream B; only
-   B5, B7 and the README remain.
+   **Decided July 25: no — the app emails instead.** See Open Questions #7. There
+   are **no unresolved decisions** left in Workstream B.
+5. **Apply `supabase/migrations/007_notify_to_post.sql` (Kevin).** Stage B5 is
+   built and merged but inert until this runs, followed by
+   `NOTIFY pgrst, 'reload schema';` in the Supabase SQL editor. Until then every
+   run of `/api/cron/send-notifications` reports `notifyError` — visible, not
+   silent, but no reminders go out.
 
 ### Next work, in order
-~~**B6**~~ **done (July 25 — see § Stage B6)** → **B5** (notify-mode emails) →
+~~**B6**~~ **done** → ~~**B5**~~ **done (both July 25 — see their stages)** →
 **B7** (Supabase inactivity diagnosis) → **the detailed README** that closes the
-project.
+project. **B5 needs migration 007 applied before it does anything** (see below).
 
 ### Repo / workflow state
 - Designated branch `claude/b0-b4-quality-verification-66dnqx`. Its PR #14 (B0
@@ -619,13 +623,62 @@ New route `src/app/api/cron/publish-posts/route.ts` (pinged every 5 min, auth pe
 API rate limit (50 API-published posts/24h) is far above Kevin's volume — a
 simple count guard is enough.
 
-### Stage B5 — Notify-to-post fallback
+### Stage B5 — Notify-to-post fallback — ✅ DONE (July 25, 2026)
 **Complexity 2/5 · Sonnet-capable · ~half day**
 For `publish_mode='notify'` posts, at `scheduled_at` send an email (via existing
 `src/lib/email.ts`) with: ready-to-copy caption+hashtags, the Dropbox file link,
 and a note of the target platform/format. This is the path for Stories, trending
 audio, collabs, custom covers. Web push upgrade (VAPID, service-worker push) is
 a separate later task — email ships first.
+
+> **⚠️ Kevin must apply `supabase/migrations/007_notify_to_post.sql`** (then
+> `NOTIFY pgrst, 'reload schema';`). Until then the notify cycle errors every run
+> and reports it as `notifyError` in the cron response — loudly, not silently.
+>
+> **What shipped:**
+> - `supabase/migrations/007_notify_to_post.sql` — `notified_at` on `social_posts`
+>   + a partial index mirroring 006's publish queue.
+> - `src/lib/notifier.ts` — `runNotifyCycle` (selection, claim, send) and
+>   `buildNotifyEmail` (exported so the email body is testable without sending).
+> - `/api/cron/send-notifications` — now runs the notify cycle **and** the original
+>   generic queue, each isolated so one failing can't stop the other. **No new
+>   pinger needed**: this endpoint was already being hit every 5 minutes.
+> - `PostDialog` clears `notified_at` when a post is saved with a *future*
+>   `scheduled_at`, so a post that slipped gets a fresh reminder at its new time.
+>
+> **Four decisions worth keeping:**
+> 1. **Reads `social_posts` directly rather than draining the `notifications`
+>    table.** A queued row bakes its message at scheduling time; captions get
+>    edited right up to posting, so a pre-baked reminder would email a stale
+>    caption. Composing at send time is the whole point.
+> 2. **Claim before send.** `notified_at` is written *before* the email, guarded by
+>    `.is('notified_at', null)`. A crash between the two costs one reminder (the
+>    post is still visibly scheduled in the pipeline); the other order would risk
+>    an email every 5 minutes, which Kevin cannot stop.
+> 3. **24h overdue grace window.** Every pre-existing post defaults to
+>    `publish_mode='notify'`, so without a cutoff the first run after deploy would
+>    email about every post ever scheduled in the past. Posts older than the window
+>    are skipped and **not** marked, so rescheduling one still works.
+> 4. **Not Instagram-only.** Unlike the publish worker, notify mode is the manual
+>    fallback for every platform — that is what it is for.
+>
+> **Known limitation:** the email prints `scheduled_at` in **UTC** (`toUTCString`),
+> matching the existing B4 failure emails. The server has no idea of Kevin's
+> timezone. Harmless in practice — the email arrives *at* the scheduled moment —
+> but if it ever reads wrong, that's why. A fix needs a stored timezone preference.
+>
+> **Verification:** 22 checks against a stubbed PostgREST client and the real
+> `buildNotifyEmail` — subject/format/caption/hashtags/download link/expiry note,
+> HTML escaping (captions are free text: `&`, `<script>`, quotes), all four
+> degraded cases (no media, no caption, no post_type, no title), Dropbox-link
+> failure falling back to the path, the selection filters, the 24h window, claim
+> ordering, and a post already claimed by another run. The rendered email was also
+> screenshotted at 390px. Build compiles; eslint at the 42-problem baseline.
+>
+> **Also discovered:** the `notifications` table has **no producer** — nothing in
+> the app has ever written to it, so that cron loop has always drained an empty
+> queue. It is left working for calendar events and the future web-push upgrade.
+> `notification_at` / `notification_method` on `social_posts` are likewise dead.
 
 ### Stage B6 — Pipeline UI — ✅ DONE (July 25, 2026)
 **Complexity 2/5 · Sonnet-capable · ~half day**

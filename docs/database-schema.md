@@ -81,6 +81,8 @@ CREATE TABLE social_posts (
   publish_locked_at TIMESTAMPTZ,          -- cooperative lease; a stale lease can be stolen
   publish_attempts INTEGER NOT NULL DEFAULT 0,  -- container-creation attempts (max 2: initial + one retry)
   ig_container_created_at TIMESTAMPTZ,    -- container age, for stuck-ingest detection
+  -- Notify-to-post (migration 007_notify_to_post.sql)
+  notified_at TIMESTAMPTZ,                -- when the "time to post this" email went out; NULL = not yet
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -228,7 +230,18 @@ CREATE INDEX idx_inspirations_tags ON inspirations USING gin(tags);
 -- 5 minutes; partial index keeps it to actual auto-publish candidates.
 CREATE INDEX idx_social_posts_publish_queue ON social_posts(scheduled_at)
   WHERE publish_mode = 'auto' AND stage = 'scheduled';
+
+-- Notify-to-post queue (migration 007). Same shape, for the other publish_mode:
+-- posts Kevin will post by hand and wants an email about at their scheduled time.
+CREATE INDEX idx_social_posts_notify_queue ON social_posts(scheduled_at)
+  WHERE publish_mode = 'notify' AND stage = 'scheduled' AND notified_at IS NULL;
 ```
+
+> **Note on `notification_at` / `notification_method`** (from `001_initial_schema.sql`):
+> these are **unused** — no code reads or writes them, and the `notifications` table
+> they belong to has no producer either. Stage B5 deliberately added `notified_at`
+> instead of reusing them: those columns describe *when and how to notify*, whereas
+> `notified_at` records *that we did*. Don't wire new work to them without checking.
 
 ---
 
