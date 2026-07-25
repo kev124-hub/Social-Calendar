@@ -37,14 +37,75 @@ file. Specifically:
    `main` instead. (`sunsama-app-guide.md` was the design guide for the May
    calendar redesign — already implemented; treat it as historical reference
    only, never as current direction.)
-4. **The task, in one line:** execute the plan in THIS file, starting with
-   Workstream A (stages A1→A2→A3, mobile calendar fixes), then the Stage B0
-   spike, then Stages B1→B6 — all defined below.
+4. **The task, in one line:** execute the plan in THIS file. Workstream A and
+   Stages B0–B4 are **done**; the remaining work is **B5, B6, B7 and the README**.
 
 > **How to use this file:** Everything needed — context, decisions, exact plan,
 > file/line references, complexity ratings, and model guidance — is in this one
-> file. No code was written in the sessions that produced it (exploration +
-> planning only); the repo is untouched except for this document.
+> file. The plan sections below are the original specification, annotated with
+> what actually happened. Read the Current State block immediately below first —
+> it is the fastest accurate picture of where the project stands.
+
+---
+
+## 📍 CURRENT STATE — read this first (updated July 25, 2026)
+
+**Workstream A: shipped. Workstream B: B0–B4 done and verified in production.
+The auto-publish pipeline is LIVE and running unattended.**
+
+### What works right now, in production
+- Posts marked `publish_mode='auto'` + `stage='scheduled'` with a due
+  `scheduled_at` are published to Instagram automatically, at original ~2K
+  quality, with no third-party re-encode anywhere in the chain.
+- Two cron-job.org pingers run every 5 minutes, both sending
+  `Authorization: Bearer <CRON_SECRET>`:
+  `/api/cron/send-notifications` (B1) and `/api/cron/publish-posts` (B4).
+- Meta credentials are set in Vercel; migrations 005 and 006 are applied to prod.
+
+### Acceptance evidence (July 25, 2026)
+| Path | Evidence |
+|---|---|
+| Manual "Publish now" | Post `1bc953a2` → container `18030885791835746` → media `17871012090627085` → https://www.instagram.com/reel/DbON80djKs7/ — 1 attempt, no retries |
+| Automatic cron path | Post `52f959ab` ("I need a Minute") → `considered:1, created:1`, container `18030889445835746`, entirely unattended |
+| Auth + config | Cron returns `{"ok":true,...,"token":{"status":"ok","daysLeft":59}}` — proves CRON_SECRET, all four Meta env vars, and a live `debug_token` round trip |
+| Dropbox picker | Confirmed listing real files in prod; `get_temporary_link` resolves the team-namespace path with **no** `Dropbox-API-Path-Root` header |
+| `app_credentials` | Token persisted with `expires_at` 2026-09-23, matching Meta's debugger exactly |
+
+### The one path still unproven
+**`fb_exchange_token` token refresh.** It cannot run until ~**13 Sept 2026**, when
+the token crosses the 10-days-remaining threshold. Everything else in B4 has been
+exercised against the live API. It is written to fail non-fatally, and a missing
+`META_APP_ID`/`META_APP_SECRET` now triggers a daily warning email — so the worst
+case is a manual rotation, not a lost post. **Do not describe it as tested.**
+
+### Immediately outstanding
+1. **PR #12 is open and unmerged** (PWA manifest fix + doc updates). Merge it.
+2. **Re-measure the test reels' DASH manifests** a few hours after publish to
+   confirm B0's async-promotion finding holds for app-published posts. **Never
+   archive a test post before measuring** — archiving freezes rendition generation.
+3. Delete the leftover test posts once measurement is done.
+4. **Undecided:** whether `/api/cron/publish-posts` should return **503** instead
+   of 200 when `ok:false` (see Open Questions #7). Kevin has not chosen yet.
+
+### Next work, in order
+**B6** (pipeline UI — the highest-value remaining piece: the "Publish now" API
+already exists, so it only needs a button, a publish-mode toggle, and status
+badges) → **B5** (notify-mode emails) → **B7** (Supabase inactivity diagnosis) →
+**the detailed README** that closes the project.
+
+### Repo / workflow state
+- Designated branch `claude/handoff-docs-review-1czeha`. Its PRs #10 and #11 are
+  merged and #12 is open. **When starting fresh work after #12 merges, restart the
+  branch from main** (`git fetch origin main && git checkout -B claude/handoff-docs-review-1czeha origin/main`)
+  rather than stacking on merged history.
+- `node_modules` is NOT present in a fresh container — run `npm ci` first, or the
+  `node_modules/next/dist/docs/` guides that `AGENTS.md` mandates won't exist.
+- `npm run build` now succeeds with **no env vars set at all**.
+- `npm run lint` reports **42 pre-existing problems** on `main` (20 errors, 22
+  warnings) in older files. Don't mistake them for regressions; check whether your
+  changed files appear before investigating.
+- `handoff-b4-start-2026-07-24.md` is now **historical** — B4 is finished. This
+  file is the source of truth.
 
 ---
 
@@ -184,7 +245,16 @@ made zero code changes. The repo state (branch history on `main`, 20 commits):
    longer depend on the Vercel dashboard config staying correct. Watch for this
    pattern in any new route: a module-scope `createClient(...)` breaks the build,
    not just the runtime.
-7. **Supabase sends weekly "project will be archived for inactivity" notices**,
+7. ~~**PWA manifest and service worker never load in production.**~~ ✅ **FIXED
+   July 25, 2026.** The browser logged `Manifest: Line: 1, column: 1, Syntax
+   error` on every page load. `public/manifest.json` is valid JSON — the cause was
+   `src/proxy.ts`: its matcher excluded `_next/static`, `favicon.ico` and image
+   extensions but not `/manifest.json` or `/sw.js`. Browsers fetch the manifest
+   **without credentials** by default, so it arrived session-less, got redirected
+   to `/login`, and the browser parsed login HTML as JSON. Both paths are now
+   treated as public. Worth remembering when adding any other unauthenticated
+   browser-initiated fetch.
+8. **Supabase sends weekly "project will be archived for inactivity" notices**,
    regardless of how heavily the app is used. Unfixed, an actually-paused project
    takes the database offline and scheduled posts silently fail to publish. Full
    analysis, diagnostic sequence, and candidate fixes are in **Stage B7** below —
@@ -361,23 +431,55 @@ publish_error text
 ```
 Update `src/types/database.ts` and `docs/database-schema.md` to match.
 
-### Stage B4 — Publisher worker (the core) — ✅ BUILT (July 25, 2026)
+### Stage B4 — Publisher worker (the core) — ✅ DONE, VERIFIED LIVE (July 25, 2026)
 **Complexity 4/5 · Use the strongest model available (Opus-class or better); NOT a Sonnet job · ~1 day**
 
-> **Status: built, typechecks, builds, and lints clean — but NOT yet exercised
-> against the live Graph API.** This repo's sandbox is on "Trusted" egress and
-> cannot reach `graph.facebook.com`, Dropbox, or Supabase, so no call in this
-> pipeline has been run end-to-end from a session. **First real run must be a
-> manual "Publish now" on a throwaway post in production**, not a scheduled one.
-> The Meta env vars (`META_APP_ID`, `META_APP_SECRET`,
-> `INSTAGRAM_USER_ACCESS_TOKEN`, `INSTAGRAM_USER_ID`) still need to be set in
-> Vercel, followed by a redeploy.
+> **Status: built AND proven end-to-end in production.** The full chain published a
+> real reel from the app: Dropbox `get_temporary_link` → Meta container → poll to
+> FINISHED → `media_publish` → permalink, with no middleman re-encode.
+>
+> **First live run (the acceptance evidence):**
+> - Post `1bc953a2-a1e5-4993-aee3-3b0588a50b75` ("Auto Post test"), source
+>   `/social media/ready to post/need a minute.mp4`.
+> - Call 1 → `container_created` (container `18030885791835746`).
+> - Call 2, ~1 min later → `published`, media `17871012090627085`,
+>   permalink `https://www.instagram.com/reel/DbON80djKs7/`.
+> - Cron smoke test with no posts due returned
+>   `{"ok":true,"considered":0,...,"token":{"status":"ok","daysLeft":59}}` — which
+>   also proves `CRON_SECRET` auth, all four Meta env vars, and a successful
+>   `debug_token` round trip against Graph.
+>
+> **Also settled by this run:**
+> - The **Dropbox picker works in production** and stores a real `path_lower`
+>   (`/social media/ready to post/…`). This closes the last open B2 verification.
+> - `app_credentials` works: the env-sourced token was inspected once and persisted
+>   with `expires_at` = 2026-09-23, matching Meta's debugger exactly. The DB value
+>   wins from now on, later runs skip `debug_token`, and the first real refresh is
+>   due around **13 Sept 2026** (the 10-days-remaining threshold).
+> - `fb_exchange_token` refresh remains **unexercised** until that date — it is the
+>   one path in B4 no test has covered. It fails non-fatally by design.
+>
+> **The automatic path is verified too.** The cron-job.org pinger for
+> `/api/cron/publish-posts` is set up (every 5 min, `Authorization: Bearer
+> <CRON_SECRET>`), and post `52f959ab` was picked up unattended:
+> `considered:1, created:1`, container `18030889445835746`. That exercised the
+> candidate-selection query — `stage='scheduled'` + `publish_mode='auto'` +
+> `scheduled_at <= now()` + the status filter, backed by the partial index — which
+> manual "Publish now" bypasses entirely by looking a post up by id.
+>
+> **Cron alerting:** both cron-job.org jobs should have *notify on failure* and
+> *notify when disabled* enabled (not notify-on-success — 288 emails/day). This is
+> the external watchdog layer: the app's own Resend emails cover per-post failures
+> and token expiry, but they only work when the app works. cron-job.org catches the
+> cases where it doesn't — 401s, 500s, Vercel down, **a paused Supabase project**
+> (the DB query throws → 500), and cron-job.org auto-disabling a job after repeated
+> failures, which would otherwise stop everything silently.
 >
 > **What shipped:**
 > - `supabase/migrations/006_publish_worker.sql` — `publish_locked_at`,
 >   `publish_attempts`, `ig_container_created_at` on `social_posts`; the
->   `app_credentials` table; the publish-queue partial index. **Not yet applied to
->   the prod DB** — apply it and then run `NOTIFY pgrst, 'reload schema';`.
+>   `app_credentials` table; the publish-queue partial index. **Applied to the prod
+>   DB on July 25, 2026**, followed by `NOTIFY pgrst, 'reload schema';`.
 > - `src/lib/instagram.ts` — Graph API client (v21.0 pinned), caption assembly and
 >   validation, media-type resolution, container lifecycle, token debug/exchange.
 > - `src/lib/ig-token.ts` — token storage in `app_credentials` + unattended refresh
@@ -608,6 +710,18 @@ suggestion.
 6. **Why does Supabase warn weekly about archiving for inactivity?** Open — see
    Stage B7 for the analysis and diagnostic sequence. Materially affects
    auto-publish reliability, since a paused project means posts silently don't go out.
+   **Narrowed July 25, 2026:** hypothesis 2 (the pinger 401ing on a stale
+   `CRON_SECRET`) is **ruled out** — the secret is confirmed working against both
+   cron endpoints. Start from hypothesis 1: check whether the warning email even
+   names this project.
+7. **Should `/api/cron/publish-posts` return 503 instead of 200 when `ok:false`?**
+   Open — Kevin's call, not yet made. Today an unconfigured integration (missing
+   `INSTAGRAM_USER_ID` or token) returns **HTTP 200** with `ok:false`, which the
+   cron-job.org failure alert cannot see and which sends no email — so scheduled
+   posts would silently pile up unpublished. Returning 503 would make the external
+   watchdog catch it, at the cost of alert emails during any window where the env
+   vars are absent. The change is one line in the route. **This is a real gap in
+   B4's "never silent" property; don't let it get lost.**
 
 ## Final Deliverable Reminder (Kevin's explicit request — do not drop)
 

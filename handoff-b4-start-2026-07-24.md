@@ -1,3 +1,11 @@
+> # ⚠️ HISTORICAL — B4 IS DONE
+>
+> **This file is superseded. B4 was built and verified in production on July 25,
+> 2026.** Read **`HANDOFF.md`** — specifically its "📍 CURRENT STATE" block at the
+> top — for where the project actually stands and what to do next. Everything
+> below is kept for provenance only: it describes B4 as upcoming work, which it
+> no longer is.
+
 # Session Handoff — Social Calendar: start Workstream B, Stage B4 (IG publisher worker)
 
 **Written: July 24, 2026.** Continues the plan in **`HANDOFF.md`** (the master
@@ -181,10 +189,10 @@ way to exercise the worker end-to-end before trusting the cron path.
   bit us during B2 — post saves silently failed until reload.)
 - **`PostDialog` swallows Supabase errors** (no error surfaced on save) — a bad
   column/constraint fails silently. Keep this in mind when adding publish fields to writes.
-- **Dropbox team namespace (`ns:3692464`):** if `list_folder`/`get_temporary_link`
-  fails to resolve `/Social Media/Ready to Post`, add a `Dropbox-API-Path-Root` header.
-  **Not yet confirmed** that the production picker actually lists a real file — the folder
-  was empty at last check and Kevin was about to drop a test video. Verify this early.
+- ~~**Dropbox team namespace (`ns:3692464`)**~~ — ✅ **CONFIRMED WORKING (July 25, 2026).**
+  The production picker lists real files and stores a `path_lower` such as
+  `/social media/ready to post/need a minute.mp4`; `get_temporary_link` resolved it and
+  Meta ingested the result. **No `Dropbox-API-Path-Root` header is needed.**
 - **Vercel Hobby:** daily cron only; cron-job.org drives the 5-min cadence. **Env var
   changes require a redeploy** to take effect. Preview deployments need the same env vars
   enabled for the Preview environment; they are now enabled and previews build green
@@ -202,10 +210,13 @@ way to exercise the worker end-to-end before trusting the cron path.
   green. Schedule an hourly self check-in per PR and stop once merged.
 
 ## Errors / blockers
-None open. B1/B2/B3 + the stage fix are live, and B0 is fully closed. Two things still
-want doing: the Meta credentials must land in Vercel before B4 can be exercised, and it
-is still unconfirmed that the Dropbox picker lists a real file in production (see gotcha
-above).
+None open. B0 is fully closed; B1/B2/B3 and **B4** are live and verified in production
+(first real publish: `instagram.com/reel/DbON80djKs7/`, July 25, 2026). Meta credentials
+are set and migration 006 is applied. The Dropbox picker is confirmed working.
+
+**One task remains before auto mode functions:** the cron-job.org pinger for
+`/api/cron/publish-posts` (every 5 min, `Authorization: Bearer <CRON_SECRET>`). Until it
+exists, only manual "Publish now" publishes anything.
 
 ## Open questions
 1. ~~**B0(b)** — does served quality match native?~~ **RESOLVED ✅ — yes.** Parity is
