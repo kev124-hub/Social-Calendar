@@ -187,7 +187,9 @@ way to exercise the worker end-to-end before trusting the cron path.
   was empty at last check and Kevin was about to drop a test video. Verify this early.
 - **Vercel Hobby:** daily cron only; cron-job.org drives the 5-min cadence. **Env var
   changes require a redeploy** to take effect. Preview deployments need the same env vars
-  enabled for the Preview environment or they can fail (known issue #6 in HANDOFF.md).
+  enabled for the Preview environment; they are now enabled and previews build green
+  (HANDOFF.md known issue #6 is resolved), so **a red Vercel check now means a real
+  problem** — don't wave it off as the old known failure.
 - **Session sandbox egress is "Trusted"** — it CANNOT reach `graph.facebook.com`,
   Dropbox, or Supabase directly. So B4's live API calls can't be tested from the Claude
   Code session; test in production/preview or via Kevin. (To run API calls from a session
