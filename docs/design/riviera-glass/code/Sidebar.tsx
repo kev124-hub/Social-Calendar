@@ -21,6 +21,7 @@ import { PlatformIcon } from '@/components/ui/PlatformIcon'
 import { cn } from '@/lib/utils'
 import type { Platform } from '@/types/database'
 import { GLASS, INK, PLATFORM } from '@/lib/glass'
+import { PublishHealth, type PublishHealthData } from '@/components/ui/PublishHealth'
 
 const NAV_ITEMS = [
   // Drop this first entry if you don't ship the dashboard home (option 3a).
@@ -45,7 +46,7 @@ const railStyle = (active: boolean) => ({
   fontWeight: active ? 600 : 500,
 })
 
-export function Sidebar({ counts }: { counts?: Partial<Record<Platform, number>> }) {
+export function Sidebar({ counts, health }: { counts?: Partial<Record<Platform, number>>; health?: PublishHealthData }) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
@@ -140,21 +141,9 @@ export function Sidebar({ counts }: { counts?: Partial<Record<Platform, number>>
     )
   }
 
-  function Health() {
-    return (
-      <div className="rounded-[15px] p-3" style={{ background: 'rgba(255,255,255,.62)', border: `1px solid ${GLASS.hairline}` }}>
-        <p className="m-0 tracking-[.14em]" style={{ fontFamily: 'var(--font-mono-num)', fontSize: 10, color: '#7a7280' }}>
-          PUBLISH HEALTH
-        </p>
-        <div className="mt-[9px] flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full" style={{ background: '#0b4f6c', animation: 'glass-pulse 2.4s ease-in-out infinite' }} />
-          <span className="text-[13px] font-medium" style={{ color: INK.primary }}>Worker live</span>
-        </div>
-        {/* Wire to the token expiry + queue depth you already compute in the cron routes */}
-        <p className="m-0 mt-2 text-[12px] leading-[1.45]" style={{ color: INK.tertiary }}>IG token 41d · queue 2</p>
-      </div>
-    )
-  }
+  // Publish health lives in its own component and must degrade gracefully.
+  // Pass whatever the status read returned; nulls render as "unknown", never
+  // as a placeholder number. See code/PublishHealth.tsx.
 
   const panel = (col: boolean) => (
     <div
@@ -172,7 +161,8 @@ export function Sidebar({ counts }: { counts?: Partial<Record<Platform, number>>
         <NavItems col={col} />
       </nav>
       <div className="mt-auto flex flex-col gap-2">
-        {!col && <Health />}
+        {!col && health && <PublishHealth data={health} />}
+        {col && health && <PublishHealth data={health} collapsed />}
         <Link
           href="/settings"
           onClick={() => setMobileOpen(false)}

@@ -66,6 +66,15 @@ Motion (transform/opacity only; all wrapped by `prefers-reduced-motion`):
 
 ---
 
+## Deltas in this revision (read this if you have the first bundle)
+1. `ReadyReel` replaced with v2: sparse-first (0 / 1 / 2–3 / 4+ states), no item cloning, real thumbnails assumed. Needs `@keyframes glass-float` added to `globals.additions.css` (snippet at the bottom of the component file).
+2. `PublishHealth` extracted from `Sidebar.tsx` with an explicit `unknown` state; the hardcoded `IG token 41d · queue 2` line is gone. Replace the `Health()` function inside `code/Sidebar.tsx` with `<PublishHealth data={health} collapsed={collapsed} />`.
+3. Dashboard §7: Platform balance cut; Row 3 is now two columns (`1.35fr / 1fr`) — Pipeline load + ReadyReel.
+4. Every remaining pace-like flag now has a stated threshold (§7 table). No undefined labels.
+5. `glass.ts`, the colour/motion tokens and every other screen are unchanged — these are deltas against what is already in the repo, not a new system.
+
+---
+
 ## Order to land it
 
 1. **Tokens + fonts** — append `code/globals.additions.css` to `src/app/globals.css`; add `src/lib/glass.ts`; add JetBrains Mono to `layout.tsx` (`variable: '--font-mono-num'`, weights 400/500/700) and put `--font-mono-num` on `<html>`. Apply the wash to the app container in `src/app/(app)/layout.tsx`, not to `body`.
@@ -86,7 +95,7 @@ Motion (transform/opacity only; all wrapped by `prefers-reduced-motion`):
 - Brand: 36px `rounded-[11px]` tile, `linear-gradient(150deg,#f1ccff,#91e0ff)`, "MJ" in Playfair 14/600; title Inter 14/600 `--ink-1`, subtitle 12 `--ink-3`.
 - Platform rows: `rgba(255,255,255,.62)` chip, hairline border, radius 11, 8px/9px padding; 10px colour square (`box-shadow: 0 0 0 1px rgba(20,16,20,.12)`), label 13/500, count in mono 12/600. Hover `translateX(4px)`.
 - Nav: active = `rgba(255,255,255,.86)` pill, `--ink-1`, 600, ink dot; inactive = `rgba(255,255,255,.28)`, `rgba(27,20,31,.68)`, 500. Hover `translateX(3px)`. Icons 18px lucide.
-- Health block: mono 10 label, pulsing `#0b4f6c` dot, "Worker live" 13/500, then token days + queue depth 12 `--ink-3`.
+- Health block: use `code/PublishHealth.tsx`. **No hardcoded values.** Four states — `live` (pulsing `#0b4f6c`, "Worker live"), `warning` (static `#8a4b06`, "Needs attention", token <10 days), `unknown` (static `#5d5660`, "Status unknown" — token expiry not inspectable because `META_APP_ID`/`META_APP_SECRET` are unset, or the status read failed), `error` (static `#8a2b12`, "Publishing blocked"). The pulse runs **only** in `live`. `tokenDays === null` prints "IG token expiry unknown"; `queueDepth === null` omits the queue clause entirely — never print `queue 0` you haven't verified. Collapsed sidebar shows the dot alone with the detail in its tooltip.
 - Mobile: same top bar and drawer as today, surfaces swapped to `rgba(255,255,255,.72)` + blur; drawer 288px, scrim `rgba(20,16,20,.28)` + `blur(4px)`.
 
 ### 2. Calendar — week view
@@ -113,18 +122,51 @@ Motion (transform/opacity only; all wrapped by `prefers-reduced-motion`):
 Width 288px, `--glass-panel` + `blur(18px)`, left hairline. Fixed vertical budget, 14px gaps: header ("TODAY · SAT 25" mono 10 + Playfair 22 summary) → **three stat tiles** in a 3-col grid (`repeat(3,minmax(0,1fr))`, 40px mono numerals, 12/600 label, tinted per stat, hover lift) → **ReadyReel** → **agenda**, max 4 rows (time mono 11 in a 42px column, 4px colour bar, title 12/500 truncated, hover `translateX(4px)`). Anything beyond 4 rows collapses into a "+n later" row rather than making the pane scroll.
 Counters ramp from 0 to target over 1100ms with cubic ease-out on mount (rAF, ~`1-(1-p)³`).
 
-### 5. ReadyReel
-Six faces, `rotateY(i*60deg) translateZ(96px)`, face 76×118, radius 10, `border 1px solid rgba(21,15,25,.40)`, `box-shadow 0 10px 20px rgba(18,52,72,.30)`; container `perspective:620px`, `transform-style:preserve-3d`, `glass-reel-spin 22s linear infinite`, `rotateX(-9deg)` tilt, pauses on hover. Faces show the Dropbox thumbnail when available, else `repeating-linear-gradient(135deg,#3f7fa8 0 6px,#e5edf3 6px 12px)`. Panel: `linear-gradient(160deg, rgba(214,164,240,.60), rgba(104,180,220,.55))`, radius 17, hairline border, mono-10 caption `READY REEL · n EXPORTS`, footer 12 `#2b2530`. Fewer than 6 items → cycle the list so the cylinder stays solid; empty → a single line of copy, no cylinder. `onPick` should open the post dialog with that file preselected.
+### 5. ReadyReel — sparse-first (revised)
+**The real folder holds 1–3 files, sometimes one. That is the primary state.** Never clone items to pad a cylinder: the block's job is to show true queue depth, and a low queue is signal worth reading. Faces always use the real Dropbox video thumbnail; the striped fill is only for a missing/loading thumb.
+
+Four states, driven purely by `items.length`:
+| n | Treatment |
+|---|---|
+| **0** | Stated empty state: dimmed 36×52 card glyph, "Queue is clear" 12.5/600, one line of copy, and an "Open Dropbox folder" pill (`rgba(255,255,255,.80)`, radius 99, 11/600). No cylinder, no apology. |
+| **1** | Hero card 108×168 at `rotateY(-8deg)`, `glass-float 6s ease-in-out infinite` (±7px on Y). Beside it: filename 13/600 (`overflow-wrap:anywhere`), optional mono-10.5 meta (duration / size), and "One export ready." No rotation. |
+| **2–3** | Static fan: cards 84×132, `margin-left:-18px` overlap, `rotateY(offset × -16deg)` where `offset = i − (n−1)/2`, container `perspective:900px`. Hover pulls one forward: `translateY(-8px) rotateY(0) translateZ(40px) scale(1.05)`, z-index 10, `.30s cubic-bezier(.2,.8,.2,1)`. No spin. |
+| **4+** | The cylinder — **exactly n faces**, `rotateY(i × 360/n) translateZ(104px)`, face 84×132, `perspective:620px`, `rotateX(-9deg)`, `glass-reel-spin 22s linear infinite`, pauses on hover. |
+
+Face chrome in all states: radius 10, `border 1px solid rgba(21,15,25,.40)`, `box-shadow 0 10px 20px rgba(18,52,72,.30)`, cover-fit thumbnail.
+Panel: `linear-gradient(160deg, rgba(214,164,240,.60), rgba(104,180,220,.55))`, radius 17, hairline border, 13px padding.
+Caption (mono 10, `.14em`, `#3d3743`): `READY TO POST · n EXPORTS · OLDEST 3 DAYS` — the oldest clause is dropped when no `modifiedAt` is available, and reads `READY TO POST · EMPTY` at n=0. `n EXPORT` singular at n=1.
+`onPick(item)` opens the post dialog with that file preselected. Code: `code/ReadyReel.tsx` (v2 — replaces the version in the first bundle).
 
 ### 6. Pipeline board (styling only, same six stages)
 Columns as **depth planes**: container `perspective:1500px; perspective-origin:50% 40%`, column `translateZ` stepping `-90px → +10px` across idea→published, hover `translateZ(70px)`, `.35s cubic-bezier(.2,.8,.2,1)`. Column surface `rgba(255,255,255,.42)` (later stages `.78`), hairline border (later stages `rgba(20,16,20,.50)`), radius 16. Cards: 30×38 thumbnail, title 11.5/600, meta mono 9.5 `--ink-3`, hover `translateY(-4px) scale(1.02)`.
 
-### 7. Optional — dashboard home `/home`
-Header: mono-11 date, Playfair 28 greeting, three quick-action tiles (label 13/600 + mono 9.5 hint, hover lift): New post / Capture idea / Paste an event.
-Row 1 grid `minmax(0,1.55fr) minmax(0,1fr)`: **next-publish hero** (132px media, pulsing dot + `NEXT PUBLISH · in 3h 41m` mono 10 `#0b3a50`, Playfair 30 title, caption 13.5, pills for time / platform / publish mode (`#141014` fill for auto), Dropbox path in mono 9.5 truncated at the bottom) + the three stat tiles.
-Row 2: **this week** — seven tinted chips, Playfair 24 date, mono weekday, count badge, 5px ready bar; hover `translateY(-5px) rotateX(6deg) scale(1.03)`; "OPEN CALENDAR →" link top-right.
-Row 3 grid `1.15fr 1fr .8fr`: **pipeline load** (label 12/600 in a 76px column, 14px track, fill `linear-gradient(90deg,#4a98ce,#7ec4e7)`, count mono 11/700), **platform balance** (tinted card per platform with % bar and an uppercase note: on pace / light this week / underfed), **ReadyReel**.
-Data: next post = earliest `social_posts` with `stage='scheduled'` and future `scheduled_at`; ready = scheduled+published this week; behind = past-due not published; queued = `publish_status in ('pending','processing')`.
+### 7. Optional — dashboard home `/home` (revised)
+**Deltas from the first spec: Platform balance is cut entirely, and the Row-3 three-column grid is gone.** The freed width goes to the two blocks that earn it.
+
+Header: mono-11 date, Playfair 28 greeting, three quick-action tiles (label 13/600 + mono 9.5 hint, hover `translateY(-3px)`): New post / Capture idea / Paste an event.
+
+**Row 1** — grid `minmax(0,1.55fr) minmax(0,1fr)`, 14px gap: next-publish hero (132px media, pulsing dot + `NEXT PUBLISH · in 3h 41m` mono 10 `#0b3a50`, Playfair 30 title, caption 13.5, pills for time / platform / publish mode with `#141014` fill for auto, Dropbox path mono 9.5 truncated at the bottom) + the three stat tiles (`repeat(3,minmax(0,1fr))`, 40px mono numerals).
+
+**Row 2** — this week: seven tinted chips, Playfair 24 date, mono weekday, count badge, 5px ready bar; hover `translateY(-5px) rotateX(6deg) scale(1.03)`; "OPEN CALENDAR →" link top-right.
+
+**Row 3** — now **two** columns, grid `minmax(0,1.35fr) minmax(0,1fr)`, 14px gap, both stretched to the same height:
+- **Pipeline load** (left, more room than before): one row per stage — stage name 12/600 in an 88px column, 16px track `rgba(255,255,255,.72)` with fill `linear-gradient(90deg,#4a98ce,#7ec4e7)` and `width .9s cubic-bezier(.2,.8,.2,1)`, count mono 12/700 `#0b3a50` right-aligned in 20px. Bar width = `stageCount / max(stageCount)` across the six stages — relative, never a fabricated capacity. Under each row, when it applies, a mono-9.5 note: `n overdue` (`#8a2b12`) and/or `oldest 12 days` (`--ink-3`).
+- **ReadyReel** (right), sparse-first per §5, filling the row height.
+
+**Threshold rules — explicit, because the cut labels had none:**
+| Flag | Exact rule | Presentation |
+|---|---|---|
+| `n overdue` on a stage row | posts in that stage with `scheduled_at < now()` and `stage !== 'published'` | mono 9.5, `#8a2b12`. Omitted when n = 0. |
+| `oldest n days` on a stage row | `now() − min(updated_at)` of posts in that stage, floored to days, **only when ≥ 7** | mono 9.5, `--ink-3`. Omitted under 7 days. |
+| `CONGESTED` chip on a stage | stage holds **≥ 40% of all non-published posts** *and* **≥ 3 posts**. At most one stage may carry it — if two qualify, flag the larger; ties go to the earlier stage. | mono 9, `.08em`, `#8a4b06` on `rgba(252,222,130,.60)`, radius 99. |
+| Stat tile `behind` | posts with `scheduled_at < now()` and `stage !== 'published'` (same population as `n overdue`, summed) | existing `behind` tile |
+| Stat tile `ready` | posts in the current week with `stage in ('scheduled','published')` | existing tile |
+| Stat tile `queued` | `publish_status in ('pending','processing')`; renders `—` when the count can't be read | existing tile |
+
+No other pace-like language survives. Do not reintroduce ON PACE / LIGHT / UNDERFED — there is no defined target cadence per platform, so any such label would be invented.
+
+Data: next post = earliest `social_posts` with `stage='scheduled'` and future `scheduled_at`; ReadyReel items = the Dropbox listing you already fetch for the post dialog (`src/lib/dropbox.ts`), with `modifiedAt` passed through for the "oldest" clause.
 
 ---
 
@@ -132,7 +174,8 @@ Data: next post = earliest `social_posts` with `stage='scheduled'` and future `s
 Only two new pieces of client state; everything else already exists.
 - `WeeklyBoard`: `expanded: string | null` — dateKey of the fanned-out column deck.
 - Today pane / dashboard: `{ready, behind, queued}` animated counters (rAF ramp, 1100ms).
-- `ReadyReel`: `paused: boolean` on hover. Dropbox items come from the existing listing endpoint.
+- `ReadyReel`: `hovered: number | null` — index of the fanned card pulled forward, or `-1` meaning "cursor is over the cylinder" (pauses the spin). Dropbox items come from the existing listing endpoint; pass `modifiedAt` through.
+- `PublishHealth`: no local state. The four-state shape is derived server-side; `tokenDays`/`queueDepth` are `number | null` and null must render as unknown, never as a number.
 
 ## Responsive
 Desktop ≥1024: sidebar + calendar + 288px Today pane. 768–1023: Today pane hidden (as today). <768: mobile top bar + drawer; week columns `44vw` scroll-snap; month cells keep 158px and scroll vertically; dashboard stacks to one column. Keep the `env(safe-area-inset-*)` handling — this runs as an installed PWA.
@@ -150,7 +193,8 @@ code/glass.ts                new: src/lib/glass.ts
 code/Sidebar.tsx             replaces src/components/layout/Sidebar.tsx
 code/WeeklyBoard.tsx         replaces src/components/calendar/WeeklyBoard.tsx
 code/MonthGrid.tsx           replaces the MonthGrid function in src/components/calendar/CalendarView.tsx
-code/ReadyReel.tsx           new: src/components/calendar/ReadyReel.tsx
+code/ReadyReel.tsx           new: src/components/calendar/ReadyReel.tsx (v2, sparse-first)
+code/PublishHealth.tsx      new: src/components/ui/PublishHealth.tsx
 mock/Calendar Redesign.dc.html   the HTML prototype (design reference)
 mock/ios-frame.jsx, mock/support.js   runtime files the prototype needs
 screenshots/2a-calendar-week.png     week view, desktop (1422px)

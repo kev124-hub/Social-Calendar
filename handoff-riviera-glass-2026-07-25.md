@@ -75,10 +75,39 @@ docs/design/riviera-glass/
 │   ├── Sidebar.tsx                  replaces src/components/layout/Sidebar.tsx
 │   ├── WeeklyBoard.tsx              replaces src/components/calendar/WeeklyBoard.tsx
 │   ├── MonthGrid.tsx                replaces the MonthGrid fn in CalendarView.tsx
-│   └── ReadyReel.tsx                new: src/components/calendar/ReadyReel.tsx
+│   ├── ReadyReel.tsx                new: src/components/calendar/ReadyReel.tsx  (v2)
+│   └── PublishHealth.tsx            new: src/components/ui/PublishHealth.tsx    (v2)
 ├── mock/Calendar Redesign.dc.html   HTML prototype (design reference only)
 └── screenshots/                     week, month, dashboard-home
 ```
+
+### ⚠️ This is bundle **v2**. Three concerns from the first assessment were
+### fixed by the designer; the fixes are already reflected below.
+
+A second bundle arrived after the first assessment and **has been merged into
+the directory above** — you are looking at v2. Changed vs. v1: `README.md`,
+`code/ReadyReel.tsx`, `code/Sidebar.tsx`, plus new `code/PublishHealth.tsx`.
+Everything else — `glass.ts`, `globals.additions.css`, `WeeklyBoard.tsx`,
+`MonthGrid.tsx`, all colour/motion tokens — is **byte-identical** to v1.
+
+README §"Deltas in this revision" summarises the changes. In short:
+
+1. **ReadyReel v2 is sparse-first** — four states driven by `items.length`
+   (0 / 1 / 2–3 / 4+), **no item cloning**. Directly answers the one-file
+   folder finding.
+2. **`PublishHealth` extracted** with a first-class `unknown` state. The
+   hardcoded `IG token 41d · queue 2` line is **gone**.
+3. **Dashboard §7 revised** — Platform balance cut, Row 3 is now two columns,
+   and every surviving flag has an explicit numeric threshold.
+
+**⚠️ The screenshots are STALE.** All three are byte-identical to v1, so
+`3a-dashboard-home.png` **still shows the Platform balance panel that was
+cut**. Trust the README §7 text over that screenshot. The two calendar
+screenshots are still accurate (nothing on those screens changed).
+
+**⚠️ `code/Sidebar.tsx` still contains the `/home` nav entry**, now with a
+comment saying to drop it if the dashboard isn't shipped. Our decision stands:
+**drop it.**
 
 `code/` is **paste-ready TypeScript** written against real repo types
 (`@/types/database`, `@/lib/utils`). `mock/` is a **prototype, not production
@@ -168,18 +197,25 @@ this — README §4 is prose only.
 
 **This is unresolved — see Open Questions.**
 
-### 3. Sidebar has a dead link and two fake numbers
+### 3. Sidebar had a dead link and two fake numbers — MOSTLY FIXED IN v2
 
-- Adds `/home` to nav; route doesn't exist → 404. **Agreed: omit it.**
-  (Note the screenshots don't show a Home item either — the code file drifted
-  from the mock.)
-- `IG token 41d · queue 2` is **hardcoded**, with the file's own comment
-  admitting it: *"Wire to the token expiry + queue depth you already compute
-  in the cron routes."* That data is server-side; surfacing it needs a new
-  endpoint. **Do not ship the fake string.** Either wire it or omit the line.
-- Platform counts (14 / 6 / 3) come from a new `counts` prop. The real
-  `Sidebar()` takes **no props** and is rendered by a **server** layout
-  (`src/app/(app)/layout.tsx`), so this is a new data path.
+- Adds `/home` to nav; route doesn't exist → 404. **Still present in v2**
+  (now with a comment saying to drop it). **Agreed: omit it.**
+- ~~`IG token 41d · queue 2` is hardcoded~~ — **fixed in v2.** Extracted to
+  `code/PublishHealth.tsx` with a four-state model (`live` / `warning` /
+  `unknown` / `error`) and explicit rules: `tokenDays === null` renders
+  "expiry unknown", `queueDepth === null` **omits the queue clause entirely**
+  (no fabricated "queue 0"), and the pulse animation runs **only** in `live`
+  — a pulsing dot asserts the worker is running, so pulsing while unknown
+  would be a lie. This is a genuinely good fix; adopt it as written.
+- **The `health` prop is optional and the block renders only when it's
+  passed.** So Stage 2 can simply **not pass it** — no health block, no new
+  endpoint, nothing fake. That fully unblocks Stage 2. Wire real data later
+  if Kevin wants it (he called it "nice to have but not essential").
+- Platform counts (14 / 6 / 3) still come from a new `counts` prop, also
+  optional. The real `Sidebar()` takes **no props** and is rendered by a
+  **server** layout (`src/app/(app)/layout.tsx`). Same treatment: omit in
+  Stage 2, wire later.
 
 ### 4. ReadyReel — thumbnails work, but the folder is nearly empty
 
@@ -200,9 +236,17 @@ this — README §4 is prose only.
 - Context: ~90 files sit in `/Social Media` proper, plus 18 in a
   `Freebird Flexseries` subfolder. The footage exists; the *staging* folder is
   one deep. So low count is a **real signal**, not a bug.
-- Kevin was told this. The recommended read (not yet confirmed by him): the
-  reel is a **queue-depth signal**, so the sparse state should be primary —
-  1–3 real faces, no cloning to pad the cylinder.
+- Kevin was told this, and **v2 of the design fixes it.** ReadyReel v2 is
+  sparse-first: four states driven purely by `items.length`, with **no item
+  cloning**. Per README §5 —
+  - **0** → stated empty state ("Queue is clear") + an "Open Dropbox folder"
+    pill. No cylinder, no apology.
+  - **1** → hero card 108×168, `glass-float` gentle bob, filename + meta.
+    No rotation. **This is the state you will actually see today.**
+  - **2–3** → static overlapping fan, hover pulls one forward. No spin.
+  - **4+** → the cylinder, with **exactly n faces**, not six.
+  `ReelItem` gained `modifiedAt` and `meta` fields for the "oldest waiting"
+  caption clause. Adopt as written.
 - `DropboxFile` is currently `{name, path, size, modified}` — **no thumbnail
   field**. `src/lib/dropbox.ts` has no thumbnail fetch. Both need adding.
 - `MEDIA_EXT` in `src/lib/dropbox.ts` is
@@ -313,10 +357,10 @@ reverted alone.
 |---|---|---|---|
 | 0 | Read `node_modules/next/dist/docs/`; `npm ci` | — | Required by AGENTS.md |
 | 1 | **Tokens + fonts** | Low | Purely additive; nothing re-renders yet |
-| 2 | **Sidebar** | Low | Minus `/home` link; health block wired or omitted, never faked |
+| 2 | **Sidebar** | Low | Minus `/home` link; omit the optional `health`/`counts` props → no fake data, no new endpoint. Also add `src/components/ui/PublishHealth.tsx` (unused until wired). |
 | 3 | **Week view + `GlassPostCard`** | **High** | The real payoff. **With publish badge restored.** |
 | 4 | **Month view** | Medium | Extract `MonthGrid` out of `CalendarView.tsx` into its own file |
-| 5 | **ReadyReel** | Low | Resolve the thumbnail endpoint here; sparse state matters |
+| 5 | **ReadyReel** | Low | Use **v2** (sparse-first). Resolve the thumbnail endpoint here — v2 assumes real thumbnails. Expect the **n=1** state today. |
 | 6 | **Today pane** | **Blocked** | Needs Kevin's answer — see Open Questions |
 | 7 | ~~Dashboard home~~ | — | **Out of scope.** Claude Design is respecking it. |
 
@@ -342,16 +386,21 @@ holding **4+ posts** (the stacked deck) and a day holding **none**.
    **Recommended to Kevin: (c) then (a).** Stages 1–5 do **not** depend on
    this. Do not block on it.
 
-2. **ReadyReel shape given a 1-file folder** — is it a queue-depth signal
-   (recommended: sparse state primary, no cloning) or a media picker (needs
-   wider folder scope)? Kevin hasn't confirmed.
+2. ~~**ReadyReel shape given a 1-file folder**~~ — **RESOLVED by design v2.**
+   Sparse-first, no cloning. Build it as specced.
 
 3. **Month view scroll vs. fit** — Kevin hasn't ruled. Build to spec
    (scrolling), show him, adjust if he dislikes it.
 
-4. **Sidebar health block** — wire real token-expiry + queue-depth (needs a
-   new API endpoint), or omit the line for now? Kevin called it "nice to have
-   but not essential," which points to omitting for now.
+4. ~~**Sidebar health block**~~ — **RESOLVED.** v2's `PublishHealth` has an
+   `unknown` state and the `health` prop is optional. **Stage 2: omit the
+   prop**, so no health block renders and nothing is faked. Revisit only if
+   Kevin asks for it.
+
+5. **Dropbox thumbnail endpoint** — still open, but scoped to Stage 5. Video
+   thumbnails are proven to exist; which API call the server should use is
+   unverified. ReadyReel v2 now *assumes* real thumbnails (striped fill is
+   only for missing/loading), so this must actually work before Stage 5 ships.
 
 ---
 
@@ -389,6 +438,24 @@ to the **end** of `src/app/globals.css` (currently 164 lines).
 - Adds keyframes `glass-fade-up`, `glass-pulse`, `glass-reel-spin`.
 - Adds a `prefers-reduced-motion` block — **keep it**, all motion depends on it.
 - Adds `.glass-thumb-placeholder`.
+
+**⚠️ TRAP — one keyframe is missing from that file.** `globals.additions.css`
+does **not** contain `@keyframes glass-float`, but `ReadyReel.tsx` (v2) uses
+it for the single-item hero card. The snippet lives in a trailing comment at
+the **bottom of `docs/design/riviera-glass/code/ReadyReel.tsx`**. Add it now,
+during Stage 1, alongside the other keyframes:
+
+```css
+@keyframes glass-float {
+  0%, 100% { transform: rotateY(-8deg) translateY(0); }
+  50%      { transform: rotateY(-8deg) translateY(-7px); }
+}
+```
+
+If you skip this, Stage 5 fails **silently** — CSS referencing a missing
+keyframe throws no error, the card just sits there. And since the Ready to
+Post folder currently holds exactly one file, the n=1 hero is precisely the
+state that will render.
 - ⚠️ The file declares `--font-mono-num: 'JetBrains Mono', …` as a raw family
   string. Once `next/font` provides a real CSS variable in 1c, make sure the
   two don't fight — prefer the `next/font` variable and let this be the
