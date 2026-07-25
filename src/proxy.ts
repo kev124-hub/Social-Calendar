@@ -38,7 +38,14 @@ export async function proxy(request: NextRequest) {
     // inside the handler (see src/lib/cron-auth.ts), so skip the login
     // redirect here — otherwise the pinger/Vercel Cron gets bounced to /login.
     request.nextUrl.pathname.startsWith('/api/cron') ||
-    request.nextUrl.pathname.startsWith('/auth/callback')
+    request.nextUrl.pathname.startsWith('/auth/callback') ||
+    // PWA assets. The browser fetches manifest.json WITHOUT credentials by
+    // default, so it arrives here session-less and used to be redirected to
+    // /login — the browser then tried to parse the login HTML as JSON and logged
+    // "Manifest: Line: 1, column: 1, Syntax error", meaning the manifest (and the
+    // service worker) never loaded in production. Both are public static files.
+    request.nextUrl.pathname === '/manifest.json' ||
+    request.nextUrl.pathname === '/sw.js'
 
   if (!isPublicPath && !isAuthPage && !user) {
     const url = request.nextUrl.clone()

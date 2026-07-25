@@ -184,7 +184,16 @@ made zero code changes. The repo state (branch history on `main`, 20 commits):
    longer depend on the Vercel dashboard config staying correct. Watch for this
    pattern in any new route: a module-scope `createClient(...)` breaks the build,
    not just the runtime.
-7. **Supabase sends weekly "project will be archived for inactivity" notices**,
+7. ~~**PWA manifest and service worker never load in production.**~~ ✅ **FIXED
+   July 25, 2026.** The browser logged `Manifest: Line: 1, column: 1, Syntax
+   error` on every page load. `public/manifest.json` is valid JSON — the cause was
+   `src/proxy.ts`: its matcher excluded `_next/static`, `favicon.ico` and image
+   extensions but not `/manifest.json` or `/sw.js`. Browsers fetch the manifest
+   **without credentials** by default, so it arrived session-less, got redirected
+   to `/login`, and the browser parsed login HTML as JSON. Both paths are now
+   treated as public. Worth remembering when adding any other unauthenticated
+   browser-initiated fetch.
+8. **Supabase sends weekly "project will be archived for inactivity" notices**,
    regardless of how heavily the app is used. Unfixed, an actually-paused project
    takes the database offline and scheduled posts silently fail to publish. Full
    analysis, diagnostic sequence, and candidate fixes are in **Stage B7** below —
@@ -361,23 +370,43 @@ publish_error text
 ```
 Update `src/types/database.ts` and `docs/database-schema.md` to match.
 
-### Stage B4 — Publisher worker (the core) — ✅ BUILT (July 25, 2026)
+### Stage B4 — Publisher worker (the core) — ✅ DONE, VERIFIED LIVE (July 25, 2026)
 **Complexity 4/5 · Use the strongest model available (Opus-class or better); NOT a Sonnet job · ~1 day**
 
-> **Status: built, typechecks, builds, and lints clean — but NOT yet exercised
-> against the live Graph API.** This repo's sandbox is on "Trusted" egress and
-> cannot reach `graph.facebook.com`, Dropbox, or Supabase, so no call in this
-> pipeline has been run end-to-end from a session. **First real run must be a
-> manual "Publish now" on a throwaway post in production**, not a scheduled one.
-> The Meta env vars (`META_APP_ID`, `META_APP_SECRET`,
-> `INSTAGRAM_USER_ACCESS_TOKEN`, `INSTAGRAM_USER_ID`) still need to be set in
-> Vercel, followed by a redeploy.
+> **Status: built AND proven end-to-end in production.** The full chain published a
+> real reel from the app: Dropbox `get_temporary_link` → Meta container → poll to
+> FINISHED → `media_publish` → permalink, with no middleman re-encode.
+>
+> **First live run (the acceptance evidence):**
+> - Post `1bc953a2-a1e5-4993-aee3-3b0588a50b75` ("Auto Post test"), source
+>   `/social media/ready to post/need a minute.mp4`.
+> - Call 1 → `container_created` (container `18030885791835746`).
+> - Call 2, ~1 min later → `published`, media `17871012090627085`,
+>   permalink `https://www.instagram.com/reel/DbON80djKs7/`.
+> - Cron smoke test with no posts due returned
+>   `{"ok":true,"considered":0,...,"token":{"status":"ok","daysLeft":59}}` — which
+>   also proves `CRON_SECRET` auth, all four Meta env vars, and a successful
+>   `debug_token` round trip against Graph.
+>
+> **Also settled by this run:**
+> - The **Dropbox picker works in production** and stores a real `path_lower`
+>   (`/social media/ready to post/…`). This closes the last open B2 verification.
+> - `app_credentials` works: the env-sourced token was inspected once and persisted
+>   with `expires_at` = 2026-09-23, matching Meta's debugger exactly. The DB value
+>   wins from now on, later runs skip `debug_token`, and the first real refresh is
+>   due around **13 Sept 2026** (the 10-days-remaining threshold).
+> - `fb_exchange_token` refresh remains **unexercised** until that date — it is the
+>   one path in B4 no test has covered. It fails non-fatally by design.
+>
+> **Still outstanding:** the cron-job.org pinger for `/api/cron/publish-posts`
+> (every 5 min, same `CRON_SECRET` Bearer header). Until it exists, auto mode never
+> fires on its own — only manual "Publish now" works.
 >
 > **What shipped:**
 > - `supabase/migrations/006_publish_worker.sql` — `publish_locked_at`,
 >   `publish_attempts`, `ig_container_created_at` on `social_posts`; the
->   `app_credentials` table; the publish-queue partial index. **Not yet applied to
->   the prod DB** — apply it and then run `NOTIFY pgrst, 'reload schema';`.
+>   `app_credentials` table; the publish-queue partial index. **Applied to the prod
+>   DB on July 25, 2026**, followed by `NOTIFY pgrst, 'reload schema';`.
 > - `src/lib/instagram.ts` — Graph API client (v21.0 pinned), caption assembly and
 >   validation, media-type resolution, container lifecycle, token debug/exchange.
 > - `src/lib/ig-token.ts` — token storage in `app_credentials` + unattended refresh
