@@ -1,0 +1,67 @@
+/* ────────────────────────────────────────────────────────────────
+   Append to src/app/globals.css — Riviera Glass additions.
+   Keeps the existing shadcn token block; adds the glass layer,
+   keyframes and the mono face used for times/numerals.
+   ──────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Glass surfaces */
+  --glass-wash:
+    radial-gradient(760px 460px at 4% 0%, rgba(214,164,240,.80), transparent 62%),
+    radial-gradient(700px 460px at 98% 6%, rgba(104,180,220,.78), transparent 62%),
+    radial-gradient(760px 500px at 72% 102%, rgba(134,200,226,.60), transparent 62%),
+    #e7ecf0;
+  --glass-panel:      rgba(255,255,255,.60);
+  --glass-panel-soft: rgba(255,255,255,.46);
+  --glass-card:       rgba(255,255,255,.88);
+  --glass-hairline:   rgba(255,255,255,.90);
+
+  /* Day tints — weekday blue / weekend yellow */
+  --day-weekday:        rgba(74,152,206,.52);
+  --day-weekday-border: rgba(9,66,94,.40);
+  --day-weekend:        rgba(252,222,130,.62);
+  --day-weekend-border: rgba(140,98,10,.42);
+  --day-today-border:   rgba(20,16,20,.62);
+
+  /* Ink — nothing lighter than --ink-3 on glass */
+  --ink-1: #150f19;
+  --ink-2: #241f28;
+  --ink-3: #5d5660;
+
+  /* Shadows */
+  --shadow-card:       0 3px 8px rgba(63,43,80,.10);
+  --shadow-card-hover: 0 26px 42px rgba(63,43,80,.28);
+  --shadow-panel:      0 16px 32px rgba(18,52,72,.16);
+
+  --font-mono-num: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@keyframes glass-fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Live status pulse (queued / publishing) */
+@keyframes glass-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(11,79,108,.45); }
+  50%      { box-shadow: 0 0 0 7px rgba(11,79,108,0); }
+}
+
+/* Ready-reel cylinder */
+@keyframes glass-reel-spin {
+  from { transform: rotateX(-9deg) rotateY(0deg); }
+  to   { transform: rotateX(-9deg) rotateY(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}
+
+/* Striped placeholder for posts with no media yet */
+.glass-thumb-placeholder {
+  background-image: repeating-linear-gradient(135deg, #ded5e2 0 7px, #ece5ee 7px 14px);
+}
