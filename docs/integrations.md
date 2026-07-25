@@ -15,9 +15,11 @@ Setup instructions and notes for each external service.
 2. Create a new project (e.g., "Social Calendar")
 3. Enable the **Google Calendar API**
 4. Create **OAuth 2.0 credentials** (Web Application type)
-5. Add authorized redirect URIs:
-   - `http://localhost:3000/api/auth/callback/google` (dev)
-   - `https://your-vercel-url.vercel.app/api/auth/callback/google` (prod)
+5. Add authorized redirect URIs — these must match the path the app actually
+   sends, which is `/api/auth/callback/google-calendar` (see
+   `src/app/api/auth/google-calendar/route.ts`):
+   - `http://localhost:3000/api/auth/callback/google-calendar` (dev)
+   - `https://your-vercel-url.vercel.app/api/auth/callback/google-calendar` (prod)
 6. Download the client ID and client secret — add to `.env.local`
 
 ### Environment Variables
