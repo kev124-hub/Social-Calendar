@@ -175,9 +175,20 @@ made zero code changes. The repo state (branch history on `main`, 20 commits):
    Production environment in Vercel. The env vars are now evidently enabled for Preview
    too — preview builds complete and deploy. **Green Vercel checks are now the
    expectation on PRs; a red one means something is actually wrong.**
-   Still-open optional hardening (nice-to-have, not required): lazy-init that admin
-   client inside the handler so a build never needs env at module-eval time — the
-   current setup depends on the dashboard config staying correct.
+   **Hardening now done in code (B4 session, July 25, 2026).** The diagnosis above
+   named only `/api/extension-key`, but there was a **second instance** with the
+   same module-scope pattern in `src/app/api/inspirations/route.ts` — so `npm run
+   build` failed locally without env vars even after fixing the first. Both now
+   build their admin client lazily inside a `function admin()`, and `npm run build`
+   completes with **no environment variables set at all**. Previews therefore no
+   longer depend on the Vercel dashboard config staying correct. Watch for this
+   pattern in any new route: a module-scope `createClient(...)` breaks the build,
+   not just the runtime.
+7. **Supabase sends weekly "project will be archived for inactivity" notices**,
+   regardless of how heavily the app is used. Unfixed, an actually-paused project
+   takes the database offline and scheduled posts silently fail to publish. Full
+   analysis, diagnostic sequence, and candidate fixes are in **Stage B7** below —
+   start with the 30-second check that the notice even refers to this project.
 
 ### Mobile bug → root cause map (verified against source)
 
@@ -350,8 +361,59 @@ publish_error text
 ```
 Update `src/types/database.ts` and `docs/database-schema.md` to match.
 
-### Stage B4 — Publisher worker (the core)
+### Stage B4 — Publisher worker (the core) — ✅ BUILT (July 25, 2026)
 **Complexity 4/5 · Use the strongest model available (Opus-class or better); NOT a Sonnet job · ~1 day**
+
+> **Status: built, typechecks, builds, and lints clean — but NOT yet exercised
+> against the live Graph API.** This repo's sandbox is on "Trusted" egress and
+> cannot reach `graph.facebook.com`, Dropbox, or Supabase, so no call in this
+> pipeline has been run end-to-end from a session. **First real run must be a
+> manual "Publish now" on a throwaway post in production**, not a scheduled one.
+> The Meta env vars (`META_APP_ID`, `META_APP_SECRET`,
+> `INSTAGRAM_USER_ACCESS_TOKEN`, `INSTAGRAM_USER_ID`) still need to be set in
+> Vercel, followed by a redeploy.
+>
+> **What shipped:**
+> - `supabase/migrations/006_publish_worker.sql` — `publish_locked_at`,
+>   `publish_attempts`, `ig_container_created_at` on `social_posts`; the
+>   `app_credentials` table; the publish-queue partial index. **Not yet applied to
+>   the prod DB** — apply it and then run `NOTIFY pgrst, 'reload schema';`.
+> - `src/lib/instagram.ts` — Graph API client (v21.0 pinned), caption assembly and
+>   validation, media-type resolution, container lifecycle, token debug/exchange.
+> - `src/lib/ig-token.ts` — token storage in `app_credentials` + unattended refresh
+>   at <10 days remaining, email warning at <3 days. Resolves Open Question #2 in
+>   favour of the table (a Vercel env var can't be rewritten by the running app).
+> - `src/lib/publisher.ts` — the state machine, shared by both entry points.
+> - `src/app/api/cron/publish-posts/route.ts` — cron entry, `checkCronAuth`.
+> - `src/app/api/posts/[id]/publish/route.ts` — session-authed "Publish now".
+>
+> **Deliberate design calls worth knowing before changing it:**
+> - **Leases, not just status.** Overlapping cron runs are possible (a run every 5
+>   min, and a slow run can outlive its interval), so a post is claimed by
+>   compare-and-swapping `publish_locked_at`. A lease older than 10 min is
+>   stealable, so a crashed run costs one cycle instead of wedging a post forever.
+> - **Double-publish is guarded three ways**: the lease, a fresh re-read of
+>   `ig_media_id` immediately before `media_publish`, and an `ig_media_id IS NULL`
+>   filter on the write that records the result.
+> - **The scariest case is handled explicitly**: if the publish succeeds but the
+>   database write fails, the post IS live on Instagram and our record is wrong.
+>   That path emails and logs "the post IS live — do not publish it again" rather
+>   than looking like a failure to be retried.
+> - **Carousels cannot be auto-published** and fail fast with that message:
+>   `social_posts` holds one `media_dropbox_path` and a carousel needs several.
+>   Supporting them means a schema change (a media array), which was out of scope.
+>   Notify mode covers them today. Same fail-fast treatment for `article` posts,
+>   non-ingestible files (webm/heic), and captions over the 2200-char / 30-hashtag
+>   limits — retrying can't fix any of these, so they don't burn the retry budget.
+> - **Token refresh is the one piece the B0 spike never exercised** (the spike used
+>   a hand-made short-lived token). It follows Meta's documented `fb_exchange_token`
+>   flow, which suits this app's Facebook-Login-based Meta app; if Kevin's token
+>   turns out to be an Instagram-Login token, the endpoint is
+>   `graph.instagram.com/refresh_access_token` instead. Refresh failures are
+>   non-fatal by design — worst case Kevin rotates by hand, never a lost post.
+>
+> Original specification follows.
+
 New route `src/app/api/cron/publish-posts/route.ts` (pinged every 5 min, auth per B1):
 1. Select posts: `stage='scheduled'`, `publish_mode='auto'`,
    `scheduled_at <= now()`, `publish_status IN ('pending','processing')` (and
@@ -391,7 +453,71 @@ a separate later task — email ships first.
 - `PostCard` (both pipeline and calendar variants): status badge — queued /
   processing / published / failed — and IG permalink once live.
 - "Publish now" button (manual trigger of the worker for one post) — doubles as
-  the test harness.
+  the test harness. **The API half is already built in B4**
+  (`POST /api/posts/[id]/publish`); B6 only needs to wire a button to it.
+
+### Stage B7 — Supabase "project will be archived for inactivity" notices
+**Complexity 2/5 (diagnosis, not construction) · Sonnet-capable · ~1–2h, mostly Kevin-side checks**
+
+Kevin receives **weekly Supabase notices that the project will be archived/paused
+for inactivity, no matter how much he uses the app.** Left alone this is worse than
+an annoyance: on the free tier an actually-paused project takes the database
+offline, and once Workstream B is live that means **the publish cron fails and
+scheduled posts silently don't go out.** It is a reliability risk for auto-publish,
+which is why it belongs in this plan rather than in a someday pile.
+
+**Why the obvious explanation doesn't fit.** Supabase free projects pause after
+~7 days of inactivity, but this project should never look idle: since B1 an
+external cron-job.org pinger hits `/api/cron/send-notifications` **every 5
+minutes**, and that handler runs a real PostgREST query against `notifications`.
+Add Kevin's own daily browser use and the database sees traffic constantly. So
+either the notice isn't about this project, or something is stopping that traffic
+from counting. Diagnose before changing anything.
+
+**Hypotheses, most likely first:**
+1. **The notice is about a different Supabase project.** Orgs accumulate
+   half-finished projects, and the warning email names one specific project ref.
+   If that ref isn't the app's, the app's usage is irrelevant and there is nothing
+   to fix in code. **Check first — it's a 30-second check that could close this
+   entirely.**
+2. **The 5-minute pinger is 401ing.** `checkCronAuth` rejects before touching the
+   database, so a stale/incorrect `Authorization: Bearer <CRON_SECRET>` at
+   cron-job.org (e.g. after the secret was rotated) means every ping does *zero*
+   DB work. This would be a significant finding on its own — **it would also mean
+   email notifications are silently broken**, and B4's publish cron would be dead
+   on arrival for the same reason.
+3. **Supabase's inactivity signal doesn't count what we generate.** If it keys off
+   something other than PostgREST request volume, steady API traffic might not
+   register as "activity".
+4. **The warning is scheduled/stale on Supabase's side** — a known class of
+   annoyance where the notice fires on a cadence or off a lagging metric.
+
+**Diagnostic sequence (needs Kevin or a session with Supabase egress — this repo's
+sandbox is on "Trusted" egress and cannot reach Supabase):**
+1. Open the warning email and compare its project ref/URL against
+   `NEXT_PUBLIC_SUPABASE_URL`. Different → delete or ignore the stale project, done.
+2. If it IS the app's project: check the cron-job.org execution history for
+   `/api/cron/send-notifications`. Are pings returning **200 with a JSON body**, or
+   401/500? A 401 confirms hypothesis 2.
+3. Cross-check in Supabase → Project → Logs / API usage that requests are actually
+   arriving in the last 24h, and read the project's reported "last activity".
+
+**Fixes, by outcome:**
+- *Wrong project* → remove it; no code change.
+- *Pinger 401* → re-set the `CRON_SECRET` header at cron-job.org and redeploy.
+  This also restores notifications and unblocks the publish cron — fix regardless.
+- *Traffic genuinely not counting* → add an explicit keepalive. Cheapest version is
+  a tiny read/write inside the existing publish cron (it already runs every 5
+  minutes and already holds a service-role client), so this is a few lines, not a
+  new endpoint.
+- *Structural* → **Supabase Pro (~$25/mo) removes project pausing entirely.** Note
+  this is NOT covered by the "no Vercel plan upgrade" decision in § Explicitly
+  Ruled Out — that decision was about Vercel cron limits, a different vendor and a
+  different problem. Once real posts depend on the database being up, paying to
+  remove a whole class of silent failure is worth putting to Kevin as a choice.
+
+**Do not** implement a keepalive before step 1. If the notice is about another
+project, a keepalive adds a permanent moving part that fixes nothing.
 
 ---
 
@@ -409,6 +535,7 @@ a separate later task — email ships first.
 | B4 | Publisher worker state machine | **4/5** | **Opus-class or stronger** | 1d |
 | B5 | Notify-to-post emails | 2/5 | Sonnet ✅ | 0.5d |
 | B6 | Pipeline UI | 2/5 | Sonnet ✅ | 0.5d |
+| B7 | Supabase inactivity-notice diagnosis | 2/5 | Sonnet ✅ (diagnosis, needs Kevin) | 1–2h |
 
 **Why B4 is the exception:** it's a distributed state machine (multi-step IG
 container lifecycle resumed across stateless serverless cron invocations), with
@@ -473,6 +600,14 @@ suggestion.
 3. Web push (VAPID) timing — deliberately deferred; email-first in B5.
 4. Whether Kevin wants `auto` or `notify` as the default for Reels once trust is
    established (schema defaults to `notify` for safety).
+5. **Long-lived IG token storage — RESOLVED in B4: the `app_credentials` table**
+   (migration 006). A Vercel env var cannot be rewritten by the running app, so
+   env-only storage would mean a manual secret rotation every ~60 days or
+   auto-publish silently stops. `INSTAGRAM_USER_ACCESS_TOKEN` stays as the
+   bootstrap value; the first successful refresh writes the table, which wins after.
+6. **Why does Supabase warn weekly about archiving for inactivity?** Open — see
+   Stage B7 for the analysis and diagnostic sequence. Materially affects
+   auto-publish reliability, since a paused project means posts silently don't go out.
 
 ## Final Deliverable Reminder (Kevin's explicit request — do not drop)
 
@@ -505,5 +640,21 @@ this as the closing stage of the project — it is part of "done."
 2. ~~Build **Workstream A** (A1 → A2 → A3).~~ **Done** — merged in PR #4.
 3. ~~Walk Kevin through the **B0 spike**.~~ **Done** — both arms pass; results
    recorded in § Stage B0 "B0 results". B4 is no longer gated on it.
-4. ~~B1 → B2 → B3~~ **done and live** (PRs #6, #7). **B4 is the current task**,
-   then B5 → B6, then the README deliverable above.
+4. ~~B1 → B2 → B3~~ **done and live** (PRs #6, #7). ~~B4~~ **built July 25, 2026**
+   (see § Stage B4) — awaiting Meta credentials, migration 006, and a first live
+   run. Remaining: **B5 → B6 → B7**, then the README deliverable above.
+
+**Immediate next actions:**
+1. **Kevin:** set `META_APP_ID` (`1002021345591349`), `META_APP_SECRET`, a
+   long-lived `INSTAGRAM_USER_ACCESS_TOKEN` (scopes `instagram_basic` +
+   `instagram_content_publish`), and `INSTAGRAM_USER_ID` (`17841455072367303`) in
+   Vercel Production, then **redeploy** — env changes need one to take effect.
+2. **Kevin:** apply `supabase/migrations/006_publish_worker.sql`, then run
+   `NOTIFY pgrst, 'reload schema';` in the SQL editor.
+3. **First live test:** attach a Dropbox file to a throwaway post and hit
+   `POST /api/posts/<id>/publish` ("Publish now"). It advances one step per call,
+   so expect `container_created`, then `published` on a later call once Meta
+   finishes ingesting. Do **not** debut this on a real scheduled post.
+4. **Kevin:** add the cron-job.org pinger for `/api/cron/publish-posts` every 5 min
+   with the same `CRON_SECRET` Bearer header.
+5. Still unverified from B2: that the Dropbox picker lists a real file in prod.

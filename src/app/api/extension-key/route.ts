@@ -2,10 +2,17 @@ import { NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 
-const admin = createAdminClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+// Lazy, NOT module scope. Building this at module scope threw
+// `supabaseUrl is required` during `next build` page-data collection whenever the
+// Supabase env vars weren't present in that environment — which broke every
+// Vercel Preview deployment (HANDOFF.md known issue #6) and still breaks
+// `npm run build` locally. Env vars are only read when a request actually arrives.
+function admin() {
+  return createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 async function requireAuth() {
   const supabase = await createClient()
@@ -21,7 +28,7 @@ export async function GET() {
   const user = await requireAuth()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data } = await admin
+  const { data } = await admin()
     .from('user_integrations')
     .select('access_token')
     .eq('provider', 'extension')
@@ -32,7 +39,7 @@ export async function GET() {
   }
 
   const key = generateKey()
-  await admin.from('user_integrations').insert({ provider: 'extension', access_token: key })
+  await admin().from('user_integrations').insert({ provider: 'extension', access_token: key })
   return NextResponse.json({ key })
 }
 
@@ -41,7 +48,7 @@ export async function POST() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const key = generateKey()
-  await admin.from('user_integrations').upsert(
+  await admin().from('user_integrations').upsert(
     { provider: 'extension', access_token: key },
     { onConflict: 'provider' }
   )

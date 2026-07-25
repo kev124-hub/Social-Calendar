@@ -74,7 +74,23 @@ export interface SocialPost {
   ig_media_id: string | null
   ig_permalink: string | null
   publish_error: string | null
+  // Publisher worker bookkeeping (migration 006)
+  publish_locked_at: string | null
+  publish_attempts: number
+  ig_container_created_at: string | null
   created_at: string
+  updated_at: string
+}
+
+/**
+ * Server-only rotating secrets (migration 006) — currently the Instagram
+ * long-lived access token, which the publish cron refreshes unattended.
+ * Reachable with the service-role key only; RLS denies the browser roles.
+ */
+export interface AppCredential {
+  key: string
+  value: string
+  expires_at: string | null
   updated_at: string
 }
 
@@ -136,12 +152,42 @@ export interface Notification {
   created_at: string
 }
 
+/**
+ * Homomorphic mapped type that re-emits a type as an anonymous object type.
+ *
+ * Needed because postgrest-js constrains a table's Row/Insert/Update to
+ * `Record<string, unknown>`, and a TypeScript `interface` is NOT assignable to
+ * that (it has no index signature) while an anonymous object type is. Without
+ * this, `Database['public']` fails supabase-js's `GenericSchema` constraint, the
+ * client's Schema generic resolves to `never`, and every `.update()` / `.insert()`
+ * argument is rejected as "not assignable to parameter of type 'never'" — with no
+ * hint that the schema type is the actual problem.
+ */
+type Columns<T> = { [K in keyof T]: T[K] }
+
 type TableDef<Row, Insert, Update> = {
-  Row: Row
-  Insert: Insert
-  Update: Update
+  Row: Columns<Row>
+  Insert: Columns<Insert>
+  Update: Columns<Update>
   Relationships: []
 }
+
+/**
+ * Publishing columns nothing outside the publisher sets by hand: each either has
+ * a database default (publish_mode → 'notify', publish_attempts → 0) or is filled
+ * in by the worker as a post moves through the container lifecycle. Optional on
+ * insert so creating a post never has to mention them.
+ */
+type PublishManagedColumn =
+  | 'publish_mode'
+  | 'publish_status'
+  | 'ig_container_id'
+  | 'ig_media_id'
+  | 'ig_permalink'
+  | 'publish_error'
+  | 'publish_locked_at'
+  | 'publish_attempts'
+  | 'ig_container_created_at'
 
 export interface Database {
   public: {
@@ -158,7 +204,8 @@ export interface Database {
       >
       social_posts: TableDef<
         SocialPost,
-        Omit<SocialPost, 'id' | 'created_at' | 'updated_at'>,
+        Omit<SocialPost, 'id' | 'created_at' | 'updated_at' | PublishManagedColumn> &
+          Partial<Pick<SocialPost, PublishManagedColumn>>,
         Partial<Omit<SocialPost, 'id' | 'created_at' | 'updated_at'>>
       >
       ugc_projects: TableDef<
@@ -180,6 +227,11 @@ export interface Database {
         Notification,
         Omit<Notification, 'id' | 'created_at'>,
         Partial<Omit<Notification, 'id' | 'created_at'>>
+      >
+      app_credentials: TableDef<
+        AppCredential,
+        Omit<AppCredential, 'updated_at'> & Partial<Pick<AppCredential, 'updated_at'>>,
+        Partial<Omit<AppCredential, 'key'>>
       >
     }
     Views: Record<string, never>
