@@ -65,9 +65,12 @@ The auto-publish pipeline is LIVE and running unattended.**
 - Two cron-job.org pingers run every 5 minutes, both sending
   `Authorization: Bearer <CRON_SECRET>`:
   `/api/cron/send-notifications` (B1) and `/api/cron/publish-posts` (B4).
-- Meta credentials are set in Vercel; migrations 005 and 006 are applied to prod.
+- Meta credentials are set in Vercel.
 - The pipeline UI (B6) exposes all of it: per-post auto/notify toggle, publish
   status badges on every card, failure reasons, IG permalinks, and "Publish now".
+- Notify-mode posts (B5, live since migration 007 on July 25) email Kevin at
+  their scheduled time with the caption, hashtags and a media download link.
+- Migrations 005, 006 and 007 are all applied to prod.
 
 ### Acceptance evidence (July 25, 2026)
 | Path | Evidence |
@@ -106,11 +109,12 @@ case is a manual rotation, not a lost post. **Do not describe it as tested.**
 4. ~~**Undecided:** whether `/api/cron/publish-posts` should return 503~~
    **Decided July 25: no — the app emails instead.** See Open Questions #7. There
    are **no unresolved decisions** left in Workstream B.
-5. **Apply `supabase/migrations/007_notify_to_post.sql` (Kevin).** Stage B5 is
-   built and merged but inert until this runs, followed by
-   `NOTIFY pgrst, 'reload schema';` in the Supabase SQL editor. Until then every
-   run of `/api/cron/send-notifications` reports `notifyError` — visible, not
-   silent, but no reminders go out.
+5. ~~**Apply `supabase/migrations/007_notify_to_post.sql`**~~ **Done (Kevin,
+   July 25)**, with `NOTIFY pgrst, 'reload schema';`. **Stage B5 is therefore
+   live**: notify-mode posts that come due now email Kevin within 5 minutes.
+   Not yet observed end-to-end against a real post — the first real reminder is
+   the confirmation. If none arrives when one is due, check
+   `/api/cron/send-notifications` for a `notifyError` in the response body.
 
 ### Next work, in order
 ~~**B6**~~ **done** → ~~**B5**~~ **done (both July 25 — see their stages)** →
@@ -631,9 +635,10 @@ and a note of the target platform/format. This is the path for Stories, trending
 audio, collabs, custom covers. Web push upgrade (VAPID, service-worker push) is
 a separate later task — email ships first.
 
-> **⚠️ Kevin must apply `supabase/migrations/007_notify_to_post.sql`** (then
-> `NOTIFY pgrst, 'reload schema';`). Until then the notify cycle errors every run
-> and reports it as `notifyError` in the cron response — loudly, not silently.
+> **Migration 007 applied July 25, 2026** (with `NOTIFY pgrst, 'reload schema';`),
+> so this is **live in production**. Not yet observed against a real post: the
+> first genuine reminder is the confirmation. If one fails to arrive, the cron
+> response body carries `notifyError`.
 >
 > **What shipped:**
 > - `supabase/migrations/007_notify_to_post.sql` — `notified_at` on `social_posts`
