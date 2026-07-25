@@ -117,9 +117,20 @@ case is a manual rotation, not a lost post. **Do not describe it as tested.**
    `/api/cron/send-notifications` for a `notifyError` in the response body.
 
 ### Next work, in order
-~~**B6**~~ **done** → ~~**B5**~~ **done (both July 25 — see their stages)** →
-**B7** (Supabase inactivity diagnosis) → **the detailed README** that closes the
-project. **B5 needs migration 007 applied before it does anything** (see below).
+**None — every planned stage is complete.** ~~B6~~, ~~B5~~, ~~B7~~ and ~~the
+README~~ all landed on July 25, 2026. Migration 007 is applied, so B5 is live.
+
+Two items are on a **clock**, not a task list:
+1. **B5's first real reminder** is its end-to-end confirmation — it has not yet
+   been observed against a genuine post.
+2. **B7 resolves on ~August 1, 2026.** If a Supabase inactivity warning arrives
+   after the pingers have run a full week, the choice is Supabase Pro (~$25/mo) or
+   accepting the risk — see § Stage B7. Before that date, silence proves nothing
+   and nothing should be built.
+
+Unstarted ideas that were always out of scope for this plan: web push (VAPID),
+TikTok/LinkedIn auto-posting (needs app review), and the resumable-upload ingest
+variant (§ Stage B0 — not needed; URL ingest reaches quality parity on its own).
 
 ### Repo / workflow state
 - Designated branch `claude/b0-b4-quality-verification-66dnqx`. Its PR #14 (B0
@@ -962,6 +973,16 @@ suggestion.
    was always caught by the watchdog; only the two graceful config exits were blind.
 
 ## Final Deliverable Reminder (Kevin's explicit request — do not drop)
+
+> ✅ **DONE — `README.md` was written on July 25, 2026**, replacing the
+> create-next-app boilerplate. Everything specified below is covered, including
+> the publishing-quality content spelled out further down this section. Two errors
+> were found and fixed while verifying its claims against the code rather than the
+> existing docs: `docs/integrations.md` gave the wrong Google OAuth redirect URI
+> (`/api/auth/callback/google` — the app sends `/api/auth/callback/google-calendar`,
+> so following the doc produced a broken sync setup), and `src/lib/dropbox.ts`'s
+> header comment named the wrong default Dropbox folder. **The spec below is kept
+> as the record of what was asked for.**
 
 When both workstreams are complete, **write a highly detailed `README.md`** for
 this project, replacing the current create-next-app boilerplate. It should cover:
