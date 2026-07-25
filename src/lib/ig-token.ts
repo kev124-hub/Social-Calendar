@@ -14,11 +14,15 @@ import { sendNotificationEmail } from '@/lib/email'
 import type { AdminClient } from '@/lib/supabase/admin'
 
 export const IG_TOKEN_KEY = 'instagram_user_access_token'
+/** Timestamp of the last "cannot refresh" warning, so it can't email every run. */
+const WARN_MARKER_KEY = 'instagram_token_warning_sent_at'
 
 /** Refresh once the remaining lifetime drops below this. */
 const REFRESH_WHEN_DAYS_LEFT = 10
 /** Warn Kevin by email below this, so a broken refresh can't fail silently. */
 const WARN_WHEN_DAYS_LEFT = 3
+/** Minimum gap between repeat warnings — the cron runs every 5 minutes. */
+const WARN_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -88,9 +92,24 @@ export async function maintainIgToken(
   const appSecret = process.env.META_APP_SECRET
 
   if (!appId || !appSecret) {
+    // Without app credentials we can neither refresh the token NOR inspect its
+    // expiry, so there is no "days left" to threshold on — this would otherwise be
+    // a genuinely silent failure: publishing simply stops whenever the ~60-day
+    // token lapses. Warn on a daily cadence instead of staying quiet.
+    const daysLeft = current.expiresAt ? daysUntil(current.expiresAt) : null
+    if (await shouldWarnAgain(supabase)) {
+      await warn(
+        'Instagram token cannot be refreshed automatically',
+        'META_APP_ID and/or META_APP_SECRET are not set in Vercel, so the app cannot refresh ' +
+          'the Instagram access token — or even check when it expires.\n\n' +
+          'A long-lived user token lasts about 60 days. When it lapses, auto-publishing stops ' +
+          'and scheduled posts will not go out.\n\n' +
+          'Fix: set META_APP_ID and META_APP_SECRET in Vercel (Production) and redeploy.'
+      )
+    }
     return {
       status: 'skipped',
-      daysLeft: current.expiresAt ? daysUntil(current.expiresAt) : null,
+      daysLeft,
       message: 'META_APP_ID / META_APP_SECRET not set — cannot refresh the Instagram token automatically.',
     }
   }
@@ -159,6 +178,37 @@ export async function maintainIgToken(
 
 function daysUntil(date: Date): number {
   return Math.floor((date.getTime() - Date.now()) / DAY_MS)
+}
+
+/**
+ * Rate-limit the "cannot refresh" warning to once a day, using app_credentials as
+ * the only durable state a stateless cron has. Returns true when it's time to warn
+ * again, and records the send.
+ *
+ * Fails open: if the marker can't be read or written (e.g. migration 006 not
+ * applied yet), warn anyway. A duplicate email is a far better failure than a
+ * token expiring in silence.
+ */
+async function shouldWarnAgain(supabase: AdminClient): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('app_credentials')
+    .select('value')
+    .eq('key', WARN_MARKER_KEY)
+    .maybeSingle()
+
+  if (!error && data?.value) {
+    const lastSent = Date.parse(data.value)
+    if (Number.isFinite(lastSent) && Date.now() - lastSent < WARN_INTERVAL_MS) return false
+  }
+
+  const { error: writeError } = await supabase
+    .from('app_credentials')
+    .upsert({ key: WARN_MARKER_KEY, value: new Date().toISOString(), expires_at: null }, { onConflict: 'key' })
+  if (writeError) {
+    console.warn(`Could not record token-warning timestamp: ${writeError.message}`)
+  }
+
+  return true
 }
 
 async function warn(subject: string, body: string) {
