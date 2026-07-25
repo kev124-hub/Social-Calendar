@@ -1,3 +1,11 @@
+> # ⚠️ HISTORICAL — B4 IS DONE
+>
+> **This file is superseded. B4 was built and verified in production on July 25,
+> 2026.** Read **`HANDOFF.md`** — specifically its "📍 CURRENT STATE" block at the
+> top — for where the project actually stands and what to do next. Everything
+> below is kept for provenance only: it describes B4 as upcoming work, which it
+> no longer is.
+
 # Session Handoff — Social Calendar: start Workstream B, Stage B4 (IG publisher worker)
 
 **Written: July 24, 2026.** Continues the plan in **`HANDOFF.md`** (the master
