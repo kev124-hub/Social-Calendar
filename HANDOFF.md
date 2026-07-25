@@ -4,13 +4,18 @@
 the repo's original build commits are from late April 2026; this document and
 its plan are from July 23, 2026, and reflect the repo's state as of that day.)
 
-> **Updated July 24, 2026 — B0 spike COMPLETE, fully CLOSED.** Workstream A
-> (mobile calendar fixes) shipped and merged (PR #4). The B0 spike has run to
-> completion: **B0(a) PASSES** (the Graph API accepts the ~2K file, audio intact)
-> and **B0(b) PASSES** (served quality reaches full parity with a native upload —
-> asynchronously, within a few hours of publish). **No fallback transcode is
-> needed and B4's done-gate is OPEN — build B4 exactly as specified in § Stage
-> B4.** See § Stage B0 "B0 results" and § Open Questions #1 for the measurements.
+> **Updated July 25, 2026 — B0 CLOSED, and the built B4 pipeline is VERIFIED IN
+> PRODUCTION at full quality parity.** Workstream A (mobile calendar fixes)
+> shipped and merged (PR #4). The B0 spike ran to completion: **B0(a) PASSES**
+> (the Graph API accepts the ~2K file, audio intact) and **B0(b) PASSES** (served
+> quality reaches full parity with a native upload — asynchronously after
+> publish). A third round then verified the *deployed* pipeline on a real post
+> (`DbON80djKs7`): it served the full 1080p VP9 ladder **~15 minutes** after
+> publish, and its birth-encode bitrates were byte-identical to the B0 API arm —
+> proof the pipeline delivers the original master bytes with no intermediate
+> re-encode. **No fallback transcode was needed and no B4 code changes are
+> required by any of these results.** See § Stage B0 "B0 results" and § Open
+> Questions #1 for the measurements.
 
 ## ⚠️ START HERE — Source-of-Truth Protocol (read before anything else)
 
@@ -70,6 +75,7 @@ The auto-publish pipeline is LIVE and running unattended.**
 | Auth + config | Cron returns `{"ok":true,...,"token":{"status":"ok","daysLeft":59}}` — proves CRON_SECRET, all four Meta env vars, and a live `debug_token` round trip |
 | Dropbox picker | Confirmed listing real files in prod; `get_temporary_link` resolves the team-namespace path with **no** `Dropbox-API-Path-Root` header |
 | `app_credentials` | Token persisted with `expires_at` 2026-09-23, matching Meta's debugger exactly |
+| **Served quality** | `DbON80djKs7` DASH manifest at 5 min = 720p H.264 @1.48 Mbps + HE-AAC 118 kbps (birth state, **byte-identical bitrates to the B0 API arm** → the exact master bytes reached Meta, uncorrupted, no intermediate re-encode); at ~15 min = **1080×1920 VP9 @2.27 Mbps + 720×1280 VP9 @1.57 Mbps + HE-AAC** — full parity with native |
 
 ### The one path still unproven
 **`fb_exchange_token` token refresh.** It cannot run until ~**13 Sept 2026**, when
@@ -89,13 +95,17 @@ case is a manual rotation, not a lost post. **Do not describe it as tested.**
    retracted in their own messages and superseded twice — deleting is correct, tip
    is `f3d6c1d` if it ever needs restoring). Also worth enabling
    **Settings → General → Automatically delete head branches**.
-2. **Re-measure the test reels' DASH manifests** a few hours after publish to
-   confirm B0's async-promotion finding holds for app-published posts. **Never
-   archive a test post before measuring** — archiving freezes rendition generation.
-   The two live test reels are `DbON80djKs7` (manual publish) and `DbOQbNblyM7`
-   (automatic). Both should show a 1080p VP9 rung once Meta's async encode lands.
-3. Delete the leftover test posts once measurement is done. One unused test post
-   remains in the DB: `04d4cd61-6ce3-4001-af28-47f7a0e7d785` ("Need a Minute").
+2. ~~**Re-measure the test reels' DASH manifests**~~ **Done for `DbON80djKs7`
+   (July 25) — B0's async-promotion finding holds for app-published posts, and the
+   transient window was only ~15 min.** See the Served-quality row above. The
+   automatic-path reel `DbOQbNblyM7` was not separately measured and does not need
+   to be: after candidate selection the two paths run identical code, and the
+   finding now has three independent confirmations. **Standing rule regardless:
+   never archive a post before its encodes settle** — archiving freezes rendition
+   generation.
+3. Delete the leftover test posts. Measurement is complete, so nothing depends on
+   them any more. One unused test post remains in the DB:
+   `04d4cd61-6ce3-4001-af28-47f7a0e7d785` ("Need a Minute").
 4. **Undecided:** whether `/api/cron/publish-posts` should return **503** instead
    of 200 when `ok:false` (see Open Questions #7). Kevin has not chosen yet.
 
@@ -338,11 +348,13 @@ still functional.
   link, test caption) → poll `GET /{container-id}?fields=status_code` → on
   FINISHED, `POST /{ig-user-id}/media_publish`. (Throwaway script or curl.)
 - **Record: (a) did IG accept the 2K file? (b) does served quality match a native
-  Edits upload of the same file?** (Post can be archived immediately after.)
+  Edits upload of the same file?** (~~Post can be archived immediately after.~~
+  **This instruction was wrong and caused round one's false conclusion — archiving
+  freezes rendition generation. Never archive a post before its encodes settle.**)
 - If rejected: fallback decision is already made — one high-bitrate 1080p
   transcode from the 2K master, done by us. Pipeline design is unchanged.
 
-#### B0 results (executed July 23–24, 2026) — FINAL: both arms PASS ✅
+#### B0 results (executed July 23–25, 2026) — FINAL: both arms PASS ✅
 
 **Measurement method (validated — use this for any future quality question).**
 Pull the post's served **DASH manifest**: `video_dash_manifest`, embedded in the
@@ -351,9 +363,20 @@ rung resolution / codec / bitrate. **Screen-recording / frame-level comparison i
 NOT valid** — ABR and player state confound it (an early −91 dB "silent reel"
 scare was player mute during capture, not a pipeline bug).
 
-**The clean two-arm experiment.** The *same* Edits 2K master, posted twice minutes
-apart as normal fresh reels on `mustache.journey`, neither archived, both measured
-at equal age:
+`taken_at` in the same page data gives the publish timestamp, so any measurement
+can be aged accurately. A healthy settled post shows a 1080×1920 VP9 rung.
+
+**Round 1 (July 23–24) was confounded and its conclusion was retracted.** It
+compared an early API test post (12 views, archived for most of its life) against
+an established native post (2.1K views) and read the difference as "API = worse".
+The arms differed in age, views **and** archive history at once, so the comparison
+could not support that. It survives only as the source of two lasting lessons: use
+DASH manifests rather than screen recordings, and never archive a post you intend
+to measure. Rounds 2 and 3 below are the evidence.
+
+**Round 2 (July 24) — the clean two-arm experiment.** The *same* Edits 2K master,
+posted twice minutes apart as normal fresh reels on `mustache.journey`, neither
+archived, both measured at equal age:
 
 | Arm | Post | Served ladder (at ~1 h) | Served ladder (re-measure, few hours) |
 |---|---|---|---|
@@ -362,25 +385,47 @@ at equal age:
 
 Audio: HE-AAC ~116 kbps native vs ~118 kbps API — full parity.
 
+At ~1 h the API arm looked like a real penalty under the pre-registered decision
+rule. The re-measure a few hours later is what settled it: the ladder was not
+capped, it was **still being generated**.
+
+**Round 3 (July 25) — production verification of the built B4 pipeline.** Not a
+spike script this time: the deployed pipeline published
+`https://www.instagram.com/reel/DbON80djKs7/` for real (Dropbox master → Graph
+API URL ingest → container → publish).
+
+| Age | Served ladder |
+|---|---|
+| 5 min | 720×1280 H.264 @1.48 Mbps + HE-AAC 118 kbps — the expected birth state |
+| ~15 min | **1080×1920 VP9 @2.27 Mbps + 720×1280 VP9 @1.57 Mbps + HE-AAC** — full ladder |
+
+The birth bitrates were **byte-identical to round 2's API arm**. Same master
+through a deterministic encoder producing the same numbers is direct evidence the
+pipeline handed Meta the exact original bytes — no corruption, no intermediate
+re-encode anywhere in the chain. The transient window here was only **~15
+minutes**, versus a few hours in round 2; treat the window as variable, not fixed.
+
 - **B0(a) — Does the Reels API accept the ~2K file? ✅ PASS — CLOSED.** Container →
   poll → publish succeeded end-to-end; audio survives ingest at parity. **No
   fallback transcode needed on acceptance grounds.**
 - **B0(b) — Does served quality match a native upload? ✅ PASS — CLOSED.** At birth
   the API post serves 720p H.264 only, but **Meta generates the high-quality VP9
-  renditions for API posts asynchronously — within a few hours, with zero views
-  required.** On re-measure the API arm serves a ladder structurally identical to
-  native, at a slightly *higher* 1080p bitrate. The one-time transient is a
-  **latency** characteristic, not a quality cap.
+  renditions for API posts asynchronously, with zero views required.** On
+  re-measure the API arm serves a ladder structurally identical to native, at a
+  slightly *higher* 1080p bitrate. The one-time transient is a **latency**
+  characteristic, not a quality cap. Observed windows: **~15 min in production
+  (round 3), up to a few hours in round 2** — variable, and not something to
+  design around beyond scheduling.
 - **Round one's "permanent 720p cap" reading was wrong, and why matters:** that
   first API test post (`DbJBleDD-BU`) was **archived immediately after publishing**,
   which froze rendition generation. The confounds of round one (upload path vs.
   age/views vs. archive history) are eliminated by the two-arm test above.
 - **Corrected folklore:** VP9/1080p renditions are **not** engagement-promoted.
   Native uploads get the full ladder at birth with zero views; API uploads get it
-  a few hours later, also without engagement.
+  minutes-to-hours later, also without engagement.
 - **Archiving is NOT quality-neutral** — it appears to freeze/demote the served
-  rendition and pause encode generation. **Never archive a post before measuring
-  it**, and treat any future "archive & restore" feature as quality-risky.
+  rendition and pause encode generation. **Never archive a post before its encodes
+  settle**, and treat any future archive-related feature as quality-risky.
 
 **Design implications for B4 — build it exactly as § Stage B4 specifies.**
 - **URL ingest via `getTemporaryLink` is validated end-to-end. Keep it.**
@@ -389,13 +434,18 @@ Audio: HE-AAC ~116 kbps native vs ~118 kbps API — full parity.
   nothing.
 - **The resumable / binary-push upload variant (`upload_type=resumable` +
   `rupload.facebook.com`) is NOT required.** It was scoped as the mitigation for a
-  URL-ingest penalty that turned out not to exist. Optional future experiment only:
-  whether pushing bytes shortens the 720p transient window.
+  URL-ingest penalty that turned out not to exist; URL ingest achieves parity on
+  its own. Optional future experiment only, and only if the transient window ever
+  matters: does pushing bytes shorten it further?
 - The container/poll/publish **state machine design is unchanged and validated.**
 - **Known characteristic to document (README troubleshooting):** API-published
-  reels serve 720p H.264 for roughly the **first 1–3 hours**, then 1080p VP9
-  permanently. Recommended usage: **schedule publishes a few hours ahead of
-  peak-audience windows** so the promoted ladder is live before the traffic is.
+  reels serve a 720p H.264 birth encode for a transient window — **~15 min
+  observed in production, up to a few hours in testing** — then the full 1080p VP9
+  ladder permanently. Native uploads get 1080p at or near birth. Recommended
+  usage: **schedule publishes ahead of peak-audience windows** and the window is
+  irrelevant.
+- **No B4 code changes are required by any of these results** (confirmed again
+  after round 3's production verification).
 
 **Build order impact:** B1 → B2 → B3 were unblocked and are **shipped** (see the
 B4-start handoff). **B4's done-gate is OPEN** — nothing about auto-publish is
@@ -501,7 +551,7 @@ Update `src/types/database.ts` and `docs/database-schema.md` to match.
 > - `src/lib/instagram.ts` — Graph API client (v21.0 pinned), caption assembly and
 >   validation, media-type resolution, container lifecycle, token debug/exchange.
 > - `src/lib/ig-token.ts` — token storage in `app_credentials` + unattended refresh
->   at <10 days remaining, email warning at <3 days. Resolves Open Question #2 in
+>   at <10 days remaining, email warning at <3 days. Resolves Open Question #5 in
 >   favour of the table (a Vercel env var can't be rewritten by the running app).
 > - `src/lib/publisher.ts` — the state machine, shared by both entry points.
 > - `src/app/api/cron/publish-posts/route.ts` — cron entry, `checkCronAuth`.
@@ -705,18 +755,24 @@ suggestion.
 
 ## Open Questions
 
-1. **B0 spike outcome** — ✅ **FULLY RESOLVED (July 24, 2026; see § Stage B0 "B0
-   results").** Both arms PASS. B0(a): the Reels API accepts the ~2K file, audio
-   survives at parity. B0(b): served quality reaches full parity with a native
-   upload — Meta generates the 1080p VP9 ladder for API posts **asynchronously
-   within a few hours, no engagement required** (verified by re-measuring the API
-   arm `DbLsSCijUL1`, which now serves 1080×1920 VP9 @2.27 Mbps + 720p VP9). The
-   earlier "stuck at 720p" reading was an artifact of archiving round one's test
-   post immediately. **No fallback transcode, no resumable-upload rewrite, B4's
-   done-gate is open.** The only residual is a documented ~1–3 h 720p transient
-   after publish — schedule ahead of peak-audience windows.
-2. Exact Edits export spec (container/codec/resolution) — confirm during B0 that
-   it's MP4/MOV H.264 or HEVC + AAC (API requirement).
+1. **B0 spike outcome** — ✅ **FULLY RESOLVED (July 24, 2026; re-confirmed in
+   production July 25 — see § Stage B0 "B0 results").** Both arms PASS. B0(a): the
+   Reels API accepts the ~2K file, audio survives at parity. B0(b): served quality
+   reaches full parity with a native upload — Meta generates the 1080p VP9 ladder
+   for API posts **asynchronously after publish, no engagement required**
+   (verified by re-measuring the API arm `DbLsSCijUL1`, then again on the
+   production post `DbON80djKs7`, both serving 1080×1920 VP9 @2.27 Mbps + 720p
+   VP9). The earlier "stuck at 720p" reading was an artifact of archiving round
+   one's test post immediately. **No fallback transcode, no resumable-upload
+   rewrite, no B4 code changes.** The only residual is a documented 720p transient
+   after publish — ~15 min in production, up to a few hours in testing — so
+   schedule ahead of peak-audience windows.
+2. **Exact Edits export spec (container/codec/resolution)** — ✅ **RESOLVED
+   (July 25, 2026).** The master is an **MP4** and was ingested by the Graph API
+   without complaint across all three test rounds and both production publishes,
+   audio intact (HE-AAC, parity with native). It satisfies the API's
+   MP4/MOV + H.264/HEVC + AAC requirement as exported, with no pre-processing on
+   our side. Nothing further to confirm.
 3. Web push (VAPID) timing — deliberately deferred; email-first in B5.
 4. Whether Kevin wants `auto` or `notify` as the default for Reels once trust is
    established (schema defaults to `notify` for safety).
@@ -752,10 +808,42 @@ publishing pipeline), architecture overview (Next.js/Supabase/Vercel/Dropbox/
 Meta Graph API), the complete env-var reference, local dev + deploy instructions,
 the cron/pinger setup, the Meta & Dropbox app setup steps (condensed from
 `docs/integrations.md`), how auto-publish vs notify-to-post works, and
-troubleshooting notes (token expiry, failed publishes, cron auth, **and the
-API-publish quality timeline: reels serve 720p H.264 for ~1–3 h after publish,
-then 1080p VP9 permanently — schedule ahead of peak-audience windows**). Treat
-this as the closing stage of the project — it is part of "done."
+troubleshooting notes (token expiry, failed publishes, cron auth).
+
+**Publishing-quality content the README must carry** (established by B0 rounds
+2–3 and the July 25 production verification; full detail in § Stage B0 "B0
+results"). These are the findings most likely to be lost, so they are spelled out
+here verbatim rather than left as a pointer:
+
+*Under "how publishing works":*
+- The pipeline hands Meta a URL to the untouched ~2K master in Dropbox
+  (`files/get_temporary_link`, 4-hour links) and Meta ingests those exact bytes.
+  Nothing re-encodes the file anywhere in the chain — that is the entire point of
+  the design, and it is verified, not assumed.
+- **The 1080p VP9 renditions are not engagement-gated.** Meta generates them
+  automatically after publish, even at zero views. Do not wait for or chase
+  engagement to "unlock" quality; there is nothing to unlock.
+
+*Under "troubleshooting":*
+- **The quality timeline.** An API-published reel serves a 720p H.264 birth encode
+  for a transient window — **~15 minutes observed in production, up to a few hours
+  in testing** — then the full 1080p VP9 ladder permanently. Native Edits uploads
+  get 1080p at or near birth. This is a latency characteristic, not a quality cap.
+  Practical guidance: **schedule auto-publishes ahead of peak-audience windows**
+  and the window never matters. A fresh post looking soft is expected, not a bug.
+- **Never archive a reel before its encodes settle.** Archiving freezes/pauses
+  rendition generation and is **not** quality-neutral — it is what produced a
+  false "API posts are permanently capped at 720p" conclusion during testing.
+  Relevant to any future archive-related feature.
+- **How to spot-check any post's served quality.** Open the reel on instagram.com
+  while logged in, extract `video_dash_manifest` from the embedded page scripts,
+  and parse the `<Representation>` attributes (width / height / codecs /
+  bandwidth). A healthy settled post shows a 1080×1920 VP9 rung. `taken_at` in the
+  same page data gives the publish timestamp, so the post's age can be computed for
+  comparison. **Screen recordings are not a valid measurement** — ABR and player
+  state confound them.
+
+Treat this README as the closing stage of the project — it is part of "done."
 
 ## Next Steps
 
