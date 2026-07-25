@@ -2,6 +2,7 @@
 
 import { format, parseISO } from 'date-fns'
 import { PlatformIcon } from '@/components/ui/PlatformIcon'
+import { PublishStatusBadge } from '@/components/ui/PublishStatusBadge'
 import type { SocialPost } from '@/types/database'
 
 const STAGE_LABELS: Record<string, string> = {
@@ -39,6 +40,7 @@ export function PostCard({ post, onClick }: { post: SocialPost; onClick: () => v
         <span className="text-[10px] text-gray-400 capitalize">
           {STAGE_LABELS[post.stage] ?? post.stage}
         </span>
+        <PublishStatusBadge post={post} size="xs" className="ml-auto" />
       </div>
     </button>
   )
