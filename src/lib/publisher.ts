@@ -29,6 +29,7 @@
 import { getTemporaryLink } from '@/lib/dropbox'
 import { sendNotificationEmail } from '@/lib/email'
 import { getIgToken, maintainIgToken, type TokenMaintenanceResult } from '@/lib/ig-token'
+import { warnOncePerInterval } from '@/lib/warn-once'
 import { createAdminClient, type AdminClient } from '@/lib/supabase/admin'
 import {
   DAILY_PUBLISH_LIMIT,
@@ -58,6 +59,11 @@ const MAX_ATTEMPTS = 2
 /** Posts advanced per run. Each does a handful of network calls; this keeps a
  *  run well inside maxDuration even in the worst case. */
 const BATCH_LIMIT = 10
+
+/** Marker for the "publishing isn't configured at all" warning (see warn-once.ts).
+ *  Shared by both unconfigured exits on purpose: they are the same problem to the
+ *  person reading the email, and either one stops publishing outright. */
+const UNCONFIGURED_WARN_KEY = 'publish_unconfigured_warning_sent_at'
 
 export type PostAction =
   | 'container_created'
@@ -113,15 +119,44 @@ export async function runPublishCycle(opts: RunOptions = {}): Promise<PublishCyc
     outcomes: [],
   }
 
+  // Both "not configured" exits below return before any post is examined, which
+  // means none of the per-post or token-maintenance emails downstream can fire.
+  // Without a warning here they are the one way auto-publishing can stop dead in
+  // complete silence: the cron reports the problem in its JSON body, but nothing
+  // reads that, so scheduled posts would pile up unpublished until Kevin noticed
+  // a reel had never gone out. Invariant 4 (never silent) applies to the worker
+  // being unable to start, not just to individual posts failing.
+  // The admin client is built before the checks below because warning requires it.
+  // It throws when Supabase itself is unconfigured, so that case now surfaces as a
+  // 500 from the cron route rather than a quiet ok:false — which is the right way
+  // round: a 500 is what the external pinger's failure alert can actually see.
   const igUserId = process.env.INSTAGRAM_USER_ID
+  const supabase = createAdminClient()
+
   if (!igUserId) {
+    await warnOncePerInterval(
+      supabase,
+      UNCONFIGURED_WARN_KEY,
+      'Instagram auto-publishing is not configured',
+      'INSTAGRAM_USER_ID is not set in Vercel, so the publish worker cannot run.\n\n' +
+        'Any post set to auto-publish will stay scheduled and will NOT go out until this is fixed.\n\n' +
+        'Fix: set INSTAGRAM_USER_ID in Vercel (Production) and redeploy.'
+    )
     return { ...empty, ok: false, error: 'INSTAGRAM_USER_ID is not set — Instagram publishing is not configured.' }
   }
 
-  const supabase = createAdminClient()
-
   const token = await getIgToken(supabase)
   if (!token) {
+    await warnOncePerInterval(
+      supabase,
+      UNCONFIGURED_WARN_KEY,
+      'Instagram auto-publishing has no access token',
+      'The app has no Instagram access token — neither INSTAGRAM_USER_ACCESS_TOKEN in Vercel nor a ' +
+        'stored credential — so the publish worker cannot run.\n\n' +
+        'Any post set to auto-publish will stay scheduled and will NOT go out until this is fixed.\n\n' +
+        'Fix: generate a long-lived token (scopes: instagram_basic, instagram_content_publish), ' +
+        'set INSTAGRAM_USER_ACCESS_TOKEN in Vercel (Production), and redeploy.'
+    )
     return {
       ...empty,
       ok: false,
