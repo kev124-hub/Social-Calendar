@@ -87,11 +87,12 @@ exercised against the live API. It is written to fail non-fatally, and a missing
 case is a manual rotation, not a lost post. **Do not describe it as tested.**
 
 ### Immediately outstanding
-1. ~~**Branch cleanup**~~ **Done (Kevin, July 25).** Stale branches removed from
-   GitHub by hand — this environment's git proxy rejects delete-ref pushes and the
-   GitHub MCP server has no delete-branch tool, so any future cleanup is manual
-   too. Enabling **Settings → General → Automatically delete head branches** is
-   still the way to stop it recurring.
+1. ~~**Branch cleanup**~~ **Done, and it now takes care of itself (July 25).**
+   **Settings → General → Automatically delete head branches** is enabled and
+   confirmed working — merged branches are removed automatically, so this should
+   not reappear as a task. (If a branch ever does need deleting by hand: this
+   environment's git proxy rejects delete-ref pushes and the GitHub MCP server has
+   no delete-branch tool, so it must be done from the GitHub branches page.)
 2. ~~**Re-measure the test reels' DASH manifests**~~ **Done for `DbON80djKs7`
    (July 25) — B0's async-promotion finding holds for app-published posts, and the
    transient window was only ~15 min.** See the Served-quality row above. The
@@ -102,9 +103,10 @@ case is a manual rotation, not a lost post. **Do not describe it as tested.**
    generation.
 3. ~~Delete the leftover test posts.~~ **Done (Kevin, July 25)** — including
    `04d4cd61-6ce3-4001-af28-47f7a0e7d785` ("Need a Minute").
-4. **Undecided:** whether `/api/cron/publish-posts` should return **503** instead
-   of 200 when `ok:false` (see Open Questions #7). Kevin has not chosen yet. This
-   is now the only unresolved item in Workstream B outside the remaining stages.
+4. ~~**Undecided:** whether `/api/cron/publish-posts` should return 503~~
+   **Decided July 25: no — the app emails instead.** See Open Questions #7. With
+   that closed there are **no unresolved decisions** left in Workstream B; only
+   B5, B7 and the README remain.
 
 ### Next work, in order
 ~~**B6**~~ **done (July 25 — see § Stage B6)** → **B5** (notify-mode emails) →
@@ -532,6 +534,17 @@ Update `src/types/database.ts` and `docs/database-schema.md` to match.
 > poll → `media_publish` → permalink across a **separate serverless invocation**,
 > which is the resumption behaviour the whole state machine exists for.
 >
+> **App-side alerting (added July 25, 2026 — closes Open Question #7):** every way
+> publishing can break now produces an email, each rate-limited to once per 24h by
+> `src/lib/warn-once.ts` (markers live in `app_credentials`, the only durable state
+> a stateless cron has; one key per condition so no warning masks another):
+> publishing not configured at all, token cannot be refreshed, token invalid,
+> token refresh failing near expiry, plus the un-throttled per-post failure and
+> "published but the record didn't update" emails. **When everything works the
+> cron sends nothing** — 288 silent runs a day — so an email always means action is
+> needed. Two of these were previously un-throttled and would have emailed every 5
+> minutes while the condition held; that is fixed.
+>
 > **Cron alerting:** both cron-job.org jobs should have *notify on failure* and
 > *notify when disabled* enabled (not notify-on-success — 288 emails/day). This is
 > the external watchdog layer: the app's own Resend emails cover per-post failures
@@ -821,13 +834,25 @@ suggestion.
    cron endpoints. Start from hypothesis 1: check whether the warning email even
    names this project.
 7. **Should `/api/cron/publish-posts` return 503 instead of 200 when `ok:false`?**
-   Open — Kevin's call, not yet made. Today an unconfigured integration (missing
-   `INSTAGRAM_USER_ID` or token) returns **HTTP 200** with `ok:false`, which the
-   cron-job.org failure alert cannot see and which sends no email — so scheduled
-   posts would silently pile up unpublished. Returning 503 would make the external
-   watchdog catch it, at the cost of alert emails during any window where the env
-   vars are absent. The change is one line in the route. **This is a real gap in
-   B4's "never silent" property; don't let it get lost.**
+   ✅ **RESOLVED (July 25, 2026) — no. The app emails instead, and the route keeps
+   returning 200.** The gap was real: an unconfigured integration (missing
+   `INSTAGRAM_USER_ID` or token) returned HTTP 200 with `ok:false`, which the
+   cron-job.org failure alert cannot see, and both exits return *before* any
+   per-post or token-maintenance email can fire — so scheduled posts would have
+   piled up unpublished in complete silence.
+
+   **Why not 503:** cron-job.org disables a job after repeated failures, so a
+   misconfiguration lasting a few hours could switch the pinger off and leave
+   publishing broken *after* the config was fixed. It also delegates the alerting
+   to third-party settings that can change without anyone noticing.
+
+   **What shipped instead:** `runPublishCycle` sends a rate-limited warning email
+   on both unconfigured exits (`src/lib/warn-once.ts`, marker
+   `publish_unconfigured_warning_sent_at`). The two alerting layers stay
+   complementary — the app reports "running but misconfigured", cron-job.org
+   reports "not running at all" — and neither can mask the other. Note that an
+   unexpected error (paused Supabase, thrown exception) already returned 500 and
+   was always caught by the watchdog; only the two graceful config exits were blind.
 
 ## Final Deliverable Reminder (Kevin's explicit request — do not drop)
 
