@@ -2,17 +2,24 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 
-const admin = createAdminClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+// Lazy, NOT module scope. Building this at module scope threw
+// `supabaseUrl is required` during `next build` page-data collection whenever the
+// Supabase env vars weren't present in that environment — which broke every
+// Vercel Preview deployment (HANDOFF.md known issue #6) and still breaks
+// `npm run build` locally. Env vars are only read when a request actually arrives.
+function admin() {
+  return createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 async function getUserFromRequest(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7)
     // Check permanent extension API key first (never expires)
-    const { data: integration } = await admin
+    const { data: integration } = await admin()
       .from('user_integrations')
       .select('id')
       .eq('provider', 'extension')
@@ -20,7 +27,7 @@ async function getUserFromRequest(request: NextRequest) {
       .maybeSingle()
     if (integration) return { id: 'extension', email: null } as { id: string; email: string | null }
     // Fall back to Supabase JWT (direct API calls)
-    const { data: { user } } = await admin.auth.getUser(token)
+    const { data: { user } } = await admin().auth.getUser(token)
     return user
   }
   // Session cookie (in-app use)
@@ -66,7 +73,7 @@ export async function POST(request: NextRequest) {
       const arrayBuffer = await res.arrayBuffer()
       const path = `${Date.now()}.${ext}`
 
-      const { error: uploadError } = await admin.storage
+      const { error: uploadError } = await admin().storage
         .from('inspirations')
         .upload(path, arrayBuffer, { contentType, upsert: false })
 
@@ -78,7 +85,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const { data, error } = await admin.from('inspirations').insert({
+  const { data, error } = await admin().from('inspirations').insert({
     type,
     title: (title as string)?.trim() || null,
     source_url: (source_url as string)?.trim() || null,

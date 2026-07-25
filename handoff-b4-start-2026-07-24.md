@@ -211,19 +211,33 @@ above).
 1. ~~**B0(b)** — does served quality match native?~~ **RESOLVED ✅ — yes.** Parity is
    reached asynchronously within a few hours of publish. No pre-transcode, no resumable
    upload; B4 ships as designed. Only residual is the documented ~1–3 h 720p transient.
-2. Long-lived IG token storage: `app_credentials` table vs env rotation — decide in B4.
+2. ~~Long-lived IG token storage: `app_credentials` table vs env rotation~~ —
+   **RESOLVED in B4: the table** (migration 006). Env vars can't be rewritten by the
+   running app, so env-only storage would need a manual rotation every ~60 days.
 3. Default publish mode for Reels once trust is established (schema defaults to `notify`).
+4. **Supabase warns weekly that the project will be archived for inactivity**, no
+   matter how much the app is used. Analysis + diagnostics are in `HANDOFF.md`
+   Stage B7. Matters for B4: a paused project means scheduled posts silently fail.
 
 ## Next steps (start of the new session)
-1. Read `AGENTS.md`, the relevant `node_modules/next/dist/docs/` route-handler pages,
-   `HANDOFF.md` Stage B4, and `src/lib/{cron-auth,dropbox,email}.ts`.
+
+> **B4 was built on July 25, 2026** — see `HANDOFF.md` § Stage B4 for what shipped
+> and the design calls behind it. Steps 1 and 3 below are done; the rest still stand.
+
+1. ~~Read `AGENTS.md`, the relevant `node_modules/next/dist/docs/` route-handler pages,
+   `HANDOFF.md` Stage B4, and `src/lib/{cron-auth,dropbox,email}.ts`.~~ Done.
+   (`AGENTS.md` still applies to every session.) Note `node_modules` is not present
+   in a fresh container — run `npm ci` before expecting the Next docs to be there.
 2. Get the Meta credentials into Vercel (Kevin): `META_APP_ID` (`1002021345591349`),
    `META_APP_SECRET`, a **long-lived** `INSTAGRAM_USER_ACCESS_TOKEN`, `INSTAGRAM_USER_ID`
-   (`17841455072367303`).
-3. Build `src/app/api/cron/publish-posts/route.ts` as the resumable container-lifecycle
-   state machine above, reusing `checkCronAuth` + `getTemporaryLink` + `sendNotificationEmail`,
-   with idempotency guards, one retry with a fresh temp link, failure email, and token refresh.
-   Add a small migration if you introduce `app_credentials`.
+   (`17841455072367303`). **Still outstanding — B4 cannot run without these.**
+3. ~~Build `src/app/api/cron/publish-posts/route.ts`~~ **Done**, along with
+   `src/lib/{instagram,ig-token,publisher}.ts`, the manual-publish endpoint
+   `POST /api/posts/[id]/publish`, and migration `006_publish_worker.sql`.
+   **Apply migration 006 to the prod DB and run `NOTIFY pgrst, 'reload schema';`.**
+   Nothing in the pipeline has been exercised against the live Graph API yet —
+   the session sandbox has no egress to it. First run should be a manual
+   "Publish now" against a throwaway post, never a real scheduled one.
 4. Add a **"Publish now"** manual trigger for one post (test harness; overlaps B6). Keep
    `publish_mode` default `notify` as a safety default — B0 no longer gates auto mode.
 5. Set up a cron-job.org pinger for `/api/cron/publish-posts` (every 5 min, same

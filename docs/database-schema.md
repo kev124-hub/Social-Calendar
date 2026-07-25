@@ -77,10 +77,40 @@ CREATE TABLE social_posts (
   ig_media_id TEXT,           -- published IG media id (guards against double-publish)
   ig_permalink TEXT,          -- public URL once published
   publish_error TEXT,         -- last failure reason
+  -- Publisher worker bookkeeping (migration 006_publish_worker.sql)
+  publish_locked_at TIMESTAMPTZ,          -- cooperative lease; a stale lease can be stolen
+  publish_attempts INTEGER NOT NULL DEFAULT 0,  -- container-creation attempts (max 2: initial + one retry)
+  ig_container_created_at TIMESTAMPTZ,    -- container age, for stuck-ingest detection
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 ```
+
+---
+
+## app_credentials
+Server-only rotating secrets (migration `006_publish_worker.sql`). Currently holds
+the Instagram long-lived access token, which the publish cron refreshes unattended
+when fewer than 10 days remain — a Vercel env var can't be rewritten by the running
+app, so the token has to live somewhere writable.
+
+Read precedence in the app: this table first, then the
+`INSTAGRAM_USER_ACCESS_TOKEN` env var as the bootstrap value. The first successful
+refresh writes the row, and the row wins from then on.
+
+```sql
+CREATE TABLE app_credentials (
+  key        TEXT PRIMARY KEY,   -- e.g. 'instagram_user_access_token'
+  value      TEXT NOT NULL,
+  expires_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+**RLS is enabled with deliberately NO policies.** Every other table has an
+`auth_all` policy for the `authenticated` role; this one must not. The
+anon/authenticated roles should see zero rows — only the service-role key (which
+bypasses RLS) reads it, from the cron worker. Do not add an `auth_all` policy here.
 
 ---
 
@@ -193,4 +223,24 @@ CREATE INDEX idx_notifications_send_at ON notifications(send_at) WHERE sent = fa
 
 -- Inspirations by tags
 CREATE INDEX idx_inspirations_tags ON inspirations USING gin(tags);
+
+-- Auto-publish queue (migration 006). The publish worker runs this selection every
+-- 5 minutes; partial index keeps it to actual auto-publish candidates.
+CREATE INDEX idx_social_posts_publish_queue ON social_posts(scheduled_at)
+  WHERE publish_mode = 'auto' AND stage = 'scheduled';
 ```
+
+---
+
+## After applying any migration
+
+Run this in the Supabase SQL editor:
+
+```sql
+NOTIFY pgrst, 'reload schema';
+```
+
+PostgREST caches the table schema. Until it reloads, writes to newly added columns
+fail with *"could not find the column … in the schema cache"* even though the
+column exists — and `PostDialog` swallows Supabase errors, so post saves appear to
+succeed while silently doing nothing. This cost real debugging time during B2.
