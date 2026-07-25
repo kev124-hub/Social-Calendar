@@ -78,6 +78,10 @@ export interface SocialPost {
   publish_locked_at: string | null
   publish_attempts: number
   ig_container_created_at: string | null
+  // Notify-to-post (migration 007) — when the "time to post this" email went out.
+  // NULL = not yet notified. Distinct from notification_at/notification_method
+  // above, which describe when/how to notify and are unused by any code.
+  notified_at: string | null
   created_at: string
   updated_at: string
 }
@@ -188,6 +192,7 @@ type PublishManagedColumn =
   | 'publish_locked_at'
   | 'publish_attempts'
   | 'ig_container_created_at'
+  | 'notified_at'
 
 export interface Database {
   public: {
