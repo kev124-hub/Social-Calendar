@@ -66,6 +66,8 @@ The auto-publish pipeline is LIVE and running unattended.**
   `Authorization: Bearer <CRON_SECRET>`:
   `/api/cron/send-notifications` (B1) and `/api/cron/publish-posts` (B4).
 - Meta credentials are set in Vercel; migrations 005 and 006 are applied to prod.
+- The pipeline UI (B6) exposes all of it: per-post auto/notify toggle, publish
+  status badges on every card, failure reasons, IG permalinks, and "Publish now".
 
 ### Acceptance evidence (July 25, 2026)
 | Path | Evidence |
@@ -85,16 +87,11 @@ exercised against the live API. It is written to fail non-fatally, and a missing
 case is a manual rotation, not a lost post. **Do not describe it as tested.**
 
 ### Immediately outstanding
-1. **Branch cleanup (Kevin, ~30s).** Four stale branches remain on GitHub; this
-   environment's git proxy rejects delete-ref pushes and the GitHub MCP server has
-   no delete-branch tool, so they must be removed from the branches page by hand:
-   `claude/focused-proskuriakova-6e486a`,
-   `claude/github-repo-review-exploration-k8llxc`, `claude/romantic-yonath-c9a4bb`
-   (all merged into main), and `claude/workstream-b-stage-b0-u9z33l` (**not**
-   merged, but docs-only: four July 23 `HANDOFF.md` commits whose conclusions were
-   retracted in their own messages and superseded twice — deleting is correct, tip
-   is `f3d6c1d` if it ever needs restoring). Also worth enabling
-   **Settings → General → Automatically delete head branches**.
+1. ~~**Branch cleanup**~~ **Done (Kevin, July 25).** Stale branches removed from
+   GitHub by hand — this environment's git proxy rejects delete-ref pushes and the
+   GitHub MCP server has no delete-branch tool, so any future cleanup is manual
+   too. Enabling **Settings → General → Automatically delete head branches** is
+   still the way to stop it recurring.
 2. ~~**Re-measure the test reels' DASH manifests**~~ **Done for `DbON80djKs7`
    (July 25) — B0's async-promotion finding holds for app-published posts, and the
    transient window was only ~15 min.** See the Served-quality row above. The
@@ -103,23 +100,23 @@ case is a manual rotation, not a lost post. **Do not describe it as tested.**
    finding now has three independent confirmations. **Standing rule regardless:
    never archive a post before its encodes settle** — archiving freezes rendition
    generation.
-3. Delete the leftover test posts. Measurement is complete, so nothing depends on
-   them any more. One unused test post remains in the DB:
+3. ~~Delete the leftover test posts.~~ **Done (Kevin, July 25)** — including
    `04d4cd61-6ce3-4001-af28-47f7a0e7d785` ("Need a Minute").
 4. **Undecided:** whether `/api/cron/publish-posts` should return **503** instead
-   of 200 when `ok:false` (see Open Questions #7). Kevin has not chosen yet.
+   of 200 when `ok:false` (see Open Questions #7). Kevin has not chosen yet. This
+   is now the only unresolved item in Workstream B outside the remaining stages.
 
 ### Next work, in order
-**B6** (pipeline UI — the highest-value remaining piece: the "Publish now" API
-already exists, so it only needs a button, a publish-mode toggle, and status
-badges) → **B5** (notify-mode emails) → **B7** (Supabase inactivity diagnosis) →
-**the detailed README** that closes the project.
+~~**B6**~~ **done (July 25 — see § Stage B6)** → **B5** (notify-mode emails) →
+**B7** (Supabase inactivity diagnosis) → **the detailed README** that closes the
+project.
 
 ### Repo / workflow state
-- Designated branch `claude/handoff-docs-review-1czeha`. Its PRs #10 and #11 are
-  merged and #12 is open. **When starting fresh work after #12 merges, restart the
-  branch from main** (`git fetch origin main && git checkout -B claude/handoff-docs-review-1czeha origin/main`)
-  rather than stacking on merged history.
+- Designated branch `claude/b0-b4-quality-verification-66dnqx`. Its PR #14 (B0
+  docs) is merged; B6 went out on the same branch restarted from main. **When
+  starting fresh work after a PR merges, restart the branch from main**
+  (`git fetch origin main && git checkout -B <branch> origin/main`) rather than
+  stacking on merged history.
 - `node_modules` is NOT present in a fresh container — run `npm ci` first, or the
   `node_modules/next/dist/docs/` guides that `AGENTS.md` mandates won't exist.
 - `npm run build` now succeeds with **no env vars set at all**.
@@ -617,7 +614,7 @@ and a note of the target platform/format. This is the path for Stories, trending
 audio, collabs, custom covers. Web push upgrade (VAPID, service-worker push) is
 a separate later task — email ships first.
 
-### Stage B6 — Pipeline UI
+### Stage B6 — Pipeline UI — ✅ DONE (July 25, 2026)
 **Complexity 2/5 · Sonnet-capable · ~half day**
 - `PostDialog`: publish-mode toggle (auto/notify) + Dropbox picker (from B2).
 - `PostCard` (both pipeline and calendar variants): status badge — queued /
@@ -625,6 +622,41 @@ a separate later task — email ships first.
 - "Publish now" button (manual trigger of the worker for one post) — doubles as
   the test harness. **The API half is already built in B4**
   (`POST /api/posts/[id]/publish`); B6 only needs to wire a button to it.
+
+> **What shipped:**
+> - `src/components/ui/PublishStatusBadge.tsx` — **one** derivation
+>   (`derivePublishState`) shared by every surface, so the pipeline board, the grid
+>   and the calendar can never disagree about a post's publish state.
+> - `PostDialog` — a Publishing section (IG-only): auto/notify toggle persisted to
+>   `publish_mode`, live badge, IG permalink, last `publish_error`, and the
+>   "Publish now" button with a readable account of what one step did.
+> - Kanban card, grid card and calendar card all carry the badge; the kanban card
+>   also shows the failure reason inline and links the permalink.
+>
+> **Three decisions worth keeping:**
+> 1. **The badge trusts `ig_media_id` over `publish_status`.** The worker writes
+>    the media id first and can die before the status (see `publishFinished`), so
+>    a stale `failed` on a post that is actually live must not be believed — that
+>    is the one wrong answer that could make someone publish twice.
+> 2. **"Publish now" saves the post first, always.** The worker reads the row from
+>    the database, so an unsaved caption or a just-picked Dropbox file would
+>    otherwise be silently ignored. Verified by test, not by inspection.
+> 3. **The follow-up wording is conditional.** The cron only resumes a post that is
+>    auto-mode, scheduled and due (`selectCandidates`). A notify-mode post pushed
+>    manually will sit at "processing" until someone clicks again, so the UI says
+>    "click again" in exactly that case and "the scheduler will finish it" otherwise.
+>
+> **Only the toggle writes to the schema; no migration, no API change, no B4
+> change.** The publish-mode toggle is shown for Instagram only, because
+> `publish_mode` is meaningless to the worker on any other platform — promising
+> automation the worker won't perform would be a lie in the UI.
+>
+> **Verification (Playwright, per Stage A3's protocol):** rendered against mocked
+> PostgREST data at 390×844 and 1280×800 — all eight badge states (including
+> "media id beats stale failed status"), the dialog's failed/published/queued
+> states, kanban + grid + calendar cards, and a full "Publish now" round trip that
+> confirmed the save-happens-first ordering and the badge refresh. `npm run build`
+> compiles; `npx eslint src` is at the documented 42-problem baseline, unchanged.
 
 ### Stage B7 — Supabase "project will be archived for inactivity" notices
 **Complexity 2/5 (diagnosis, not construction) · Sonnet-capable · ~1–2h, mostly Kevin-side checks**
@@ -860,9 +892,9 @@ Treat this README as the closing stage of the project — it is part of "done."
 2. ~~Build **Workstream A** (A1 → A2 → A3).~~ **Done** — merged in PR #4.
 3. ~~Walk Kevin through the **B0 spike**.~~ **Done** — both arms pass; results
    recorded in § Stage B0 "B0 results". B4 is no longer gated on it.
-4. ~~B1 → B2 → B3~~ **done and live** (PRs #6, #7). ~~B4~~ **built July 25, 2026**
-   (see § Stage B4) — awaiting Meta credentials, migration 006, and a first live
-   run. Remaining: **B5 → B6 → B7**, then the README deliverable above.
+4. ~~B1 → B2 → B3~~ **done and live** (PRs #6, #7). ~~B4~~ **built and verified in
+   production July 25, 2026** (see § Stage B4). ~~B6~~ **done July 25, 2026** (see
+   § Stage B6). Remaining: **B5 → B7**, then the README deliverable above.
 
 **Immediate next actions:**
 1. **Kevin:** set `META_APP_ID` (`1002021345591349`), `META_APP_SECRET`, a

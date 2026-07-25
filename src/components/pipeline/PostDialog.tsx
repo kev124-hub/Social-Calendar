@@ -9,8 +9,10 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { PublishStatusBadge, derivePublishState } from '@/components/ui/PublishStatusBadge'
+import { ExternalLink } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import type { SocialPost, PostStage, Platform, PostType } from '@/types/database'
+import type { SocialPost, PostStage, Platform, PostType, PublishMode } from '@/types/database'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -36,6 +38,53 @@ const labelClass = 'text-[13px] font-medium text-[#333] block mb-1.5 tracking-ti
 
 type DropboxFile = { name: string; path: string; size: number; modified: string | null }
 
+/** The publish columns the dialog reflects back, refreshed after "Publish now". */
+type PublishRow = Pick<
+  SocialPost,
+  'platform' | 'stage' | 'publish_mode' | 'publish_status' | 'ig_media_id' | 'ig_permalink' | 'publish_error'
+>
+
+const PUBLISH_ROW_COLUMNS =
+  'platform, stage, publish_mode, publish_status, ig_media_id, ig_permalink, publish_error'
+
+/**
+ * Turn one worker step into something readable.
+ *
+ * `autoWillFinish` is the difference between "leave it alone" and "click again":
+ * the cron only picks a post back up when it is auto-mode, scheduled, and due
+ * (see selectCandidates in publisher.ts). A notify-mode post that was pushed
+ * manually will sit at "processing" forever unless the user clicks again.
+ */
+function describePublishAction(action: string, message: string | null, autoWillFinish: boolean): string {
+  switch (action) {
+    case 'container_created':
+      return autoWillFinish
+        ? 'Sent to Instagram — it is ingesting the video. The scheduler finishes this automatically within about 5 minutes.'
+        : 'Sent to Instagram — it is ingesting the video. Click "Publish now" again in a minute to finish publishing it.'
+    case 'published':
+      return 'Published to Instagram.'
+    case 'reconciled':
+      return 'This post was already live on Instagram — the record has been corrected.'
+    case 'waiting':
+      return autoWillFinish
+        ? 'Instagram is still ingesting the video. The scheduler will finish it automatically.'
+        : 'Instagram is still ingesting the video. Give it a minute, then click "Publish now" again.'
+    case 'retrying':
+      return `${message ?? 'The attempt failed.'} It will be retried automatically.`
+    case 'skipped':
+      return message ?? 'Skipped this time — try again shortly.'
+    case 'failed':
+      return message ?? 'Publishing failed.'
+    default:
+      return message ?? `Publisher returned "${action}".`
+  }
+}
+
+const PUBLISH_MODES: { key: PublishMode; label: string; hint: string }[] = [
+  { key: 'notify', label: 'Notify me', hint: 'Emails you at the scheduled time so you can post it yourself.' },
+  { key: 'auto', label: 'Auto-publish', hint: 'Posts it to Instagram automatically at the scheduled time, at full quality.' },
+]
+
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`
@@ -53,6 +102,12 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
   const [scheduledAt, setScheduledAt] = useState('')
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // Auto-publish
+  const [publishMode, setPublishMode] = useState<PublishMode>('notify')
+  const [publishRow, setPublishRow] = useState<PublishRow | null>(null)
+  const [publishing, setPublishing] = useState(false)
+  const [publishNote, setPublishNote] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
 
   // Dropbox "Ready to Post" media picker
   const [mediaDropboxPath, setMediaDropboxPath] = useState<string | null>(null)
@@ -92,6 +147,8 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
       setScheduledAt(post.scheduled_at ? post.scheduled_at.slice(0, 16) : '')
       setNotes(post.notes ?? '')
       setMediaDropboxPath(post.media_dropbox_path ?? null)
+      setPublishMode(post.publish_mode ?? 'notify')
+      setPublishRow(post)
       setDropboxOpen(false) // collapse the picker; files refresh on next open
     } else {
       setPlatform('instagram')
@@ -104,18 +161,37 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
       setScheduledAt(defaultScheduledAt ?? '')
       setNotes('')
       setMediaDropboxPath(null)
+      setPublishMode('notify') // matches the schema default; auto is opt-in per post
+      setPublishRow(null)
       setDropboxOpen(false)
     }
+    setPublishNote(null)
   }, [open, post, defaultStage, defaultScheduledAt])
 
-  async function handleSave() {
-    setSaving(true)
-    const scheduledIso = scheduledAt ? new Date(scheduledAt).toISOString() : null
-    // Giving a post a scheduled date advances it to the "scheduled" stage
-    // (unless it's already further along), so it shows as scheduled on the
-    // calendar and the auto-publish worker can pick it up.
-    const effectiveStage: PostStage =
-      scheduledIso && STAGES_BEFORE_SCHEDULED.includes(stage) ? 'scheduled' : stage
+  // Giving a post a scheduled date advances it to the "scheduled" stage (unless
+  // it's already further along), so it shows as scheduled on the calendar and
+  // the auto-publish worker can pick it up.
+  const scheduledIso = scheduledAt ? new Date(scheduledAt).toISOString() : null
+  const effectiveStage: PostStage =
+    scheduledIso && STAGES_BEFORE_SCHEDULED.includes(stage) ? 'scheduled' : stage
+
+  /**
+   * Would the cron carry this post forward on its own? Mirrors selectCandidates
+   * in publisher.ts. Evaluated on click rather than during render — it reads the
+   * clock, which is not a pure thing to do while rendering.
+   */
+  function willCronFinish(): boolean {
+    return (
+      platform === 'instagram' &&
+      publishMode === 'auto' &&
+      effectiveStage === 'scheduled' &&
+      !!scheduledIso &&
+      new Date(scheduledIso).getTime() <= Date.now()
+    )
+  }
+
+  /** Write the form to the DB. Returns false if the write failed. */
+  async function persist(): Promise<boolean> {
     const payload = {
       platform,
       post_type: postType || null,
@@ -125,16 +201,69 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
       hashtags: hashtags || null,
       media_url: mediaUrl || null,
       media_dropbox_path: mediaDropboxPath,
+      publish_mode: publishMode,
       scheduled_at: scheduledIso,
       notes: notes || null,
     }
-    if (post) {
-      await supabase.from('social_posts').update(payload).eq('id', post.id)
-    } else {
-      await supabase.from('social_posts').insert(payload)
-    }
+    const { error } = post
+      ? await supabase.from('social_posts').update(payload).eq('id', post.id)
+      : await supabase.from('social_posts').insert(payload)
+    return !error
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    await persist()
     setSaving(false)
     onSave()
+  }
+
+  // "Publish now" — hands this one post to the same worker the cron drives.
+  //
+  // The worker reads the post from the database, so unsaved caption/media edits
+  // would otherwise be silently ignored: save first, always. One call advances
+  // the post by exactly one step (container → publish), which is why the note
+  // below tells you when a second click is needed.
+  async function handlePublishNow() {
+    if (!post) return
+    setPublishing(true)
+    setPublishNote(null)
+
+    if (!(await persist())) {
+      setPublishNote({ tone: 'error', text: 'Could not save your changes, so nothing was published. Try again.' })
+      setPublishing(false)
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/posts/${post.id}/publish`, { method: 'POST' })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setPublishNote({ tone: 'error', text: data.error ?? `Publish failed (HTTP ${res.status}).` })
+      } else {
+        setPublishNote({
+          tone: data.ok ? 'ok' : 'error',
+          text: describePublishAction(data.action, data.message, willCronFinish()),
+        })
+      }
+
+      // Re-read the row either way: a failed attempt still records publish_error,
+      // and the badge/permalink should reflect what actually happened.
+      const { data: fresh } = await supabase
+        .from('social_posts')
+        .select(PUBLISH_ROW_COLUMNS)
+        .eq('id', post.id)
+        .maybeSingle<PublishRow>()
+      if (fresh) setPublishRow(fresh)
+    } catch (err) {
+      setPublishNote({
+        tone: 'error',
+        text: err instanceof Error ? err.message : 'Publish request failed.',
+      })
+    } finally {
+      setPublishing(false)
+    }
   }
 
   return (
@@ -312,6 +441,104 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
               className={inputClass}
             />
           </div>
+
+          {/* Publishing — mode, live status, and the manual trigger */}
+          {platform === 'instagram' && (
+            <div className="rounded-[10px] border border-[#d6d6d6] bg-[#fafafa] p-3 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <label className={labelClass + ' mb-0'}>Publishing</label>
+                {publishRow && <PublishStatusBadge post={publishRow} />}
+              </div>
+
+              <div className="flex gap-1">
+                {PUBLISH_MODES.map((m) => (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => setPublishMode(m.key)}
+                    title={m.hint}
+                    className={cn(
+                      'px-3 py-1.5 text-xs font-medium rounded-[10px] transition-colors',
+                      publishMode === m.key
+                        ? 'bg-[#f1ccff] text-black'
+                        : 'bg-white text-[#7b7b7b] hover:text-black border border-[#d6d6d6]'
+                    )}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[12px] text-[#7b7b7b] leading-snug">
+                {PUBLISH_MODES.find((m) => m.key === publishMode)?.hint}
+              </p>
+
+              {/* Auto-publish without a source file fails at container creation, so
+                  say so here rather than by email at the scheduled time. */}
+              {publishMode === 'auto' && !mediaDropboxPath && (
+                <p className="text-[12px] text-[#b45309] leading-snug">
+                  Attach a Dropbox file above — auto-publish has nothing to upload without one.
+                </p>
+              )}
+              {publishMode === 'auto' && !scheduledAt && (
+                <p className="text-[12px] text-[#b45309] leading-snug">
+                  Set a scheduled date — auto-publish only picks up posts that are due.
+                </p>
+              )}
+
+              {publishRow?.ig_permalink && (
+                <a
+                  href={publishRow.ig_permalink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[12px] text-[#8b3fb0] hover:underline"
+                >
+                  View on Instagram
+                  <ExternalLink size={11} />
+                </a>
+              )}
+
+              {publishRow?.publish_error && derivePublishState(publishRow) !== 'published' && (
+                <p className="text-[12px] text-destructive leading-snug break-words">
+                  {publishRow.publish_error}
+                </p>
+              )}
+
+              {publishNote && (
+                <p
+                  className={cn(
+                    'text-[12px] leading-snug break-words',
+                    publishNote.tone === 'ok' ? 'text-[#15803d]' : 'text-destructive'
+                  )}
+                >
+                  {publishNote.text}
+                </p>
+              )}
+
+              {post && (
+                publishRow?.ig_media_id ? (
+                  <p className="text-[12px] text-[#7b7b7b] leading-snug">
+                    Already live on Instagram — it can&apos;t be published again.
+                  </p>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-[10px] w-full"
+                    onClick={handlePublishNow}
+                    disabled={publishing || saving}
+                  >
+                    {publishing ? 'Publishing…' : 'Publish now'}
+                  </Button>
+                )
+              )}
+              {!post && (
+                <p className="text-[12px] text-[#7b7b7b] leading-snug">
+                  Save the post to enable &ldquo;Publish now&rdquo;.
+                </p>
+              )}
+            </div>
+          )}
 
           <div>
             <label className={labelClass}>Notes</label>

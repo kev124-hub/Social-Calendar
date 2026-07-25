@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase/client'
 import type { SocialPost, PostStage, Platform } from '@/types/database'
+import { PublishStatusBadge, derivePublishState } from '@/components/ui/PublishStatusBadge'
 import { PostDialog } from './PostDialog'
 import { cn } from '@/lib/utils'
 
@@ -300,6 +301,7 @@ function GridCard({ post, onEdit }: { post: SocialPost; onEdit: () => void }) {
         )}
         {/* Stage dot */}
         <div className={cn('absolute top-2 right-2 w-2.5 h-2.5 rounded-full', stage?.dot ?? 'bg-slate-400')} title={stage?.label} />
+        <PublishStatusBadge post={post} size="xs" className="absolute top-1.5 left-1.5" />
       </div>
 
       {/* Info */}
@@ -348,16 +350,35 @@ function PostCard({
       </div>
       {post.post_type && <p className="text-xs text-muted-foreground mb-2">{POST_TYPE_LABELS[post.post_type]}</p>}
       {post.caption && <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{post.caption}</p>}
-      <div className="flex items-center justify-between mt-2">
+      <div className="flex items-center justify-between gap-2 mt-2">
         {post.scheduled_at ? (
           <span className="text-xs text-muted-foreground">{format(parseISO(post.scheduled_at), 'MMM d')}</span>
         ) : <span />}
-        {post.media_url && (
-          <a href={post.media_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-muted-foreground hover:text-foreground">
-            <ExternalLink size={12} />
-          </a>
-        )}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <PublishStatusBadge post={post} />
+          {post.ig_permalink && (
+            <a
+              href={post.ig_permalink}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              title="View on Instagram"
+              className="text-[#8b3fb0] hover:text-[#6b2f88]"
+            >
+              <ExternalLink size={12} />
+            </a>
+          )}
+          {post.media_url && !post.ig_permalink && (
+            <a href={post.media_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-muted-foreground hover:text-foreground">
+              <ExternalLink size={12} />
+            </a>
+          )}
+        </div>
       </div>
+      {/* Why a post didn't go out belongs on the card — an email is easy to miss. */}
+      {derivePublishState(post) === 'failed' && post.publish_error && (
+        <p className="text-[11px] text-destructive line-clamp-2 mt-1.5 leading-snug">{post.publish_error}</p>
+      )}
       <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-border/50" onClick={(e) => e.stopPropagation()}>
         <p className="text-xs text-muted-foreground">Move:</p>
         {stages.filter((s) => s.key !== post.stage).map((s) => (
