@@ -78,23 +78,38 @@ and live; **B4 (the publisher worker) is the next task.**
   → `scheduled` (never demotes `scheduled`/`published`). Matters because **B4 selects
   `stage = 'scheduled'`** — a dated post must not sit in `idea`.
 
-## B0 spike outcome (the gate on B4's auto mode)
+## B0 spike outcome — ✅ FULLY CLOSED, both arms PASS (updated July 24, 2026)
 
-- **B0(a) — 2K acceptance: CLOSED ✅.** The Graph API ingests the ~2K master
-  end-to-end; audio survives (HE-AAC 78 kbps). **No 1080p fallback transcode needed on
-  acceptance grounds.**
-- **B0(b) — served-quality parity: STILL OPEN ⏳.** API test reel served 720p H.264
-  only; native reel served 1080p VP9 + 720p — but confounded (upload path vs age/views
-  vs archive history). **DO NOT enable auto-publish by default and DO NOT trigger a
-  fallback transcode until B0(b) is settled.** Keep `publish_mode` default = `notify`.
-- **Deciding experiment (needs Kevin, ~15 min + 1h):** post one 2K export twice, both
-  fresh — once via API flow, once native from Edits; caption both as tests; **do not
-  archive**; at ~1h pull both DASH manifests (`video_dash_manifest` embedded in the
-  logged-in instagram.com page). Rule: fresh native also 720p-only at birth → parity
-  proven, open B4's auto gate; fresh native gets 1080p immediately and API doesn't →
-  API penalty is real, add one high-bitrate 1080p transcode from the 2K master before
-  upload. **Archiving demotes served quality — never archive a test post before
-  measuring.**
+The fresh-vs-fresh deciding experiment has been run; B0 is done and B4's gate is open.
+Full measurements live in `HANDOFF.md` § Stage B0 "B0 results".
+
+- **B0(a) — 2K acceptance: PASS ✅.** The Graph API ingests the ~2K master end-to-end;
+  audio survives at parity. **No 1080p fallback transcode needed.**
+- **B0(b) — served-quality parity: PASS ✅.** Same master posted twice minutes apart,
+  neither archived: native (`DbLqOclhOn1`) served 1080p VP9 + 720p VP9 at birth; the API
+  arm (`DbLsSCijUL1`) served 720p H.264 only at ~1 h — **but on re-measure hours later
+  serves 1080×1920 VP9 @2.27 Mbps + 720p VP9**, structurally identical to native at a
+  slightly higher 1080p bitrate. Meta builds the high-quality ladder for API posts
+  **asynchronously within hours, zero views required.** Round one's "permanent 720p cap"
+  was an artifact of archiving that first test post immediately.
+- **Consequences for B4 — build it exactly as designed below:**
+  - **Keep URL ingest via `getTemporaryLink`** — validated end-to-end.
+  - **Do NOT build the 1080p pre-transcode** — source resolution cannot influence the
+    serving ladder, so it would fix nothing.
+  - **The resumable / binary-push variant (`upload_type=resumable` +
+    `rupload.facebook.com`) is NOT required** — it existed to mitigate a URL-ingest
+    penalty that turned out not to exist. Optional future experiment only: whether
+    pushing bytes shortens the transient window.
+  - **The DONE-GATE is now OPEN.** The only remaining prerequisite is Meta credentials.
+  - Keep the schema default `publish_mode='notify'` for safety, but flipping a post to
+    `auto` is now a product choice, not a quality risk.
+- **Document in the README troubleshooting section:** API-published reels serve 720p
+  H.264 for roughly the first **1–3 hours**, then 1080p VP9 permanently — so schedule
+  publishes a few hours ahead of peak-audience windows.
+- **Still true and important:** archiving is not quality-neutral (it freezes/demotes the
+  served rendition and pauses encode generation) — **never archive a post before
+  measuring it.** DASH-manifest parsing is the only valid measurement method; screen
+  recordings are confounded by ABR/player state.
 
 ## Environment / credentials
 
@@ -141,11 +156,11 @@ NOT busy-wait inside one invocation (serverless timeout):
    never publish twice (check `ig_media_id IS NULL` before `media_publish`).
 7. Rate limit (50 API posts/24h) is far above Kevin's volume — a simple count guard suffices.
 
-**DONE-GATE stays closed** until B0(b) resolves. You may build B4 fully, but keep it from
-actually auto-publishing at scale: `publish_mode` default is `notify`, so nothing flips to
-`auto` unless explicitly set. Add a **"Publish now" manual trigger** for one post (overlaps
-Stage B6) that doubles as the test harness — that's the safe way to exercise B4 before the
-gate opens.
+**DONE-GATE IS OPEN** — B0 closed with both arms passing, so build B4 to completion as
+specified. Keep `publish_mode` default = `notify` so nothing flips to `auto` unless
+explicitly set (safety, not a quality gate now). Add a **"Publish now" manual trigger**
+for one post (overlaps Stage B6) that doubles as the test harness — it's still the right
+way to exercise the worker end-to-end before trusting the cron path.
 
 ## Reusable pieces already in place for B4
 - `src/lib/cron-auth.ts` → `checkCronAuth(request)`
@@ -172,7 +187,9 @@ gate opens.
   was empty at last check and Kevin was about to drop a test video. Verify this early.
 - **Vercel Hobby:** daily cron only; cron-job.org drives the 5-min cadence. **Env var
   changes require a redeploy** to take effect. Preview deployments need the same env vars
-  enabled for the Preview environment or they can fail (known issue #6 in HANDOFF.md).
+  enabled for the Preview environment; they are now enabled and previews build green
+  (HANDOFF.md known issue #6 is resolved), so **a red Vercel check now means a real
+  problem** — don't wave it off as the old known failure.
 - **Session sandbox egress is "Trusted"** — it CANNOT reach `graph.facebook.com`,
   Dropbox, or Supabase directly. So B4's live API calls can't be tested from the Claude
   Code session; test in production/preview or via Kevin. (To run API calls from a session
@@ -185,12 +202,15 @@ gate opens.
   green. Schedule an hourly self check-in per PR and stop once merged.
 
 ## Errors / blockers
-None open. B1/B2/B3 + the stage fix are live. The only pending verification is that the
-Dropbox picker lists a real file in production (see gotcha above), and the B0(b) experiment.
+None open. B1/B2/B3 + the stage fix are live, and B0 is fully closed. Two things still
+want doing: the Meta credentials must land in Vercel before B4 can be exercised, and it
+is still unconfirmed that the Dropbox picker lists a real file in production (see gotcha
+above).
 
 ## Open questions
-1. **B0(b)** — does served quality match native? Run the fresh-vs-fresh manifest test to
-   decide whether B4 needs the 1080p pre-transcode. Until then, auto mode stays gated.
+1. ~~**B0(b)** — does served quality match native?~~ **RESOLVED ✅ — yes.** Parity is
+   reached asynchronously within a few hours of publish. No pre-transcode, no resumable
+   upload; B4 ships as designed. Only residual is the documented ~1–3 h 720p transient.
 2. Long-lived IG token storage: `app_credentials` table vs env rotation — decide in B4.
 3. Default publish mode for Reels once trust is established (schema defaults to `notify`).
 
@@ -205,14 +225,12 @@ Dropbox picker lists a real file in production (see gotcha above), and the B0(b)
    with idempotency guards, one retry with a fresh temp link, failure email, and token refresh.
    Add a small migration if you introduce `app_credentials`.
 4. Add a **"Publish now"** manual trigger for one post (test harness; overlaps B6). Keep
-   `publish_mode` default `notify` — do not enable auto at scale until B0(b) clears.
+   `publish_mode` default `notify` as a safety default — B0 no longer gates auto mode.
 5. Set up a cron-job.org pinger for `/api/cron/publish-posts` (every 5 min, same
    `CRON_SECRET` Bearer header) — Kevin.
 6. Confirm the Dropbox picker lists a real file in prod; fix the team-namespace path-root
    header if needed.
-7. Run the B0(b) deciding experiment to unlock auto mode; record the result in
-   `HANDOFF.md` Open Questions #1.
-8. Typecheck (`npx tsc --noEmit`) + `npm run build` before each PR; push a draft PR; let
+7. Typecheck (`npx tsc --noEmit`) + `npm run build` before each PR; push a draft PR; let
    Kevin merge.
 
 **To use this file:** start a new session, have it read `handoff-b4-start-2026-07-24.md`

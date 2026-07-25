@@ -4,11 +4,13 @@
 the repo's original build commits are from late April 2026; this document and
 its plan are from July 23, 2026, and reflect the repo's state as of that day.)
 
-> **Updated July 24, 2026 — B0 spike executed.** Workstream A (mobile calendar
-> fixes) shipped and merged (PR #4). The B0 2K-acceptance spike has run: **B0(a)
-> is CLOSED (API accepts the 2K file)**; **B0(b) (served-quality parity) is still
-> OPEN** pending a fresh-vs-fresh experiment. See § Stage B0 "B0 results" and
-> § Open Questions #1 for the full findings and the deciding test.
+> **Updated July 24, 2026 — B0 spike COMPLETE, fully CLOSED.** Workstream A
+> (mobile calendar fixes) shipped and merged (PR #4). The B0 spike has run to
+> completion: **B0(a) PASSES** (the Graph API accepts the ~2K file, audio intact)
+> and **B0(b) PASSES** (served quality reaches full parity with a native upload —
+> asynchronously, within a few hours of publish). **No fallback transcode is
+> needed and B4's done-gate is OPEN — build B4 exactly as specified in § Stage
+> B4.** See § Stage B0 "B0 results" and § Open Questions #1 for the measurements.
 
 ## ⚠️ START HERE — Source-of-Truth Protocol (read before anything else)
 
@@ -100,10 +102,11 @@ that can guarantee no-middleman 2K publishing. The Notion migration is ruled out
   route ("personal app"). That was tolerable for emails; it is NOT tolerable once
   a cron endpoint can publish to Instagram. Use a `CRON_SECRET` bearer check on
   all cron routes.
-- **Run the B0 spike before building the pipeline** (see plan). The one real risk
-  is whether the Reels API accepts ~2K files (its *recommended* spec is 1080×1920).
-  Fallback if rejected: a single high-bitrate 1080p transcode done by us once from
-  the 2K master — still strictly better than a scheduler's blind re-encode.
+- **Run the B0 spike before building the pipeline** — ✅ **DONE, both arms PASS
+  (July 24, 2026).** The Reels API accepts ~2K files (despite the *recommended*
+  1080×1920 spec) and served quality reaches native parity within a few hours.
+  The contemplated fallback (one high-bitrate 1080p transcode by us) is **not
+  needed and must not be built** — see § Stage B0 "B0 results".
 - **TikTok and LinkedIn publishing are OUT of scope** for this build. TikTok's
   Content Posting API requires an app audit for public posts (unaudited = drafts
   only; possible later add). LinkedIn deferred.
@@ -163,18 +166,18 @@ made zero code changes. The repo state (branch history on `main`, 20 commits):
 3. **No web push** — email only. Partially addressed by B5 (email first, push later).
 4. **Mobile week view broken** — see Workstream A bug table below.
 5. No test suite exists at all. Scripts: `npm run dev` / `build` / `start` / `lint`.
-6. **Vercel PREVIEW deployments fail for every branch** (diagnosed from build
-   logs, PR #1): `Error: supabaseUrl is required.` during page-data collection
-   for `/api/extension-key`. Cause: `src/app/api/extension-key/route.ts:5-8`
-   creates the Supabase admin client at module scope, and the Supabase env vars
-   (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) are only configured
-   for the Production environment in Vercel — not Preview. **Fix (Kevin, ~2 min,
-   no code):** Vercel dashboard → claude-social-calendar → Settings → Environment
-   Variables → enable the Supabase (and other) vars for the Preview environment.
-   Optional hardening for the build session: lazy-init that admin client inside
-   the handler so builds never require env at module-eval time — but the env-var
-   fix is still required for previews to actually run. Until fixed, expect red
-   Vercel checks on all PRs; they do not indicate broken code.
+6. ~~**Vercel PREVIEW deployments fail for every branch**~~ — ✅ **RESOLVED (observed
+   green on PR #10, July 25, 2026).** Previously (diagnosed from build logs, PR #1):
+   `Error: supabaseUrl is required.` during page-data collection for
+   `/api/extension-key`, because `src/app/api/extension-key/route.ts:5-8` creates the
+   Supabase admin client at module scope and the Supabase env vars
+   (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) were enabled only for the
+   Production environment in Vercel. The env vars are now evidently enabled for Preview
+   too — preview builds complete and deploy. **Green Vercel checks are now the
+   expectation on PRs; a red one means something is actually wrong.**
+   Still-open optional hardening (nice-to-have, not required): lazy-init that admin
+   client inside the handler so a build never needs env at module-eval time — the
+   current setup depends on the dashboard config staying correct.
 
 ### Mobile bug → root cause map (verified against source)
 
@@ -232,7 +235,7 @@ and attach the screenshots to the PR. Check PWA standalone: `viewport-fit=cover`
 no clipped controls, no truncated day names, smooth column scroll-snap, drag
 still functional.
 
-### Stage B0 — Spike: validate 2K acceptance (DO THIS BEFORE B2–B6)
+### Stage B0 — Spike: validate 2K acceptance ✅ CLOSED (both arms PASS)
 **Complexity 2/5 (mostly manual/API driving, little code) · any model assists; needs Kevin for account setup · ~1 hour**
 - Kevin (manual): create Meta Developer app (Consumer type, Instagram Graph API
   product, Development mode), connect the MJ IG Business/Creator account, generate
@@ -246,53 +249,68 @@ still functional.
 - If rejected: fallback decision is already made — one high-bitrate 1080p
   transcode from the 2K master, done by us. Pipeline design is unchanged.
 
-#### B0 results (executed July 23–24, 2026)
-Two reels of the **same** video on the live `mustache.journey` account: an API-path
-post from the 2K Dropbox master (`instagram.com/reel/DbJBleDD-BU/`, ~12 views, was
-archived then unarchived) vs. a native Edits-app post days earlier
-(`instagram.com/reel/DbEcIsFxsEE/`, ~2.1K views). Measured two ways; the
-**definitive** method was stream-level: pulling each post's DASH manifest
-(`video_dash_manifest`, embedded in the logged-in instagram.com page scripts —
-rung resolution/codec/bitrate). Frame-level screen-recording analysis is
-confounded by ABR/player state — **prefer the manifest method for all future
-measurements.**
+#### B0 results (executed July 23–24, 2026) — FINAL: both arms PASS ✅
 
-- **B0(a) — Does the Reels API accept the ~2K file? ✅ YES — CLOSED.** Container +
-  publish flow succeeded end-to-end; audio survived ingest (served HE-AAC 78 kbps,
-  same rendition as native). (A −91 dB "silent" screen recording was player mute
-  during capture, not a pipeline bug — confirmed via manifest.) **The 1080p-transcode
-  fallback is NOT needed on acceptance grounds.**
-- **B0(b) — Does served quality match a native upload? ⏳ STILL OPEN.** Served ladders
-  as of July 24: API test reel = **720×1280 H.264 @ 2.12 Mbps (only rung)**; native
-  reel = **1080×1920 VP9 @ 2.92 Mbps + 720×1280 VP9 @ 2.22 Mbps**. The API post is
-  ~19% softer as served — fully explained by the rung gap. **But attribution is
-  confounded:** H.264-single-rung is Meta's birth-tier encode (every fresh upload);
-  VP9 rungs are the promoted tier Meta generates for content that earns watch time.
-  The two arms differ in upload path AND age/views AND archive history at once. Two
-  live hypotheses — (1) benign: the test post is birth-tier because 12 views + archived,
-  and a fresh native upload would look identical on day one; (2) bad: API ingest caps
-  the ladder at 720p permanently. **Current data cannot distinguish these — do NOT record
-  B0(b) as failed and do NOT trigger the fallback transcode yet.**
-- **Additional finding:** archiving is NOT quality-neutral — it appears to freeze/demote
-  what's served. **Never archive a test post before measuring it** (also relevant to any
-  future "archive & restore" feature: quality may not survive the round trip).
+**Measurement method (validated — use this for any future quality question).**
+Pull the post's served **DASH manifest**: `video_dash_manifest`, embedded in the
+logged-in instagram.com page scripts, then parse the `<Representation>` attrs for
+rung resolution / codec / bitrate. **Screen-recording / frame-level comparison is
+NOT valid** — ABR and player state confound it (an early −91 dB "silent reel"
+scare was player mute during capture, not a pipeline bug).
 
-**Deciding experiment to close B0(b) (needs Kevin, ~15 min + ~1 h wait):** take one
-Edits 2K export; within minutes post it **twice, both fresh** — once via the API flow,
-once natively from Edits; caption both as tests; **do not archive.** At ~1 h old, pull
-both DASH manifests. Decision rule: if the fresh **native** post is **also 720p-only at
-birth** → **parity proven** (promotion is engagement-driven; open B4's gate); if fresh
-native gets **1080p immediately** and API doesn't → **API penalty is real** (enable the
-fallback 1080p transcode step in B4 and re-test). Archive/delete the test posts only
-**after** measurement. Passive corroboration: re-pull the live test reel `DbJBleDD-BU`
-manifest after 24–48 h of views — a 1080p VP9 rung appearing there directly supports
-hypothesis (1).
+**The clean two-arm experiment.** The *same* Edits 2K master, posted twice minutes
+apart as normal fresh reels on `mustache.journey`, neither archived, both measured
+at equal age:
 
-**Build order impact:** B1 → B2 → B3 are unblocked (none depend on B0(b)); build them now,
-B1 first (it also fixes the broken notification cadence). B4 may be built, but its
-**done-gate stays closed until B0(b) resolves** — architecture is unchanged either way
-(worst case inserts one isolated high-bitrate 1080p transcode from the 2K master before
-upload).
+| Arm | Post | Served ladder (at ~1 h) | Served ladder (re-measure, few hours) |
+|---|---|---|---|
+| Native (Edits app) | `instagram.com/reel/DbLqOclhOn1/` | 1080×1920 VP9 @2.03 Mbps + 720×1280 VP9 @1.47 Mbps | — |
+| **API** (REELS, `video_url` = Dropbox `files/get_temporary_link` — the exact B4 design) | `instagram.com/reel/DbLsSCijUL1/` | 720×1280 H.264 @1.48 Mbps — only rung | **1080×1920 VP9 @2.27 Mbps + 720×1280 VP9 @1.57 Mbps** |
+
+Audio: HE-AAC ~116 kbps native vs ~118 kbps API — full parity.
+
+- **B0(a) — Does the Reels API accept the ~2K file? ✅ PASS — CLOSED.** Container →
+  poll → publish succeeded end-to-end; audio survives ingest at parity. **No
+  fallback transcode needed on acceptance grounds.**
+- **B0(b) — Does served quality match a native upload? ✅ PASS — CLOSED.** At birth
+  the API post serves 720p H.264 only, but **Meta generates the high-quality VP9
+  renditions for API posts asynchronously — within a few hours, with zero views
+  required.** On re-measure the API arm serves a ladder structurally identical to
+  native, at a slightly *higher* 1080p bitrate. The one-time transient is a
+  **latency** characteristic, not a quality cap.
+- **Round one's "permanent 720p cap" reading was wrong, and why matters:** that
+  first API test post (`DbJBleDD-BU`) was **archived immediately after publishing**,
+  which froze rendition generation. The confounds of round one (upload path vs.
+  age/views vs. archive history) are eliminated by the two-arm test above.
+- **Corrected folklore:** VP9/1080p renditions are **not** engagement-promoted.
+  Native uploads get the full ladder at birth with zero views; API uploads get it
+  a few hours later, also without engagement.
+- **Archiving is NOT quality-neutral** — it appears to freeze/demote the served
+  rendition and pause encode generation. **Never archive a post before measuring
+  it**, and treat any future "archive & restore" feature as quality-risky.
+
+**Design implications for B4 — build it exactly as § Stage B4 specifies.**
+- **URL ingest via `getTemporaryLink` is validated end-to-end. Keep it.**
+- **Do NOT build a 1080p pre-transcode.** The 2K file was accepted fine and source
+  resolution cannot influence the serving ladder — a self-transcode would address
+  nothing.
+- **The resumable / binary-push upload variant (`upload_type=resumable` +
+  `rupload.facebook.com`) is NOT required.** It was scoped as the mitigation for a
+  URL-ingest penalty that turned out not to exist. Optional future experiment only:
+  whether pushing bytes shortens the 720p transient window.
+- The container/poll/publish **state machine design is unchanged and validated.**
+- **Known characteristic to document (README troubleshooting):** API-published
+  reels serve 720p H.264 for roughly the **first 1–3 hours**, then 1080p VP9
+  permanently. Recommended usage: **schedule publishes a few hours ahead of
+  peak-audience windows** so the promoted ladder is live before the traffic is.
+
+**Build order impact:** B1 → B2 → B3 were unblocked and are **shipped** (see the
+B4-start handoff). **B4's done-gate is OPEN** — nothing about auto-publish is
+gated on further measurement. Remaining B4 prerequisite is credentials only
+(`META_APP_ID`, `META_APP_SECRET`, a long-lived `INSTAGRAM_USER_ACCESS_TOKEN`,
+`INSTAGRAM_USER_ID`). The schema default `publish_mode='notify'` stays as-is for
+safety — flipping individual posts to `auto` is now a product choice, not a
+quality risk.
 
 ### Stage B1 — Cron foundation + auth (also fixes broken notifications)
 **Complexity 1/5 · Sonnet/Haiku-capable · ~half day**
@@ -440,13 +458,16 @@ suggestion.
 
 ## Open Questions
 
-1. **B0 spike outcome** — **PARTIALLY RESOLVED (July 24, 2026; see § Stage B0 "B0
-   results").** B0(a) **CLOSED** — the Reels API accepts the ~2K file (audio survives;
-   no fallback needed on acceptance grounds). B0(b) **STILL OPEN** — the API test reel
-   serves a 720p-only H.264 rung vs. the native reel's 1080p VP9 ladder, but attribution
-   is confounded (upload path vs. age/views vs. archive history). Close it with the
-   fresh-vs-fresh deciding experiment in § Stage B0; only then decide whether the 1080p
-   fallback transcode is needed. Do NOT treat B0(b) as failed yet.
+1. **B0 spike outcome** — ✅ **FULLY RESOLVED (July 24, 2026; see § Stage B0 "B0
+   results").** Both arms PASS. B0(a): the Reels API accepts the ~2K file, audio
+   survives at parity. B0(b): served quality reaches full parity with a native
+   upload — Meta generates the 1080p VP9 ladder for API posts **asynchronously
+   within a few hours, no engagement required** (verified by re-measuring the API
+   arm `DbLsSCijUL1`, which now serves 1080×1920 VP9 @2.27 Mbps + 720p VP9). The
+   earlier "stuck at 720p" reading was an artifact of archiving round one's test
+   post immediately. **No fallback transcode, no resumable-upload rewrite, B4's
+   done-gate is open.** The only residual is a documented ~1–3 h 720p transient
+   after publish — schedule ahead of peak-audience windows.
 2. Exact Edits export spec (container/codec/resolution) — confirm during B0 that
    it's MP4/MOV H.264 or HEVC + AAC (API requirement).
 3. Web push (VAPID) timing — deliberately deferred; email-first in B5.
@@ -464,18 +485,25 @@ publishing pipeline), architecture overview (Next.js/Supabase/Vercel/Dropbox/
 Meta Graph API), the complete env-var reference, local dev + deploy instructions,
 the cron/pinger setup, the Meta & Dropbox app setup steps (condensed from
 `docs/integrations.md`), how auto-publish vs notify-to-post works, and
-troubleshooting notes (token expiry, failed publishes, cron auth). Treat this as
-the closing stage of the project — it is part of "done."
+troubleshooting notes (token expiry, failed publishes, cron auth, **and the
+API-publish quality timeline: reels serve 720p H.264 for ~1–3 h after publish,
+then 1080p VP9 permanently — schedule ahead of peak-audience windows**). Treat
+this as the closing stage of the project — it is part of "done."
 
-## Next Steps (first actions for the new session)
+## Next Steps
 
-1. Read `AGENTS.md`, skim `docs/build-phases.md` and `docs/database-schema.md`,
+> **Status as of July 24, 2026:** Workstream A (A1–A3) is shipped. **B0 is closed
+> (both arms pass), and B1, B2, B3 are shipped and live.** The next task is
+> **Stage B4**, whose gate is now open. Steps 1–4 below are the original plan and
+> are kept for provenance; the live checklist is in
+> `handoff-b4-start-2026-07-24.md` § "Next steps".
+
+1. ~~Read `AGENTS.md`, skim `docs/build-phases.md` and `docs/database-schema.md`,
    and the two key files: `src/components/calendar/CalendarView.tsx` and
-   `src/components/calendar/WeeklyBoard.tsx`.
-2. Build **Workstream A** (A1 → A2 → A3) — self-contained, no external accounts
-   needed, immediate daily-life win. Verify with the A3 screenshot protocol
-   before opening the PR.
-3. In parallel or next: walk Kevin through the **B0 spike** (needs his Meta app
-   + a real 2K file). Do not start B4 until B0's result is recorded here.
-4. Then B1 → B2 → B3 → B4 → B5 → B6 in order. B1 alone fixes the broken
-   notification timing and is worth shipping immediately.
+   `src/components/calendar/WeeklyBoard.tsx`.~~ (`AGENTS.md` still applies to
+   every session — Next.js 16 has breaking changes vs. training data.)
+2. ~~Build **Workstream A** (A1 → A2 → A3).~~ **Done** — merged in PR #4.
+3. ~~Walk Kevin through the **B0 spike**.~~ **Done** — both arms pass; results
+   recorded in § Stage B0 "B0 results". B4 is no longer gated on it.
+4. ~~B1 → B2 → B3~~ **done and live** (PRs #6, #7). **B4 is the current task**,
+   then B5 → B6, then the README deliverable above.
