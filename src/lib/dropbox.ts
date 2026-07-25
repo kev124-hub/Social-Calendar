@@ -3,7 +3,7 @@
 // the app only needs files.metadata.read (list) + files.content.read (temp links).
 //
 // Env: DROPBOX_APP_KEY, DROPBOX_APP_SECRET, DROPBOX_REFRESH_TOKEN,
-//      DROPBOX_READY_FOLDER (optional, defaults to "/Social Calendar/Ready to Post").
+//      DROPBOX_READY_FOLDER (optional, defaults to "/Social Media/Ready to Post").
 
 const TOKEN_URL = 'https://api.dropboxapi.com/oauth2/token'
 const API = 'https://api.dropboxapi.com/2'
