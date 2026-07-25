@@ -4,11 +4,12 @@
 // URL to the untouched ~2K master in Dropbox and Meta ingests those exact bytes.
 // Nothing re-encodes the file before upload.
 //
-// Validated end-to-end by the B0 spike (see HANDOFF.md § Stage B0). Both arms of
-// B0 pass: the API accepts the ~2K file, and served quality reaches parity with a
-// native Edits upload — though asynchronously. Reels serve 720p H.264 for roughly
-// the first 1–3 hours after publish, then 1080p VP9 permanently, so schedule
-// publishes a few hours ahead of peak-audience windows.
+// Validated end-to-end by the B0 spike and re-verified in production (see
+// HANDOFF.md § Stage B0). Both arms of B0 pass: the API accepts the ~2K file, and
+// served quality reaches parity with a native Edits upload — though
+// asynchronously. Reels serve a 720p H.264 birth encode for a transient window
+// (~15 min observed in production, up to a few hours in testing), then 1080p VP9
+// permanently, so schedule publishes ahead of peak-audience windows.
 //
 // Env: META_APP_ID, META_APP_SECRET, INSTAGRAM_USER_ID,
 //      INSTAGRAM_USER_ACCESS_TOKEN (bootstrap; the live token is kept in the
