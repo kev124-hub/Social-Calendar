@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import {
   format,
   startOfMonth,
@@ -19,6 +20,7 @@ import {
   isToday,
   eachDayOfInterval,
   parseISO,
+  isValid,
   set,
 } from 'date-fns'
 import {
@@ -176,6 +178,33 @@ export function CalendarView() {
   useEffect(() => {
     if (window.innerWidth < 640) setView('day')
   }, [])
+
+  // Deep link: /calendar?date=2026-07-30&view=day
+  //
+  // Until now CalendarView read nothing from the URL, so every link pointing
+  // into it — including /home's week strip — landed on today no matter which
+  // day it named. Declared after the phone-default effect above so an explicit
+  // ?view= wins over it; scheduled on a frame so this is not a synchronous
+  // setState in an effect body.
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    const dateParam = searchParams.get('date')
+    const viewParam = searchParams.get('view')
+    if (!dateParam && !viewParam) return
+    const frame = requestAnimationFrame(() => {
+      if (dateParam) {
+        const parsed = parseISO(dateParam)
+        // Ignore a malformed date rather than calling setCurrentDate with an
+        // Invalid Date, which would make every downstream format() throw.
+        if (isValid(parsed)) setCurrentDate(parsed)
+      }
+      if (viewParam === 'day' || viewParam === 'week' || viewParam === 'month' || viewParam === 'list') {
+        setView(viewParam)
+      }
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [searchParams])
+
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [calendars, setCalendars] = useState<Calendar[]>([])
   const [posts, setPosts] = useState<SocialPost[]>([])
