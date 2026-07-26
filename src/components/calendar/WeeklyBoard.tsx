@@ -2,11 +2,12 @@
 
 // src/components/calendar/WeeklyBoard.tsx — Riviera Glass rewrite.
 //
-// FUNCTIONALITY IS UNCHANGED from the previous file: same dnd-kit setup, same
+// The drag MODEL is unchanged from the previous file: same sensors, same
 // colOrder sync effect, same handleDragEnd semantics (same-column reorder is
-// local, cross-column calls onMovePost / onMoveIdea), same mobile scroll-snap
-// and press-and-hold touch sensor, same scrollIntoView on today's column.
-// The drag logic was diffed line by line against the previous version.
+// local, cross-column calls onMovePost / onMoveIdea), same scrollIntoView on
+// today's column. Two drag *mechanics* did change, both to fix behaviour Kevin
+// hit on a real phone that no desktop test reproduced — see collisionDetection
+// below and the scroll-snap note on the board element.
 //
 // What changed is presentation:
 //   · weekday columns tinted blue, weekend columns yellow (dayTint)
@@ -15,14 +16,17 @@
 //   · >2 cards collapse into a stacked deck that fans out on click
 //   · cards stagger in on mount (45ms apart)
 //
-// Three deviations from the design bundle, each explained at its site below:
-// the publish badge is kept on the card, the column no longer sets an inline
-// minWidth, and the board no longer paints its own copy of the app wash.
+// Deviations from the design bundle, each explained at its site below: the
+// publish badge is kept on the card, the column sets no inline minWidth and
+// takes a definite width, the hover tilt is gated on a real hover pointer, the
+// media strip falls back to the placeholder, and the board does not paint its
+// own copy of the app wash.
 
 import { useState, useEffect, useRef } from 'react'
 import {
   DndContext, DragOverlay, PointerSensor, TouchSensor, useSensor, useSensors,
-  useDroppable, closestCorners, type DragEndEvent, type DragStartEvent,
+  useDroppable, pointerWithin, rectIntersection,
+  type CollisionDetection, type DragEndEvent, type DragStartEvent,
 } from '@dnd-kit/core'
 import {
   SortableContext, useSortable, verticalListSortingStrategy, arrayMove,
@@ -52,6 +56,17 @@ interface Props {
 // pointer. (The design README also asks for hover-only, never focus.)
 const canHover = () =>
   typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+
+// Drop where the finger is. closestCorners ranks droppables by corner distance,
+// which in tall sparse columns picks a neighbour: dropping into the empty lower
+// half of one column measured closer to the *corner* of the next column's card
+// than to its own column, so posts landed on the wrong day. pointerWithin only
+// matches a droppable the pointer is actually inside; rectIntersection is the
+// fallback for the moment the pointer leaves every droppable mid-drag.
+const collisionDetection: CollisionDetection = (args) => {
+  const withinPointer = pointerWithin(args)
+  return withinPointer.length > 0 ? withinPointer : rectIntersection(args)
+}
 
 const toPostId = (id: string) => `post-${id}`
 const toIdeaId = (id: string) => `idea-${id}`
@@ -295,13 +310,21 @@ export function WeeklyBoard({
   const activeIdea = activeId?.startsWith('idea-') ? ideas.find((i) => i.id === activeId.slice(5)) ?? null : null
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       {/* No background here. The bundle paints GLASS.wash on this element, but
           Stage 1 already put the wash on the app container — a second copy
           anchors its radial gradients to the board's own box and shows a seam
           at the sidebar edge. Transparent lets the one page-level wash through. */}
       <div
-        className="flex h-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden p-[14px] sm:overflow-hidden"
+        className={cn(
+          'flex h-full overflow-x-auto overflow-y-hidden p-[14px] sm:overflow-hidden',
+          // Scroll-snap is suspended while dragging. dnd-kit auto-scrolls the
+          // board when a dragged card nears the edge; scroll-snap: mandatory
+          // then yanks the scroll position back to the nearest snap point, and
+          // the two fight — on a phone every column visibly vibrates and the
+          // drop target moves under your finger, so cards land on a random day.
+          !activeId && 'snap-x snap-mandatory',
+        )}
         style={{ perspective: 1400 }}
       >
         {days.map((day) => {
