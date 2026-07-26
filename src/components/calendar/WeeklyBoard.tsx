@@ -237,7 +237,17 @@ export function WeeklyBoard({
 }: Props) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [expanded, setExpanded] = useState<string | null>(null) // dateKey of the fanned-out deck
+  // Which day decks are fanned open. This is a Set, not a single dateKey: with
+  // one key, opening the drop target necessarily closed whatever was already
+  // open, so dragging a card OUT of a fanned day collapsed that day back to
+  // "+ n more" behind you. Days fan independently.
+  const [expandedDays, setExpandedDays] = useState<ReadonlySet<string>>(() => new Set())
+  const toggleExpanded = (dateKey: string) =>
+    setExpandedDays((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(dateKey)) next.add(dateKey)
+      return next
+    })
 
   const todayColRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -318,8 +328,10 @@ export function WeeklyBoard({
       })
       // A collapsed column renders only its first two cards, so a card landing
       // past that vanished under "+n more" the moment it was released — which
-      // reads as a drop that failed. Open the target column instead.
-      setExpanded(overDateKey)
+      // reads as a drop that failed. Spread the target. The source day keeps
+      // whatever state it had — dragging a card out of a fanned day must not
+      // fold that day up behind you.
+      setExpandedDays((prev) => new Set(prev).add(overDateKey))
       if (parsed.type === 'post') await onMovePost(parsed.rawId, newDate)
       else await onMoveIdea(parsed.rawId, newDate)
     }
@@ -357,7 +369,7 @@ export function WeeklyBoard({
           const postMap = new Map(dayPosts.map((p) => [toPostId(p.id), p]))
           const ideaMap = new Map(dayIdeas.map((i) => [toIdeaId(i.id), i]))
 
-          const isOpen = expanded === dateKey
+          const isOpen = expandedDays.has(dateKey)
           const visible = isOpen ? colItems : colItems.slice(0, 2)
           const hidden = colItems.length - visible.length
 
@@ -437,7 +449,7 @@ export function WeeklyBoard({
               {/* Stacked deck — fans the column open */}
               {(hidden > 0 || isOpen) && (
                 <button
-                  onClick={() => setExpanded(isOpen ? null : dateKey)}
+                  onClick={() => toggleExpanded(dateKey)}
                   className="relative h-[40px] w-full"
                   type="button"
                 >
