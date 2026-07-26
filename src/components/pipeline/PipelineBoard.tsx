@@ -214,6 +214,11 @@ function KanbanView({
           // scheduled + published sit forward and read as more solid: these are
           // the committed columns.
           const elevated = i > 3
+          // An empty column recedes: thinner surface, softer border, lighter
+          // shadow. Deliberately NOT opacity on the panel — that would drag the
+          // stage label below the #5d5660 text floor, which is the complaint
+          // this redesign exists to fix. Label and count stay at full ink.
+          const empty = stagePosts.length === 0
           return (
             <div
               key={key}
@@ -221,10 +226,19 @@ function KanbanView({
               className="w-64 shrink-0 transition-transform duration-[350ms] ease-[cubic-bezier(.2,.8,.2,1)] lg:w-auto lg:min-w-0 lg:flex-1 lg:shrink lg:[transform:translateZ(var(--plane-z))] lg:hover:[transform:translateZ(70px)]"
             >
               <div
-                className="flex h-full flex-col gap-2 rounded-[16px] p-[10px] shadow-[0_16px_28px_rgba(63,43,80,.16)] backdrop-blur-[12px]"
+                className={cn(
+                  'flex h-full flex-col gap-2 rounded-[16px] p-[10px] backdrop-blur-[12px] transition-[background,border-color,box-shadow] duration-300',
+                  empty ? 'shadow-[0_6px_14px_rgba(63,43,80,.07)]' : 'shadow-[0_16px_28px_rgba(63,43,80,.16)]',
+                )}
                 style={{
-                  background: elevated ? 'rgba(255,255,255,.78)' : 'rgba(255,255,255,.42)',
-                  border: `1px solid ${elevated ? 'rgba(20,16,20,.50)' : 'rgba(255,255,255,.70)'}`,
+                  background: empty
+                    ? (elevated ? 'rgba(255,255,255,.46)' : 'rgba(255,255,255,.18)')
+                    : (elevated ? 'rgba(255,255,255,.78)' : 'rgba(255,255,255,.42)'),
+                  border: `1px solid ${
+                    empty
+                      ? (elevated ? 'rgba(20,16,20,.22)' : 'rgba(255,255,255,.40)')
+                      : (elevated ? 'rgba(20,16,20,.50)' : 'rgba(255,255,255,.70)')
+                  }`,
                 }}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -243,11 +257,21 @@ function KanbanView({
                     </button>
                   </div>
                 </div>
-                <div className="flex-1 space-y-2 overflow-y-auto">
-                  {stagePosts.map((post, idx) => (
-                    <PostCard key={post.id} post={post} index={idx} stages={stages} onEdit={() => onEdit(post)} onMove={(s) => onMove(post, s)} />
-                  ))}
-                </div>
+                {empty ? (
+                  // Stated, not apologised for — same voice as the ReadyReel's
+                  // "Queue is clear". A blank panel reads as a loading failure.
+                  <div className="flex flex-1 items-center justify-center">
+                    <span className="text-[10px] tracking-[.14em]" style={{ ...MONO, color: INK.tertiary }}>
+                      EMPTY
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex-1 space-y-2 overflow-y-auto">
+                    {stagePosts.map((post, idx) => (
+                      <PostCard key={post.id} post={post} index={idx} stages={stages} onEdit={() => onEdit(post)} onMove={(s) => onMove(post, s)} />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )
