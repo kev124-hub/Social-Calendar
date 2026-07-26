@@ -1,19 +1,29 @@
 # Session Handoff — Riviera Glass redesign, Stages 1–4 and 8 merged
 
 **Written 26 July 2026, evening. Consolidates two sessions. Updated later the
-same evening** after Stages 4 and 8 merged. Supersedes
-`handoff-riviera-glass-stage4-2026-07-26.md` entirely — that file says "Stage 4
-next", which is no longer true and is exactly the stale picture that let two
-sessions build Stage 4 twice.
+same evening** after Stages 4 and 8 merged. It superseded
+`handoff-riviera-glass-stage4-2026-07-26.md`, which said "Stage 4 next" — the
+stale picture that let two sessions build Stage 4 twice. **That file was
+deleted on 26 July** once its banner had done its job; it is in git history if
+the provenance is ever needed.
 
 ## ⚠️ Read first — which handoff governs what
 
 | File | Governs |
 |---|---|
 | `HANDOFF.md` (repo root) | **Backend / publishing** (B0–B7, Instagram auto-publish, cron, notifications). Still authoritative. Do not touch `src/lib/publisher.ts`, `notifier.ts`, `ig-token.ts`, or the cron routes — the redesign is presentation work. |
-| `handoff-riviera-glass-2026-07-25.md` | The redesign's origin: design-bundle inventory, original assessment, the seven-stage plan. Its "Current State" is stale; the bundle inventory is still good. |
-| `handoff-riviera-glass-stage4-2026-07-26.md` | **Superseded by this file.** |
+| `handoff-riviera-glass-2026-07-25.md` | The redesign's origin. **Only § "The Design Bundle" is still current** — see the banner at the top of that file. Everything else in it (current state, the seven-stage plan, the Stage 1 instructions) is history. |
+| `handoff-home-phase-b-2026-07-26.md` | The `/home` Phase B task brief. **Delete it when Phase B merges** — see the lifecycle note below. |
 | **This file** | Current state of the redesign and what to do next. |
+
+**Handoff lifecycle — the convention that keeps this from rotting.** A
+task-scoped handoff dies when its work merges; the session that finishes the
+work deletes the file in the same PR. Two superseded handoffs were deleted on
+26 July under this rule (`handoff-b4-start-2026-07-24.md`,
+`handoff-riviera-glass-stage4-2026-07-26.md`) — git history is the archive, so
+deletion loses nothing. What must never be left behind is a plausible-looking
+file with stale state and no warning: that is precisely what cost this project
+a duplicated Stage 4.
 
 ---
 
