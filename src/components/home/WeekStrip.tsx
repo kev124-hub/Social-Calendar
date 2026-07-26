@@ -49,7 +49,9 @@ export function WeekStrip({ posts, now }: { posts: SocialPost[]; now: Date }) {
           return (
             <Link
               key={date.toISOString()}
-              href="/calendar"
+              // The day the chip shows, opened in the day view — not a bare
+              // /calendar, which lands on today whichever chip you tapped.
+              href={`/calendar?date=${format(date, 'yyyy-MM-dd')}&view=day`}
               className="flex flex-col p-2 transition-transform hover:-translate-y-[5px]"
               style={{
                 background: tint.bg,

@@ -91,7 +91,10 @@ export function NextPublishHero({ post, now }: { post: SocialPost | null; now: D
   const auto = post.publish_mode === 'auto'
 
   return (
-    <section style={PANEL} className="flex gap-4 p-4">
+    // The whole hero opens the post. It is a card about one specific thing and
+    // it read as tappable long before it was — the same deep link the
+    // needs-attention rows use.
+    <Link href={`/pipeline?post=${post.id}`} style={PANEL} className="flex gap-4 p-4 transition-transform hover:-translate-y-[2px]">
       {post.media_url ? (
         // Supabase/Dropbox media URLs are arbitrary remote hosts; next/image
         // would need every one allowlisted in next.config, and this is a
@@ -170,6 +173,6 @@ export function NextPublishHero({ post, now }: { post: SocialPost | null; now: D
           </p>
         )}
       </div>
-    </section>
+    </Link>
   )
 }

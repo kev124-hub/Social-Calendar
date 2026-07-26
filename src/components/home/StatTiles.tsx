@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { INK, RADIUS, STAT } from '@/lib/glass'
 import { MONO } from './glass-home'
 
-type Tile = { key: keyof typeof STAT; label: string; value: number | null }
+type Tile = { key: keyof typeof STAT; label: string; value: number | null; href: string }
 
 /**
  * Ramps 0 → target over 1100ms on a cubic ease-out.
@@ -49,8 +50,12 @@ function StatTile({ tile }: { tile: Tile }) {
   const tint = STAT[tile.key]
 
   return (
-    <div
-      className="p-3 transition-transform hover:-translate-y-1"
+    // A tile that lifts on hover promises it does something. It didn't, which
+    // read as the page being dead to touch — so each one now goes to the
+    // surface that lists what it counts.
+    <Link
+      href={tile.href}
+      className="block p-3 transition-transform hover:-translate-y-1"
       style={{
         background: tint.tint,
         borderRadius: RADIUS.card,
@@ -65,15 +70,17 @@ function StatTile({ tile }: { tile: Tile }) {
       <div className="mt-1.5 text-[12px] font-semibold" style={{ color: INK.strong }}>
         {tile.label}
       </div>
-    </div>
+    </Link>
   )
 }
 
 export function StatTiles({ ready, behind, queued }: { ready: number; behind: number; queued: number | null }) {
   const tiles: Tile[] = [
-    { key: 'ready',  label: 'Ready this week', value: ready },
-    { key: 'behind', label: 'Behind',          value: behind },
-    { key: 'queued', label: 'Queued',          value: queued },
+    { key: 'ready',  label: 'Ready this week', value: ready,  href: '/calendar?view=week' },
+    // Both land on the pipeline: it is the only surface that lists posts by
+    // state, and neither "overdue" nor "queued" has a filter of its own yet.
+    { key: 'behind', label: 'Behind',          value: behind, href: '/pipeline' },
+    { key: 'queued', label: 'Queued',          value: queued, href: '/pipeline' },
   ]
 
   return (
