@@ -1,6 +1,7 @@
-# Session Handoff — Riviera Glass redesign, Stages 1–3 done, Stage 4 next
+# Session Handoff — Riviera Glass redesign, Stages 1–3 MERGED, Stage 4 next
 
-**Written: July 26, 2026.** Supersedes `handoff-riviera-glass-2026-07-25.md`
+**Written: July 26, 2026. Updated later the same day** — Stages 1–3 are all
+merged to `main`, and a separate event-creation fix (#23) merged alongside. Supersedes `handoff-riviera-glass-2026-07-25.md`
 for *current state* (that file is still the best record of the design bundle's
 contents and the original assessment — keep reading it for those).
 
@@ -41,29 +42,27 @@ cramped, week dates hard to read, Today pane needing scrolling.
      exist yet and otherwise break `tsc`.
 2. **Meanwhile, start Stage 4 (month view).** It does not depend on the
    pipeline files.
-3. **Also required (new, from Kevin today): the calendar should default to
-   `day` view on phones.** See "Day-view default" below.
+3. **Also required (from Kevin): the calendar should default to `day` view on
+   phones.** See "Day-view default" below.
+4. **Kevin decided the content pipeline IS in scope** and is having Claude
+   Design spec it — hence step 1.
 
 ---
 
 ## Where things stand
 
 ### Merged to `main`
-- **PR #20 — Stage 1** (design tokens + JetBrains Mono). Merged.
-- **PR #21 — Stage 2** (glass sidebar + `PublishHealth.tsx`). Merged.
-- `main` is at `fee6250`.
+- **PR #20 — Stage 1** (design tokens + JetBrains Mono).
+- **PR #21 — Stage 2** (glass sidebar + `PublishHealth.tsx`).
+
+- **PR #22 — Stage 3 (week view)**. Merged. Drag confirmed working on a real
+  phone after the `2693e7c` revert.
+- **PR #23 — event-creation fixes**. Merged. Off `main`, unrelated to the
+  redesign — see "The event-creation saga" below.
+
+`main` is at `ebe5ec1`. **There are no open PRs and no armed check-ins.**
 
 ### Open
-- **PR #22 — Stage 3 (week view)** — https://github.com/kev124-hub/Social-Calendar/pull/22
-  - Branch `claude/redesign-visual-elements-blxj78`, head `2693e7c`, **draft**,
-    mergeable clean, Vercel green.
-  - Four commits: `8a5555f` (week view), `4be9a52` (drag fixes), `2cb1ea8`
-    (h-dvh + selection suppression), `2693e7c` (revert of the selection part).
-  - **Kevin has tested it on a real phone and the last outstanding item was a
-    confirmation pass that press-and-hold drags again after `2693e7c`.** If he
-    hasn't confirmed, ask before merging.
-  - An hourly self check-in on this PR was armed via `send_later`. If it fires
-    and the PR is merged/closed, stop the loop.
 
 ### ⚠️ Branch auto-delete — this has bitten three times
 The repo has **Settings → General → Automatically delete head branches**
@@ -315,7 +314,92 @@ optional; Kevin has now asked for it.
 | 5 | ReadyReel (v2, sparse-first) | Blocked on the Dropbox thumbnail endpoint. Video thumbnails are proven to exist (pulled a real 640×480 JPEG for `Need a minute.mp4`), but that was via the Dropbox MCP connector, **not** the public `/2/files/get_thumbnail_v2` the app would call. `DropboxFile` has no thumbnail field and `src/lib/dropbox.ts` has no thumbnail fetch. Expect the **n=1** state — `/Social Media/Ready to Post/` holds exactly one file. |
 | 6 | Today pane | **Blocked** on Kevin: (a) merge — keep the Calendars toggle list + TimeGrid, restyle in glass; (b) replace — follow README §4 exactly, losing per-calendar visibility toggling and the day time-grid; (c) defer. Recommended (c) then (a). |
 | 7 | Dashboard home | Out of scope. |
-| — | Content pipeline | **Awaiting Claude Design files.** |
+| 8 | Content pipeline | In scope. **Awaiting Claude Design files.** |
+| 9 | **Two-way Google Calendar sync** | Kevin's explicit call: *after the last stage*. See below. |
+
+## The event-creation saga (merged as #23) — and what it left behind
+
+Kevin reported that creating a calendar event did nothing. It took several
+rounds because **every failure in that path was silent**. Worth reading before
+touching anything in the calendar: it is a good map of the traps.
+
+**Root cause, confirmed from a screenshot rather than inferred.** `EventDialog`
+defaulted `calendar_id` to `calendars[0]` — the alphabetically first calendar,
+which for Kevin was `hello@mustachejourney.com` with `is_visible = false`.
+Every event was written successfully and then filtered straight back out by
+`CalendarView`'s `visibleEvents`. The picker only rendered when there was more
+than one calendar, so the destination was invisible too.
+
+**What #23 changed** (`src/components/calendar/EventDialog.tsx`,
+`AIEventInput.tsx`, `CalendarView.tsx`, `settings/page.tsx`,
+`components/settings/GoogleCalendarSettings.tsx`):
+- Both write paths check `.error` and show it; `handleSave` is wrapped so no
+  exit is silent. `AIEventInput` awaits `onEventParsed` so a failed insert
+  reaches the input that reported success.
+- The all-day toggle no longer throws. The inputs switch between `type="date"`
+  and `type="datetime-local"`, but the value in state did not follow — **a
+  browser silently rejects a value its input type cannot parse, blanking the
+  field WITHOUT firing onChange** — so `new Date(datetimeString + 'T00:00:00')`
+  was an Invalid Date and `.toISOString()` threw before the write.
+- The calendar picker always renders, hidden calendars are labelled
+  `(hidden)`, and a **"Show this calendar"** button flips `is_visible`. That
+  button matters: the only other visibility control is in `RightPanel`, which
+  is `hidden md:flex`, so on a phone a hidden calendar could not be un-hidden
+  anywhere at all.
+- The Google card derives its state from `getValidAccessToken()` rather than
+  the presence of a row, and offers Reconnect. It had been claiming
+  "Connected — events sync automatically" while every sync returned
+  "Not authenticated with Google".
+
+**Still open from that thread — the week view renders no calendar events.**
+`WeeklyBoard`'s props are `weekStart, posts, ideas, …`; there is no `events`
+prop and never has been. Month, day and list all receive `visibleEvents`. So
+an event created from the "+ New Event" button in the week toolbar can only be
+seen by switching view — Kevin hit exactly this and it is not yet fixed.
+Proposed treatment, **awaiting his yes**: compact rows using the calendar's
+colour as a left border, above the post cards, mirroring how `MonthGrid`
+renders events. It belongs in `WeeklyBoard.tsx` on a redesign branch.
+
+---
+
+## Stage 9 — two-way Google Calendar sync (after the last stage)
+
+**Kevin's decision, in his words:** *"I'd rather make it real. Not sure what
+the point of having a new event button/dialogue if it's not doing anything.
+Add it to the plan after step 7 or whatever last stage is."*
+
+Today the sync is **one-way, Google → app**. `syncGoogleCalendar` lists Google
+calendars and events and upserts them into `calendar_events`. The exports of
+`src/lib/google-calendar.ts` are `getGoogleTokens`, `saveGoogleTokens`,
+`getValidAccessToken`, `disconnectGoogle`, `listGoogleCalendars`,
+`listGoogleEvents`, `syncGoogleCalendar` — **there is no function that creates
+an event in Google.** Nothing this app has ever created reached Google.
+
+Worse than a gap: the event dialog lets you pick a *Google* calendar
+(including the primary) as the destination, which implies the event goes
+there. It does not — the row is tagged with that calendar's local id and stays
+in Supabase.
+
+**The pleasant surprise: no re-consent is needed.** The OAuth scope in
+`src/app/api/auth/google-calendar/route.ts` is already
+`https://www.googleapis.com/auth/calendar` — full read/write, not
+`calendar.readonly`. The app has been asking for write access since day one
+and never using it.
+
+Scope for the work:
+1. `events.insert` on save for events whose calendar has `source = 'google'`,
+   storing the returned Google event id in `external_id` so the next
+   `syncGoogleCalendar` recognises it instead of creating a duplicate. The
+   upsert already keys on `external_id`.
+2. Then edits and deletes — `events.patch` / `events.delete`.
+3. **Where the care goes, not the insert:** the local row saving but the Google
+   push failing (do not leave the user thinking it synced); preventing the two
+   ends duplicating each other on the next sync; and deciding which side wins
+   when both changed since the last sync.
+4. A decision to put to Kevin then: whether app-only calendars stay app-only,
+   or everything created goes to Google.
+
+---
 
 ## Notes on working with Kevin
 
@@ -332,9 +416,8 @@ optional; Kevin has now asked for it.
 ## Next steps
 
 1. `npm ci`; read `node_modules/next/dist/docs/` per `AGENTS.md`.
-2. Confirm PR #22's state. If merged: `git fetch --prune origin && git checkout
-   -B claude/redesign-visual-elements-blxj78 origin/main`. If still open, check
-   whether Kevin confirmed drag works after `2693e7c`.
+2. Start from `main` — everything is merged, nothing is in flight:
+   `git fetch --prune origin && git checkout -B claude/redesign-visual-elements-blxj78 origin/main`
 3. Read `docs/design/riviera-glass/README.md` §3 and
    `docs/design/riviera-glass/code/MonthGrid.tsx` in full.
 4. Build **Stage 4 (month view)**, fixing the grey-on-wash contrast first, and
@@ -347,3 +430,8 @@ optional; Kevin has now asked for it.
 7. When Claude Design's pipeline files arrive: copy into `docs/design/`, commit
    that first, then assess against the real code before implementing — every
    bundle so far has contained bugs that only appeared when run.
+8. Two-way Google sync (Stage 9) comes last, per Kevin. Do not start it early.
+
+**Two things await a yes from Kevin, neither blocking Stage 4:** whether the
+week view should render calendar events (proposed treatment above), and the
+Stage 6 Today-pane merge-vs-replace question.
