@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; font-family:Inter,sans-serif; color:#1b141f;
+    background:
+      radial-gradient(1100px 620px at 12% 4%, rgba(241,204,255,.55), transparent 60%),
+      radial-gradient(900px 560px at 88% 12%, rgba(145,224,255,.45), transparent 62%),
+      radial-gradient(1000px 700px at 60% 96%, rgba(255,216,168,.42), transparent 60%),
+      #f3efeb; }
+  a { color:#7b2f9e; text-decoration:none; }
+  a:hover { color:#4d1a66; }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
+  @keyframes livePulse { 0%,100% { box-shadow:0 0 0 0 rgba(145,224,255,.55); } 50% { box-shadow:0 0 0 7px rgba(145,224,255,0); } }
+  @keyframes livePulseInk { 0%,100% { box-shadow:0 0 0 0 rgba(11,79,108,.45); } 50% { box-shadow:0 0 0 7px rgba(11,79,108,0); } }
+  @keyframes reelSpin { from { transform:rotateX(-9deg) rotateY(0deg); } to { transform:rotateX(-9deg) rotateY(360deg); } }
+  @keyframes sheen { from { background-position:-160% 0; } to { background-position:260% 0; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; } }
+</style>
+</helmet>
+
+<section style="padding:56px 56px 40px; display:flex; flex-direction:column; gap:30px;">
+  <div style="display:flex; flex-direction:column; gap:10px; max-width:900px;">
+    <span style="font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:#6b6470;">Turn 3 · Newest</span>
+    <h1 style="margin:0; font-family:'Playfair Display',serif; font-size:44px; font-weight:600; color:#1b141f; letter-spacing:-.01em;">Home screen, Riviera Glass</h1>
+    <p style="margin:0; font-size:16px; line-height:1.6; color:#4a4450; text-wrap:pretty;"><a href="#3a">3a</a> is the dashboard-as-home option in the <a href="#2a">2a</a> style: what's publishing next, ready vs behind, the week at a glance, where the pipeline is bunching up, and which platform is underfed. The calendar stays one click away — nothing moves out of it.</p>
+  </div>
+
+  <div id="3a" style="display:flex; flex-direction:column; gap:16px;">
+    <div style="display:flex; align-items:baseline; gap:14px;">
+      <span style="font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700; color:#1b141f; background:rgba(255,255,255,.85); border:1px solid rgba(20,16,20,.3); padding:4px 9px; border-radius:6px;">3a</span>
+      <span style="font-family:'Playfair Display',serif; font-size:26px; color:#1b141f;">Today, then the week</span>
+      <span style="font-size:14px; color:#6b6470;">Dashboard home · same glass system</span>
+    </div>
+
+    <div style="width:1420px; display:flex; border-radius:24px; overflow:hidden; border:1px solid rgba(255,255,255,.7); box-shadow:0 30px 70px rgba(18,52,72,.28); background:
+        radial-gradient(760px 460px at 4% 0%, rgba(214,164,240,.8), transparent 62%),
+        radial-gradient(700px 460px at 98% 6%, rgba(104,180,220,.78), transparent 62%),
+        radial-gradient(760px 500px at 72% 102%, rgba(134,200,226,.6), transparent 62%),
+        #e7ecf0;">
+
+      <div style="width:212px; flex-shrink:0; background:rgba(255,255,255,.46); backdrop-filter:blur(18px); border-right:1px solid rgba(255,255,255,.75); display:flex; flex-direction:column; padding:18px 12px; gap:22px;">
+        <div style="display:flex; align-items:center; gap:11px; padding:0 4px;">
+          <div style="width:36px; height:36px; border-radius:11px; background:linear-gradient(150deg,#f1ccff,#91e0ff); border:1px solid rgba(255,255,255,.8); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 18px rgba(123,47,158,.18);"><span style="font-family:'Playfair Display',serif; font-size:14px; font-weight:600; color:#1b141f;">MJ</span></div>
+          <div>
+            <p style="margin:0; font-size:14px; font-weight:600; color:#1b141f;">Mustache Journey</p>
+            <p style="margin:2px 0 0; font-size:12px; color:#5d5660;">Social Calendar</p>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:9px;">
+          <p style="margin:0 4px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.16em; color:#7a7280;">PLATFORMS</p>
+          <sc-for list="{{ platformRail }}" as="p" hint-placeholder-count="3">
+            <div style="display:flex; align-items:center; gap:10px; padding:8px 9px; border-radius:11px; background:rgba(255,255,255,.62); border:1px solid rgba(255,255,255,.85); transition:transform .18s ease, box-shadow .18s ease;" style-hover="transform:translateX(4px) scale(1.02); box-shadow:0 8px 18px rgba(18,52,72,.16);">
+              <span style="width:10px; height:10px; border-radius:3px; background:{{ p.color }}; box-shadow:0 0 0 1px rgba(20,16,20,.12);"></span>
+              <span style="font-size:13px; font-weight:500; color:#241f28; flex:1;">{{ p.name }}</span>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600; color:#5d5660;">{{ p.count }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <p style="margin:0 4px 6px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.16em; color:#7a7280;">NAVIGATE</p>
+          <div style="display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:11px; font-size:14px; font-weight:600; border:1px solid rgba(255,255,255,.6); background:rgba(255,255,255,.86); color:#1b141f;">
+            <span style="width:6px; height:6px; border-radius:99px; background:#0b3a50;"></span>
+            Home
+          </div>
+          <sc-for list="{{ nav }}" as="n" hint-placeholder-count="6">
+            <div style="display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:11px; font-size:14px; font-weight:500; border:1px solid rgba(255,255,255,.6); background:rgba(255,255,255,.28); color:rgba(27,20,31,.68); transition:transform .18s ease, box-shadow .18s ease;" style-hover="transform:translateX(3px); box-shadow:0 8px 16px rgba(18,52,72,.14);">
+              <span style="width:6px; height:6px; border-radius:99px; background:rgba(27,20,31,.24);"></span>
+              {{ n.label }}
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin-top:auto; padding:12px; border-radius:15px; background:rgba(255,255,255,.62); border:1px solid rgba(255,255,255,.85);">
+          <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#7a7280;">PUBLISH HEALTH</p>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:9px;">
+            <span style="width:8px; height:8px; border-radius:99px; background:#0b4f6c; animation:livePulseInk 2.4s ease-in-out infinite;"></span>
+            <span style="font-size:13px; font-weight:500; color:#1b141f;">Worker live</span>
+          </div>
+          <p style="margin:8px 0 0; font-size:12px; color:#5d5660; line-height:1.45;">IG token 41d · queue 2</p>
+        </div>
+      </div>
+
+      <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+        <div style="display:flex; align-items:center; gap:18px; padding:18px 22px; border-bottom:1px solid rgba(255,255,255,.7); background:rgba(255,255,255,.4); backdrop-filter:blur(16px);">
+          <div>
+            <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.16em; color:#5d5660;">SATURDAY · 25 JULY 2026</p>
+            <h2 style="margin:4px 0 0; font-family:'Playfair Display',serif; font-size:28px; font-weight:600; color:#1b141f;">Good evening, Kevin</h2>
+          </div>
+          <div style="margin-left:auto; display:flex; gap:9px;">
+            <sc-for list="{{ quickActions }}" as="q" hint-placeholder-count="3">
+              <div style="padding:9px 14px; border-radius:13px; background:rgba(255,255,255,.72); border:1px solid rgba(255,255,255,.9); cursor:pointer; transition:transform .2s ease, box-shadow .2s ease;" style-hover="transform:translateY(-3px); box-shadow:0 14px 24px rgba(18,52,72,.2);">
+                <p style="margin:0; font-size:13px; font-weight:600; color:#1b141f;">{{ q.label }}</p>
+                <p style="margin:2px 0 0; font-family:'JetBrains Mono',monospace; font-size:9.5px; color:#5d5660;">{{ q.hint }}</p>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="padding:18px; display:flex; flex-direction:column; gap:14px;">
+
+          <!-- hero row -->
+          <div style="display:grid; grid-template-columns:minmax(0,1.55fr) minmax(0,1fr); gap:14px;">
+            <div style="border-radius:20px; padding:16px; background:rgba(255,255,255,.66); backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,.9); box-shadow:0 16px 32px rgba(18,52,72,.16); display:flex; gap:16px;">
+              <div style="width:132px; flex-shrink:0; border-radius:14px; background-image:repeating-linear-gradient(135deg,#d8dfe6 0 8px,#e9eef2 8px 16px); border:1px solid rgba(255,255,255,.9); position:relative;">
+                <span style="position:absolute; left:8px; bottom:8px; font-family:'JetBrains Mono',monospace; font-size:9px; color:#3d4a55;">{{ hero.thumb }}</span>
+              </div>
+              <div style="min-width:0; display:flex; flex-direction:column; gap:9px;">
+                <div style="display:flex; align-items:center; gap:9px;">
+                  <span style="width:9px; height:9px; border-radius:99px; background:#0b4f6c; animation:livePulseInk 2.4s ease-in-out infinite;"></span>
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.16em; color:#0b3a50;">NEXT PUBLISH · {{ hero.countdown }}</span>
+                </div>
+                <h3 style="margin:0; font-family:'Playfair Display',serif; font-size:30px; font-weight:600; line-height:1.1; color:#150f19; overflow-wrap:anywhere;">{{ hero.title }}</h3>
+                <p style="margin:0; font-size:13.5px; line-height:1.5; color:#3d3743; text-wrap:pretty;">{{ hero.caption }}</p>
+                <div style="display:flex; flex-wrap:wrap; gap:7px; margin-top:2px;">
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; padding:4px 9px; border-radius:99px; background:rgba(126,196,231,.6); color:#0b3a50;">{{ hero.time }}</span>
+                  <span style="font-size:11px; font-weight:600; padding:4px 9px; border-radius:99px; background:rgba(226,180,246,.6); color:#5f1c80;">{{ hero.platform }}</span>
+                  <span style="font-size:11px; font-weight:600; padding:4px 9px; border-radius:99px; background:#141014; color:#f7f3ef;">{{ hero.mode }}</span>
+                </div>
+                <p style="margin:auto 0 0; font-family:'JetBrains Mono',monospace; font-size:9.5px; color:#5d5660; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ hero.dropbox }}</p>
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px;">
+              <sc-for list="{{ statsA }}" as="s" hint-placeholder-count="3">
+                <div style="border-radius:20px; padding:14px 12px; display:flex; flex-direction:column; justify-content:space-between; background:{{ s.tintGlass }}; border:1px solid rgba(255,255,255,.9); box-shadow:0 12px 24px rgba(18,52,72,.14); transition:transform .24s cubic-bezier(.2,.8,.2,1), box-shadow .24s ease;" style-hover="transform:translateY(-6px) scale(1.03); box-shadow:0 22px 34px rgba(18,52,72,.22);">
+                  <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:40px; font-weight:700; line-height:1; color:{{ s.colorLight }};">{{ s.value }}</p>
+                  <p style="margin:10px 0 0; font-size:12px; font-weight:600; color:#241f28; line-height:1.3;">{{ s.label }}</p>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- week strip -->
+          <div style="border-radius:20px; padding:14px; background:rgba(255,255,255,.5); backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,.9);">
+            <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:11px;">
+              <h4 style="margin:0; font-family:'Playfair Display',serif; font-size:19px; color:#150f19;">This week</h4>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#5d5660;">JUL 19 – 25 · BAR = READY</span>
+              <a href="#2a" style="margin-left:auto; font-family:'JetBrains Mono',monospace; font-size:10.5px; font-weight:700; letter-spacing:.1em;">OPEN CALENDAR →</a>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:10px; perspective:1200px;">
+              <sc-for list="{{ weekStrip }}" as="d" hint-placeholder-count="7">
+                <div style="min-width:0; border-radius:15px; padding:11px 10px; display:flex; flex-direction:column; gap:9px; background:{{ d.bg }}; border:1px solid {{ d.border }}; box-shadow:{{ d.ring }}; transition:transform .26s cubic-bezier(.2,.8,.2,1);" style-hover="transform:translateY(-5px) rotateX(6deg) scale(1.03);">
+                  <div style="display:flex; align-items:baseline; gap:6px;">
+                    <span style="font-family:'Playfair Display',serif; font-size:24px; font-weight:600; line-height:1; color:#150f19;">{{ d.num }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.12em; font-weight:600; color:rgba(21,15,25,.72);">{{ d.dow }}</span>
+                    <span style="margin-left:auto; font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; color:#150f19; background:rgba(255,255,255,.82); border-radius:99px; padding:2px 6px;">{{ d.count }}</span>
+                  </div>
+                  <div style="height:5px; border-radius:99px; background:rgba(255,255,255,.72); overflow:hidden;">
+                    <div style="height:100%; border-radius:99px; background:#150f19; transition:width .9s cubic-bezier(.2,.8,.2,1); width:{{ d.pct }};"></div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- bottom row -->
+          <div style="display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) minmax(0,.8fr); gap:14px;">
+
+            <div style="border-radius:20px; padding:14px; background:rgba(255,255,255,.6); backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,.9); display:flex; flex-direction:column; gap:10px;">
+              <div style="display:flex; align-items:baseline; gap:10px;">
+                <h4 style="margin:0; font-family:'Playfair Display',serif; font-size:19px; color:#150f19;">Pipeline load</h4>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#5d5660;">WHERE IT'S BUNCHING</span>
+              </div>
+              <sc-for list="{{ stageBars }}" as="b" hint-placeholder-count="6">
+                <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+                  <span style="font-size:12px; font-weight:600; color:#241f28; width:76px; flex-shrink:0;">{{ b.name }}</span>
+                  <div style="flex:1; min-width:0; height:14px; border-radius:99px; background:rgba(255,255,255,.72); overflow:hidden;">
+                    <div style="height:100%; border-radius:99px; background:linear-gradient(90deg,#4a98ce,#7ec4e7); transition:width .9s cubic-bezier(.2,.8,.2,1); width:{{ b.pct }};"></div>
+                  </div>
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; color:#0b3a50; width:16px; text-align:right;">{{ b.count }}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="border-radius:20px; padding:14px; background:rgba(255,255,255,.6); backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,.9); display:flex; flex-direction:column; gap:10px;">
+              <div style="display:flex; align-items:baseline; gap:10px;">
+                <h4 style="margin:0; font-family:'Playfair Display',serif; font-size:19px; color:#150f19;">Platform balance</h4>
+              </div>
+              <sc-for list="{{ platformBalance }}" as="p" hint-placeholder-count="3">
+                <div style="border-radius:13px; padding:9px 11px; background:{{ p.tint }}; border:1px solid rgba(255,255,255,.85); display:flex; flex-direction:column; gap:6px; transition:transform .22s ease, box-shadow .22s ease;" style-hover="transform:translateY(-4px); box-shadow:0 14px 22px rgba(18,52,72,.18);">
+                  <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+                    <span style="font-size:12.5px; font-weight:700; color:{{ p.ink }};">{{ p.name }}</span>
+                    <span style="margin-left:auto; font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:600; color:{{ p.ink }};">{{ p.count }}</span>
+                  </div>
+                  <div style="height:5px; border-radius:99px; background:rgba(255,255,255,.8); overflow:hidden;">
+                    <div style="height:100%; border-radius:99px; background:{{ p.ink }}; transition:width .9s cubic-bezier(.2,.8,.2,1); width:{{ p.pct }};"></div>
+                  </div>
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:{{ p.ink }};">{{ p.note }}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="border-radius:20px; padding:14px; background:linear-gradient(160deg, rgba(214,164,240,.6), rgba(104,180,220,.55)); border:1px solid rgba(255,255,255,.9); display:flex; flex-direction:column; gap:10px;">
+              <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#3d3743;">READY REEL · 6 EXPORTS</p>
+              <div style="flex:1; min-height:170px; perspective:620px; display:flex; align-items:center; justify-content:center;">
+                <div style="position:relative; width:76px; height:118px; transform-style:preserve-3d; animation:reelSpin 22s linear infinite;">
+                  <div style="position:absolute; inset:0; border-radius:10px; transform:rotateY(0deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#3f7fa8 0 6px,#e5edf3 6px 12px); border:1px solid rgba(21,15,25,.4); box-shadow:0 10px 20px rgba(18,52,72,.3);"></div>
+                  <div style="position:absolute; inset:0; border-radius:10px; transform:rotateY(60deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#3f7fa8 0 6px,#eee7f1 6px 12px); border:1px solid rgba(21,15,25,.4); box-shadow:0 10px 20px rgba(18,52,72,.3);"></div>
+                  <div style="position:absolute; inset:0; border-radius:10px; transform:rotateY(120deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#3f7fa8 0 6px,#f4eedd 6px 12px); border:1px solid rgba(21,15,25,.4); box-shadow:0 10px 20px rgba(18,52,72,.3);"></div>
+                  <div style="position:absolute; inset:0; border-radius:10px; transform:rotateY(180deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#3f7fa8 0 6px,#e5edf3 6px 12px); border:1px solid rgba(21,15,25,.4); box-shadow:0 10px 20px rgba(18,52,72,.3);"></div>
+                  <div style="position:absolute; inset:0; border-radius:10px; transform:rotateY(240deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#3f7fa8 0 6px,#eee7f1 6px 12px); border:1px solid rgba(21,15,25,.4); box-shadow:0 10px 20px rgba(18,52,72,.3);"></div>
+                  <div style="position:absolute; inset:0; border-radius:10px; transform:rotateY(300deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#3f7fa8 0 6px,#f4eedd 6px 12px); border:1px solid rgba(21,15,25,.4); box-shadow:0 10px 20px rgba(18,52,72,.3);"></div>
+                </div>
+              </div>
+              <p style="margin:0; font-size:12px; color:#2b2530; line-height:1.45; text-wrap:pretty;">Drag one onto a day, or drop it straight into the next open slot.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:26px; align-items:flex-start; margin-top:10px;">
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="330px,700px">
+        <div style="height:100%; padding:60px 12px 34px; display:flex; flex-direction:column; gap:11px; font-family:Inter,sans-serif; background:
+            radial-gradient(320px 240px at 10% 0%, rgba(214,164,240,.85), transparent 62%),
+            radial-gradient(300px 260px at 95% 22%, rgba(104,180,220,.8), transparent 62%),
+            radial-gradient(340px 300px at 60% 100%, rgba(134,200,226,.7), transparent 62%),
+            #e7ecf0;">
+          <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.16em; color:#4a4450;">SAT 25 JULY</p>
+          <div style="border-radius:17px; padding:12px; background:rgba(255,255,255,.74); border:1px solid rgba(255,255,255,.9); box-shadow:0 8px 20px rgba(18,52,72,.16); display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="width:8px; height:8px; border-radius:99px; background:#0b4f6c; animation:livePulseInk 2.4s ease-in-out infinite;"></span>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:.14em; color:#0b3a50;">NEXT · {{ hero.countdown }}</span>
+            </div>
+            <div style="display:flex; gap:10px;">
+              <span style="width:56px; height:72px; border-radius:9px; flex-shrink:0; background-image:repeating-linear-gradient(135deg,#d8dfe6 0 6px,#e9eef2 6px 12px);"></span>
+              <div style="min-width:0; display:flex; flex-direction:column; gap:6px;">
+                <p style="margin:0; font-family:'Playfair Display',serif; font-size:19px; font-weight:600; line-height:1.15; color:#150f19;">{{ hero.title }}</p>
+                <span style="align-self:flex-start; font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; padding:3px 8px; border-radius:99px; background:rgba(126,196,231,.6); color:#0b3a50;">{{ hero.time }}</span>
+              </div>
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px;">
+            <sc-for list="{{ statsA }}" as="s" hint-placeholder-count="3">
+              <div style="padding:9px; border-radius:13px; background:{{ s.tintGlass }}; border:1px solid rgba(255,255,255,.88);">
+                <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:22px; font-weight:700; color:{{ s.colorLight }};">{{ s.value }}</p>
+                <p style="margin:4px 0 0; font-size:9.5px; font-weight:600; color:#241f28;">{{ s.label }}</p>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px;">
+            <sc-for list="{{ weekStrip }}" as="d" hint-placeholder-count="7">
+              <div style="min-width:0; border-radius:10px; padding:7px 4px; text-align:center; background:{{ d.bg }}; border:1px solid {{ d.border }};">
+                <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:8.5px; letter-spacing:.06em; color:rgba(21,15,25,.75);">{{ d.dow }}</p>
+                <p style="margin:3px 0 0; font-family:'Playfair Display',serif; font-size:15px; font-weight:600; color:#150f19;">{{ d.num }}</p>
+                <p style="margin:2px 0 0; font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:700; color:#150f19;">{{ d.count }}</p>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px; overflow:hidden;">
+            <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:9.5px; letter-spacing:.14em; color:#4a4450;">TODAY</p>
+            <sc-for list="{{ mobileCards }}" as="c" hint-placeholder-count="3">
+              <div style="display:flex; gap:10px; padding:8px; border-radius:14px; background:rgba(255,255,255,.8); border:1px solid rgba(255,255,255,.9); animation:fadeUp .5s cubic-bezier(.2,.8,.2,1) both; animation-delay:{{ c.delay }};">
+                <span style="width:40px; height:52px; border-radius:8px; flex-shrink:0; background-image:repeating-linear-gradient(135deg,#d8dfe6 0 6px,#e9eef2 6px 12px);"></span>
+                <div style="min-width:0; display:flex; flex-direction:column; gap:4px;">
+                  <p style="margin:0; font-size:12.5px; font-weight:600; color:#150f19; line-height:1.3;">{{ c.title }}</p>
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; color:#5d5660;">{{ c.time }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </x-import>
+      <div style="width:300px; padding-top:8px; display:flex; flex-direction:column; gap:12px;">
+        <p style="margin:0; font-size:14px; line-height:1.6; color:#4a4450; text-wrap:pretty;">The hero answers "what's going out and when" without a click — countdown, caption, publish mode, and the actual Dropbox master it will send. Counters sit beside it, so ready-vs-behind is the same glance.</p>
+        <p style="margin:0; font-size:14px; line-height:1.6; color:#4a4450; text-wrap:pretty;">Below that: the week as seven tinted chips (bar = ready share), pipeline load so you can see where work is stacking, and platform balance calling out what's underfed. "Open calendar" goes straight to <a href="#2a">2a</a>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding:16px 56px 40px; display:flex; flex-direction:column; gap:30px;">
+  <div style="display:flex; flex-direction:column; gap:10px; max-width:900px;">
+    <span style="font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:#6b6470;">Turn 2 · Newest</span>
+    <h1 style="margin:0; font-family:'Playfair Display',serif; font-size:44px; font-weight:600; color:#1b141f; letter-spacing:-.01em;">Riviera Glass</h1>
+    <p style="margin:0; font-size:16px; line-height:1.6; color:#4a4450; text-wrap:pretty;"><a href="#2a">2a</a> takes the bones of <a href="#1b">1b</a> and drops the black: a deep blue and violet wash behind frosted panels, with weekdays tinted blue and weekends warm yellow so the working week reads as one block. Text stays near-black on translucent white so nothing goes pale. Hover pop, the 3D ready-reel and the counters carry over.</p>
+  </div>
+
+  <div id="2a" style="display:flex; flex-direction:column; gap:16px;">
+    <div style="display:flex; align-items:baseline; gap:14px;">
+      <span style="font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700; color:#1b141f; background:rgba(255,255,255,.85); border:1px solid rgba(20,16,20,.3); padding:4px 9px; border-radius:6px;">2a</span>
+      <span style="font-family:'Playfair Display',serif; font-size:26px; color:#1b141f;">Riviera Glass</span>
+      <span style="font-size:14px; color:#6b6470;">Colour wash · frosted surfaces · weekday blue / weekend yellow</span>
+    </div>
+
+    <div style="width:1420px; display:flex; border-radius:24px; overflow:hidden; border:1px solid rgba(255,255,255,.7); box-shadow:0 30px 70px rgba(18,52,72,.28); background:
+        radial-gradient(760px 460px at 4% 0%, rgba(214,164,240,.8), transparent 62%),
+        radial-gradient(700px 460px at 98% 6%, rgba(104,180,220,.78), transparent 62%),
+        radial-gradient(760px 500px at 72% 102%, rgba(134,200,226,.6), transparent 62%),
+        #e7ecf0;">
+
+      <!-- sidebar -->
+      <div style="width:212px; flex-shrink:0; background:rgba(255,255,255,.46); backdrop-filter:blur(18px); border-right:1px solid rgba(255,255,255,.75); display:flex; flex-direction:column; padding:18px 12px; gap:22px;">
+        <div style="display:flex; align-items:center; gap:11px; padding:0 4px;">
+          <div style="width:36px; height:36px; border-radius:11px; background:linear-gradient(150deg,#f1ccff,#91e0ff); border:1px solid rgba(255,255,255,.8); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 18px rgba(123,47,158,.18);"><span style="font-family:'Playfair Display',serif; font-size:14px; font-weight:600; color:#1b141f;">MJ</span></div>
+          <div>
+            <p style="margin:0; font-size:14px; font-weight:600; color:#1b141f;">Mustache Journey</p>
+            <p style="margin:2px 0 0; font-size:12px; color:#5d5660;">Social Calendar</p>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:9px;">
+          <p style="margin:0 4px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.16em; color:#7a7280;">PLATFORMS</p>
+          <sc-for list="{{ platformRail }}" as="p" hint-placeholder-count="3">
+            <div style="display:flex; align-items:center; gap:10px; padding:8px 9px; border-radius:11px; background:rgba(255,255,255,.62); border:1px solid rgba(255,255,255,.85); transition:transform .18s ease, box-shadow .18s ease;" style-hover="transform:translateX(4px) scale(1.02); box-shadow:0 8px 18px rgba(63,43,80,.14);">
+              <span style="width:10px; height:10px; border-radius:3px; background:{{ p.color }}; box-shadow:0 0 0 1px rgba(20,16,20,.12);"></span>
+              <span style="font-size:13px; font-weight:500; color:#241f28; flex:1;">{{ p.name }}</span>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600; color:#5d5660;">{{ p.count }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <p style="margin:0 4px 6px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.16em; color:#7a7280;">NAVIGATE</p>
+          <sc-for list="{{ nav }}" as="n" hint-placeholder-count="6">
+            <div style="display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:11px; font-size:14px; border:1px solid rgba(255,255,255,.6); transition:transform .18s ease, box-shadow .18s ease; background:{{ n.bgGlass }}; color:{{ n.fgGlass }}; font-weight:{{ n.weight }};" style-hover="transform:translateX(3px); box-shadow:0 8px 16px rgba(63,43,80,.12);">
+              <span style="width:6px; height:6px; border-radius:99px; background:{{ n.dotGlass }};"></span>
+              {{ n.label }}
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin-top:auto; padding:12px; border-radius:15px; background:rgba(255,255,255,.62); border:1px solid rgba(255,255,255,.85);">
+          <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#7a7280;">PUBLISH HEALTH</p>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:9px;">
+            <span style="width:8px; height:8px; border-radius:99px; background:#0b4f6c; animation:livePulseInk 2.4s ease-in-out infinite;"></span>
+            <span style="font-size:13px; font-weight:500; color:#1b141f;">Worker live</span>
+          </div>
+          <p style="margin:8px 0 0; font-size:12px; color:#5d5660; line-height:1.45;">IG token 41d · queue 2</p>
+        </div>
+      </div>
+
+      <!-- main -->
+      <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+        <div style="display:flex; align-items:center; gap:18px; padding:18px 22px; border-bottom:1px solid rgba(255,255,255,.7); background:rgba(255,255,255,.4); backdrop-filter:blur(16px);">
+          <div>
+            <h2 style="margin:0; font-family:'Playfair Display',serif; font-size:28px; font-weight:600; color:#1b141f;">July 2026</h2>
+            <p style="margin:3px 0 0; font-family:'JetBrains Mono',monospace; font-size:12px; color:#5d5660;">WEEK 30 · JUL 19 – 25</p>
+          </div>
+          <div style="display:flex; gap:4px; padding:4px; background:rgba(255,255,255,.45); border:1px solid rgba(255,255,255,.85); border-radius:13px;">
+            <sc-for list="{{ viewsC }}" as="v" hint-placeholder-count="2">
+              <div onClick="{{ v.onClick }}" style="padding:7px 16px; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; transition:background .22s cubic-bezier(.2,.8,.2,1), color .22s ease, box-shadow .22s ease; background:{{ v.bgGlass }}; color:{{ v.fgGlass }};" style-hover="box-shadow:0 6px 14px rgba(63,43,80,.14);">{{ v.label }}</div>
+            </sc-for>
+          </div>
+          <div style="margin-left:auto; display:flex; align-items:center; gap:12px; padding:9px 14px; border-radius:13px; background:rgba(145,224,255,.42); border:1px solid rgba(255,255,255,.85);">
+            <span style="width:8px; height:8px; border-radius:99px; background:#0b4f6c; animation:livePulseInk 2.4s ease-in-out infinite;"></span>
+            <div>
+              <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#2f5f75;">NEXT PUBLISH</p>
+              <p style="margin:2px 0 0; font-size:13px; font-weight:600; color:#0b3a50;">Monaco night drive · 18:30</p>
+            </div>
+          </div>
+          <div style="padding:10px 18px; border-radius:13px; background:linear-gradient(140deg,#f1ccff,#dcb4f0); border:1px solid rgba(255,255,255,.8); color:#1b141f; font-size:13px; font-weight:700; cursor:pointer; transition:transform .2s ease, box-shadow .2s ease;" style-hover="transform:translateY(-3px) scale(1.03); box-shadow:0 14px 26px rgba(123,47,158,.28);">New post</div>
+        </div>
+
+        <div style="display:flex; min-height:660px;">
+          <div style="flex:1; min-width:0; padding:16px 14px 20px;">
+
+            <sc-if value="{{ weekC }}" hint-placeholder-val="{{ true }}">
+              <div style="display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:10px; perspective:1400px;">
+                <sc-for list="{{ colsC }}" as="col" hint-placeholder-count="7">
+                  <div style="display:flex; flex-direction:column; gap:9px; min-width:0; padding:11px 9px 13px; border-radius:18px; backdrop-filter:blur(12px); background:{{ col.bgGlass }}; border:1px solid {{ col.borderGlass }};">
+                    <div style="display:flex; align-items:baseline; gap:7px;">
+                      <span style="font-family:'Playfair Display',serif; font-size:31px; font-weight:600; line-height:1; color:{{ col.numGlass }};">{{ col.num }}</span>
+                      <span style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.14em; font-weight:500; color:{{ col.dowGlass }};">{{ col.dow }}</span>
+                    </div>
+                    <div>
+                      <div style="height:4px; border-radius:99px; background:rgba(255,255,255,.75); overflow:hidden;">
+                        <div style="height:100%; border-radius:99px; background:#1b141f; transition:width .9s cubic-bezier(.2,.8,.2,1); width:{{ col.pct }};"></div>
+                      </div>
+                      <p style="margin:5px 0 0; font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:500; color:#4a4450;">{{ col.readyLabel }}</p>
+                    </div>
+                    <sc-for list="{{ col.cards }}" as="c" hint-placeholder-count="2">
+                      <div style="animation:fadeUp .55s cubic-bezier(.2,.8,.2,1) both; animation-delay:{{ c.delay }};">
+                        <div style="border-radius:14px; overflow:hidden; background:rgba(255,255,255,.88); border:1px solid rgba(255,255,255,.9); cursor:pointer; transform-style:preserve-3d; transition:transform .3s cubic-bezier(.2,.8,.2,1), box-shadow .3s ease; box-shadow:0 3px 8px rgba(63,43,80,.1);" style-hover="transform:translateY(-7px) rotateX(7deg) rotateY(-5deg) scale(1.04); box-shadow:0 26px 42px rgba(63,43,80,.28); background:#ffffff;">
+                          <sc-if value="{{ ui.showMedia }}" hint-placeholder-val="{{ true }}">
+                            <div style="position:relative; height:{{ ui.thumbH }}; background-image:repeating-linear-gradient(135deg,#ded5e2 0 7px,#ece5ee 7px 14px);">
+                              <span style="position:absolute; left:7px; bottom:6px; font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:.06em; color:#5d5660;">{{ c.thumb }}</span>
+                              <span style="position:absolute; right:6px; top:6px; width:8px; height:8px; border-radius:99px; background:{{ c.pfColor }}; box-shadow:0 0 0 1.5px rgba(255,255,255,.9);"></span>
+                            </div>
+                          </sc-if>
+                          <div style="padding:8px 9px 9px; display:flex; flex-direction:column; gap:6px;">
+                            <p style="margin:0; font-size:12.5px; font-weight:600; line-height:1.35; overflow-wrap:anywhere; color:#1b141f; text-wrap:pretty;">{{ c.title }}</p>
+                            <div style="display:flex; align-items:center; flex-wrap:wrap; gap:5px;">
+                              <span style="font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:500; color:#5d5660;">{{ c.time }}</span>
+                              <span style="margin-left:auto; font-size:10px; font-weight:600; padding:2px 7px; border-radius:99px; white-space:nowrap; flex-shrink:0; background:{{ c.stageBgLight }}; color:{{ c.stageFgLight }};">{{ c.stage }}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </sc-for>
+                    <sc-if value="{{ col.hasStack }}" hint-placeholder-val="{{ false }}">
+                      <div onClick="{{ col.onToggle }}" style="position:relative; height:40px; cursor:pointer;">
+                        <div style="position:absolute; inset:8px 6px 0; border-radius:12px; background:rgba(255,255,255,.5); border:1px solid rgba(255,255,255,.7);"></div>
+                        <div style="position:absolute; inset:4px 3px 4px; border-radius:12px; background:rgba(255,255,255,.68); border:1px solid rgba(255,255,255,.8);"></div>
+                        <div style="position:absolute; inset:0 0 8px; border-radius:12px; background:rgba(255,255,255,.94); border:1px solid rgba(20,16,20,.35); display:flex; align-items:center; justify-content:center; transition:transform .22s ease, box-shadow .22s ease;" style-hover="transform:translateY(-4px); box-shadow:0 12px 22px rgba(63,43,80,.2);">
+                          <span style="font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:600; color:#1b141f;">{{ col.stackLabel }}</span>
+                        </div>
+                      </div>
+                    </sc-if>
+                    <div onClick="{{ col.onAdd }}" style="margin-top:2px; padding:6px; border-radius:11px; border:1px dashed rgba(27,20,31,.32); text-align:center; font-size:11px; font-weight:500; color:#4a4450; cursor:pointer; transition:background .18s ease, border-color .18s ease;" style-hover="background:rgba(255,255,255,.7); border-color:#1b141f;">+ post</div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ monthC }}" hint-placeholder-val="{{ false }}">
+              <div style="animation:fadeUp .4s ease both;">
+                <div style="display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px; margin-bottom:8px;">
+                  <sc-for list="{{ dowNames }}" as="d" hint-placeholder-count="7">
+                    <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.16em; color:#5d5660; padding-left:4px;">{{ d.label }}</p>
+                  </sc-for>
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px; perspective:1400px;">
+                  <sc-for list="{{ monthCells }}" as="m" hint-placeholder-count="35">
+                    <div style="min-height:158px; min-width:0; padding:9px 8px; border-radius:15px; backdrop-filter:blur(10px); background:{{ m.bgGlass }}; border:1px solid {{ m.borderGlass }}; display:flex; flex-direction:column; gap:6px; transition:transform .26s cubic-bezier(.2,.8,.2,1), box-shadow .26s ease;" style-hover="transform:translateY(-5px) scale(1.02); box-shadow:0 18px 30px rgba(11,79,108,.24);">
+                      <div style="display:flex; align-items:baseline; gap:6px; min-width:0;">
+                        <span style="font-family:'Playfair Display',serif; font-size:19px; font-weight:600; line-height:1; color:{{ m.numGlass }};">{{ m.num }}</span>
+                        <sc-if value="{{ m.hasAny }}" hint-placeholder-val="{{ true }}">
+                          <span style="margin-left:auto; font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:700; color:#0b3a50; background:rgba(255,255,255,.8); border-radius:99px; padding:2px 6px;">{{ m.countLabel }}</span>
+                        </sc-if>
+                      </div>
+                      <sc-for list="{{ m.items }}" as="it" hint-placeholder-count="3">
+                        <div style="display:flex; flex-direction:column; gap:3px; min-width:0; padding:5px 7px; border-radius:9px; background:rgba(255,255,255,.9); border-left:3px solid {{ it.pfInk }}; box-shadow:0 1px 3px rgba(11,79,108,.12);">
+                          <div style="display:flex; align-items:center; gap:5px; min-width:0;">
+                            <span style="font-family:'JetBrains Mono',monospace; font-size:9.5px; font-weight:700; color:#0b3a50;">{{ it.time }}</span>
+                            <span style="font-family:'JetBrains Mono',monospace; font-size:8.5px; font-weight:700; letter-spacing:.06em; color:#150f19; background:{{ it.codeTint }}; border-radius:4px; padding:1px 4px;">{{ it.code }}</span>
+                          </div>
+                          <span style="font-size:10.5px; font-weight:600; line-height:1.28; color:#150f19; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{{ it.title }}</span>
+                        </div>
+                      </sc-for>
+                      <sc-if value="{{ m.more }}" hint-placeholder-val="{{ false }}">
+                        <span style="font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:600; color:#0b3a50; padding-left:3px;">{{ m.moreLabel }}</span>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="width:288px; flex-shrink:0; border-left:1px solid rgba(255,255,255,.7); background:rgba(255,255,255,.42); backdrop-filter:blur(18px); padding:16px 15px; display:flex; flex-direction:column; gap:14px;">
+            <div>
+              <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.16em; color:#7a7280;">TODAY · SAT 25</p>
+              <h3 style="margin:6px 0 0; font-family:'Playfair Display',serif; font-size:22px; font-weight:600; color:#1b141f;">Three out the door</h3>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px;">
+              <sc-for list="{{ statsA }}" as="s" hint-placeholder-count="3">
+                <div style="padding:10px 9px; border-radius:14px; background:{{ s.tintGlass }}; border:1px solid rgba(255,255,255,.85); transition:transform .22s ease, box-shadow .22s ease;" style-hover="transform:translateY(-4px); box-shadow:0 14px 24px rgba(63,43,80,.18);">
+                  <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:26px; font-weight:700; line-height:1; color:{{ s.colorLight }};">{{ s.value }}</p>
+                  <p style="margin:6px 0 0; font-size:10.5px; font-weight:500; color:#3d3743; line-height:1.3;">{{ s.label }}</p>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="padding:13px; border-radius:17px; background:linear-gradient(160deg, rgba(241,204,255,.6), rgba(145,224,255,.5)); border:1px solid rgba(255,255,255,.85); display:flex; flex-direction:column; gap:11px;">
+              <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#4a4450;">READY REEL</p>
+              <div style="height:150px; perspective:620px; display:flex; align-items:center; justify-content:center;">
+                <div style="position:relative; width:76px; height:118px; transform-style:preserve-3d; animation:reelSpin 22s linear infinite;">
+                  <div style="position:absolute; inset:0; border-radius:10px; transform:rotateY(0deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#3f7fa8 0 6px,#eee7f1 6px 12px); border:1px solid rgba(21,15,25,.4); box-shadow:0 10px 20px rgba(18,52,72,.3);"></div>
+                  <div style="position:absolute; inset:0; border-radius:10px; transform:rotateY(60deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#3f7fa8 0 6px,#e7eef4 6px 12px); border:1px solid rgba(21,15,25,.4); box-shadow:0 10px 20px rgba(18,52,72,.3);"></div>
+                  <div style="position:absolute; inset:0; border-radius:10px; transform:rotateY(120deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#3f7fa8 0 6px,#f4ecdf 6px 12px); border:1px solid rgba(21,15,25,.4); box-shadow:0 10px 20px rgba(18,52,72,.3);"></div>
+                  <div style="position:absolute; inset:0; border-radius:10px; transform:rotateY(180deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#3f7fa8 0 6px,#eae6f4 6px 12px); border:1px solid rgba(21,15,25,.4); box-shadow:0 10px 20px rgba(18,52,72,.3);"></div>
+                  <div style="position:absolute; inset:0; border-radius:10px; transform:rotateY(240deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#3f7fa8 0 6px,#e6f1ec 6px 12px); border:1px solid rgba(21,15,25,.4); box-shadow:0 10px 20px rgba(18,52,72,.3);"></div>
+                  <div style="position:absolute; inset:0; border-radius:10px; transform:rotateY(300deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#3f7fa8 0 6px,#f1e7ee 6px 12px); border:1px solid rgba(21,15,25,.4); box-shadow:0 10px 20px rgba(18,52,72,.3);"></div>
+                </div>
+              </div>
+              <p style="margin:0; font-size:12px; color:#3d3743; line-height:1.45; text-wrap:pretty;">6 exports sitting in Dropbox / Ready to Post. Drag one onto a day to schedule.</p>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:7px;">
+              <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#7a7280;">AGENDA</p>
+              <sc-for list="{{ agenda }}" as="a" hint-placeholder-count="4">
+                <div style="display:flex; gap:9px; align-items:center; padding:8px 9px; border-radius:12px; background:rgba(255,255,255,.72); border:1px solid rgba(255,255,255,.9); transition:transform .2s ease, box-shadow .2s ease;" style-hover="transform:translateX(4px); box-shadow:0 10px 18px rgba(63,43,80,.14);">
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:500; color:#4a4450; width:42px;">{{ a.time }}</span>
+                  <span style="width:4px; height:20px; border-radius:99px; background:{{ a.inkColor }};"></span>
+                  <span style="font-size:12px; font-weight:500; color:#1b141f; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ a.title }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid rgba(255,255,255,.7); background:rgba(255,255,255,.3); padding:16px 18px 24px;">
+          <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:12px;">
+            <h3 style="margin:0; font-family:'Playfair Display',serif; font-size:20px; color:#1b141f;">Pipeline</h3>
+            <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#5d5660;">DEPTH PLANES — LATER STAGES SIT CLOSER</span>
+          </div>
+          <div style="display:flex; gap:18px; perspective:1500px; perspective-origin:50% 40%;">
+            <sc-for list="{{ pipeline }}" as="s" hint-placeholder-count="6">
+              <div style="flex:1; min-width:0; transform:translateZ({{ s.z }}); transition:transform .35s cubic-bezier(.2,.8,.2,1);" style-hover="transform:translateZ(70px);">
+                <div style="border-radius:16px; backdrop-filter:blur(12px); background:{{ s.bgGlass }}; border:1px solid {{ s.borderGlass }}; padding:10px; display:flex; flex-direction:column; gap:8px; box-shadow:0 16px 28px rgba(63,43,80,.16);">
+                  <div style="display:flex; align-items:center; gap:7px;">
+                    <span style="font-size:12px; font-weight:700; color:#1b141f;">{{ s.name }}</span>
+                    <span style="margin-left:auto; font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:600; color:#5d5660;">{{ s.count }}</span>
+                  </div>
+                  <sc-for list="{{ s.cards }}" as="c" hint-placeholder-count="2">
+                    <div style="display:flex; gap:8px; padding:7px; border-radius:12px; background:rgba(255,255,255,.86); border:1px solid rgba(255,255,255,.9); cursor:pointer; transition:transform .25s ease, box-shadow .25s ease;" style-hover="transform:translateY(-4px) scale(1.02); box-shadow:0 14px 22px rgba(63,43,80,.2);">
+                      <span style="width:30px; height:38px; border-radius:7px; flex-shrink:0; background-image:repeating-linear-gradient(135deg,#ded5e2 0 5px,#ece5ee 5px 10px);"></span>
+                      <div style="min-width:0;">
+                        <p style="margin:0; font-size:11.5px; font-weight:600; color:#1b141f; line-height:1.3;">{{ c.title }}</p>
+                        <p style="margin:4px 0 0; font-family:'JetBrains Mono',monospace; font-size:9.5px; color:#5d5660;">{{ c.meta }}</p>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:26px; align-items:flex-start; margin-top:10px;">
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="330px,700px">
+        <div style="height:100%; padding:60px 12px 34px; display:flex; flex-direction:column; gap:12px; font-family:Inter,sans-serif; background:
+            radial-gradient(320px 240px at 10% 0%, rgba(214,164,240,.85), transparent 62%),
+            radial-gradient(300px 260px at 95% 22%, rgba(104,180,220,.8), transparent 62%),
+            radial-gradient(340px 300px at 60% 100%, rgba(134,200,226,.7), transparent 62%),
+            #e7ecf0;">
+          <div style="display:flex; align-items:baseline; gap:9px;">
+            <h2 style="margin:0; font-family:'Playfair Display',serif; font-size:25px; color:#1b141f;">Sat 25</h2>
+            <span style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#5d5660;">JULY</span>
+            <span style="margin-left:auto; width:8px; height:8px; border-radius:99px; background:#0b4f6c; animation:livePulseInk 2.4s ease-in-out infinite;"></span>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:7px;">
+            <sc-for list="{{ statsA }}" as="s" hint-placeholder-count="3">
+              <div style="padding:8px; border-radius:13px; background:{{ s.tintGlass }}; border:1px solid rgba(255,255,255,.85);">
+                <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:20px; font-weight:700; color:{{ s.colorLight }};">{{ s.value }}</p>
+                <p style="margin:4px 0 0; font-size:9.5px; font-weight:500; color:#3d3743;">{{ s.label }}</p>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:9px; overflow:hidden;">
+            <sc-for list="{{ mobileCards }}" as="c" hint-placeholder-count="4">
+              <div style="display:flex; gap:10px; padding:9px; border-radius:15px; background:rgba(255,255,255,.82); border:1px solid rgba(255,255,255,.9); box-shadow:0 4px 12px rgba(63,43,80,.1); animation:fadeUp .5s cubic-bezier(.2,.8,.2,1) both; animation-delay:{{ c.delay }};">
+                <span style="width:52px; height:66px; border-radius:9px; flex-shrink:0; background-image:repeating-linear-gradient(135deg,#ded5e2 0 6px,#ece5ee 6px 12px);"></span>
+                <div style="min-width:0; display:flex; flex-direction:column; gap:5px;">
+                  <p style="margin:0; font-size:13px; font-weight:600; color:#1b141f; line-height:1.3;">{{ c.title }}</p>
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#5d5660;">{{ c.time }}</span>
+                  <span style="align-self:flex-start; font-size:10px; font-weight:600; padding:3px 8px; border-radius:99px; background:{{ c.stageBgLight }}; color:{{ c.stageFgLight }};">{{ c.stage }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </x-import>
+      <div style="width:300px; padding-top:8px; display:flex; flex-direction:column; gap:12px;">
+        <p style="margin:0; font-size:14px; line-height:1.6; color:#4a4450; text-wrap:pretty;">Mon–Fri share one blue, Sat and Sun a warm yellow on the opposite side of the wheel, so the working week reads as a single block and the weekend stands apart before you read any date. Cards sit on frosted white above it, which keeps titles near-black and the media thumbnails clean.</p>
+        <p style="margin:0; font-size:14px; line-height:1.6; color:#4a4450; text-wrap:pretty;">Hover behaviour is the one from <a href="#1b">1b</a>, pushed further: cards, stat tiles, agenda rows, nav items and pipeline planes all lift toward you.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding:16px 56px 96px; display:flex; flex-direction:column; gap:34px;">
+  <div style="display:flex; flex-direction:column; gap:10px; max-width:900px;">
+    <span style="font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:#6b6470;">Turn 1 · First two directions</span>
+    <h1 style="margin:0; font-family:'Playfair Display',serif; font-size:44px; font-weight:600; color:#1b141f; letter-spacing:-.01em;">Social Calendar — depth, contrast, motion</h1>
+    <p style="margin:0; font-size:16px; line-height:1.6; color:#4a4450; text-wrap:pretty;">Same functionality, two visual systems. <a href="#1a">1a</a> goes dark and cinematic; <a href="#1b">1b</a> stays on the porcelain brand but rebuilds contrast and hierarchy. Both fix the cramped month grid, the unreadable dates, and the scrolling Today pane, and both carry 3D card tilt, stacked day decks, staggered load-in and live status pulse. Switch Week ↔ Month inside each mock.</p>
+  </div>
+
+  <div style="display:flex; flex-wrap:wrap; gap:44px; align-items:flex-start;">
+
+    <!-- ═══════════ 1a — NIGHT DESK ═══════════ -->
+    <div id="1a" style="display:flex; flex-direction:column; gap:16px;">
+      <div style="display:flex; align-items:baseline; gap:14px;">
+        <span style="font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700; color:#141317; background:#f1ccff; padding:4px 9px; border-radius:6px;">1a</span>
+        <span style="font-family:'Playfair Display',serif; font-size:26px; color:#1b141f;">Night Desk</span>
+        <span style="font-size:14px; color:#6b6470;">Cinematic dark shell · media-forward · amethyst signal colour</span>
+      </div>
+
+      <div style="width:1420px; display:flex; background:#0e0d11; border:1px solid #2a2732; border-radius:22px; overflow:hidden; box-shadow:0 40px 90px rgba(0,0,0,.55);">
+
+        <!-- sidebar -->
+        <div style="width:212px; flex-shrink:0; background:#141317; border-right:1px solid #26232e; display:flex; flex-direction:column; padding:18px 12px; gap:22px;">
+          <div style="display:flex; align-items:center; gap:11px; padding:0 4px;">
+            <div style="width:36px; height:36px; border-radius:11px; background:linear-gradient(145deg,#f1ccff,#b98fd6); display:flex; align-items:center; justify-content:center; box-shadow:0 6px 16px rgba(241,204,255,.22);"><span style="font-family:'Playfair Display',serif; font-size:14px; font-weight:600; color:#1b1820;">MJ</span></div>
+            <div>
+              <p style="margin:0; font-size:14px; font-weight:600; color:#f6f4f2;">Mustache Journey</p>
+              <p style="margin:2px 0 0; font-size:12px; color:#7d7789;">Social Calendar</p>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:9px;">
+            <p style="margin:0 4px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.16em; color:#605a6d;">PLATFORMS</p>
+            <sc-for list="{{ platformRail }}" as="p" hint-placeholder-count="3">
+              <div style="display:flex; align-items:center; gap:10px; padding:7px 9px; border-radius:10px; background:#1a1822; border:1px solid #262330; transition:transform .18s ease, border-color .18s ease;" style-hover="transform:translateX(3px); border-color:#3a3547;">
+                <span style="width:9px; height:9px; border-radius:3px; background:{{ p.color }};"></span>
+                <span style="font-size:13px; color:#cfc9d9; flex:1;">{{ p.name }}</span>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#7d7789;">{{ p.count }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:3px;">
+            <p style="margin:0 4px 6px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.16em; color:#605a6d;">NAVIGATE</p>
+            <sc-for list="{{ nav }}" as="n" hint-placeholder-count="6">
+              <div style="display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:10px; font-size:14px; transition:background .16s ease, color .16s ease; background:{{ n.bgDark }}; color:{{ n.fgDark }}; font-weight:{{ n.weight }};" style-hover="background:#221f2c; color:#f6f4f2;">
+                <span style="width:6px; height:6px; border-radius:99px; background:{{ n.dotDark }};"></span>
+                {{ n.label }}
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin-top:auto; padding:12px; border-radius:14px; background:linear-gradient(160deg,#1d1a26,#16141d); border:1px solid #2b2735;">
+            <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#605a6d;">PUBLISH HEALTH</p>
+            <div style="display:flex; align-items:center; gap:8px; margin-top:9px;">
+              <span style="width:8px; height:8px; border-radius:99px; background:#91e0ff; animation:livePulse 2.4s ease-in-out infinite;"></span>
+              <span style="font-size:13px; color:#e6e2ee;">Worker live</span>
+            </div>
+            <p style="margin:8px 0 0; font-size:12px; color:#7d7789; line-height:1.45;">IG token 41d · queue 2</p>
+          </div>
+        </div>
+
+        <!-- main -->
+        <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+          <div style="display:flex; align-items:center; gap:18px; padding:18px 22px; border-bottom:1px solid #26232e; background:linear-gradient(180deg,#15141a,#0e0d11);">
+            <div>
+              <h2 style="margin:0; font-family:'Playfair Display',serif; font-size:28px; font-weight:600; color:#f6f4f2;">July 2026</h2>
+              <p style="margin:3px 0 0; font-family:'JetBrains Mono',monospace; font-size:12px; color:#7d7789;">WEEK 30 · JUL 19 – 25</p>
+            </div>
+            <div style="display:flex; gap:4px; padding:4px; background:#1a1822; border:1px solid #2a2733; border-radius:12px;">
+              <sc-for list="{{ viewsA }}" as="v" hint-placeholder-count="3">
+                <div onClick="{{ v.onClick }}" style="padding:7px 16px; border-radius:9px; font-size:13px; font-weight:600; cursor:pointer; transition:background .22s cubic-bezier(.2,.8,.2,1), color .22s ease; background:{{ v.bgDark }}; color:{{ v.fgDark }};">{{ v.label }}</div>
+              </sc-for>
+            </div>
+            <div style="margin-left:auto; display:flex; align-items:center; gap:12px; padding:9px 14px; border-radius:12px; background:#1a1822; border:1px solid #2a2733;">
+              <span style="width:8px; height:8px; border-radius:99px; background:#91e0ff; animation:livePulse 2.4s ease-in-out infinite;"></span>
+              <div>
+                <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#605a6d;">NEXT PUBLISH</p>
+                <p style="margin:2px 0 0; font-size:13px; color:#f6f4f2;">Monaco night drive · 18:30</p>
+              </div>
+            </div>
+            <div style="padding:10px 18px; border-radius:12px; background:#f1ccff; color:#1b1820; font-size:13px; font-weight:600; cursor:pointer; transition:transform .18s ease, box-shadow .18s ease;" style-hover="transform:translateY(-2px); box-shadow:0 10px 24px rgba(241,204,255,.28);">New post</div>
+          </div>
+
+          <div style="display:flex; min-height:660px;">
+            <!-- grid area -->
+            <div style="flex:1; min-width:0; padding:16px 14px 20px; background:#0e0d11;">
+
+              <sc-if value="{{ weekA }}" hint-placeholder-val="{{ true }}">
+                <div style="display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:10px; perspective:1400px;">
+                  <sc-for list="{{ colsA }}" as="col" hint-placeholder-count="7">
+                    <div style="display:flex; flex-direction:column; gap:9px; min-width:0; padding:11px 9px 13px; border-radius:16px; background:{{ col.bgDark }}; border:1px solid {{ col.borderDark }};">
+                      <div style="display:flex; align-items:baseline; gap:7px;">
+                        <span style="font-family:'Playfair Display',serif; font-size:30px; font-weight:600; line-height:1; color:{{ col.numDark }};">{{ col.num }}</span>
+                        <span style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.14em; color:{{ col.dowDark }};">{{ col.dow }}</span>
+                      </div>
+                      <div>
+                        <div style="height:3px; border-radius:99px; background:#262330; overflow:hidden;">
+                          <div style="height:100%; border-radius:99px; background:linear-gradient(90deg,#91e0ff,#f1ccff); transition:width .9s cubic-bezier(.2,.8,.2,1); width:{{ col.pct }};"></div>
+                        </div>
+                        <p style="margin:5px 0 0; font-family:'JetBrains Mono',monospace; font-size:10px; color:#6f6980;">{{ col.readyLabel }}</p>
+                      </div>
+                      <sc-for list="{{ col.cards }}" as="c" hint-placeholder-count="2">
+                        <div style="animation:fadeUp .55s cubic-bezier(.2,.8,.2,1) both; animation-delay:{{ c.delay }};">
+                          <div style="border-radius:13px; overflow:hidden; background:#1a1822; border:1px solid #2a2733; cursor:pointer; transform-style:preserve-3d; transition:transform .3s cubic-bezier(.2,.8,.2,1), box-shadow .3s ease, border-color .3s ease;" style-hover="transform:translateY(-6px) rotateX(7deg) rotateY(-5deg) scale(1.03); box-shadow:0 22px 40px rgba(0,0,0,.6); border-color:#453f57;">
+                            <sc-if value="{{ ui.showMedia }}" hint-placeholder-val="{{ true }}">
+                              <div style="position:relative; height:{{ ui.thumbH }}; background-image:repeating-linear-gradient(135deg,#2a2735 0 7px,#211f2b 7px 14px);">
+                                <span style="position:absolute; left:7px; bottom:6px; font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:.06em; color:#8d8798;">{{ c.thumb }}</span>
+                                <span style="position:absolute; right:6px; top:6px; width:7px; height:7px; border-radius:99px; background:{{ c.pfColor }};"></span>
+                              </div>
+                            </sc-if>
+                            <div style="padding:8px 9px 9px; display:flex; flex-direction:column; gap:6px;">
+                              <p style="margin:0; font-size:12.5px; font-weight:600; line-height:1.35; overflow-wrap:anywhere; color:#ece8f3; text-wrap:pretty;">{{ c.title }}</p>
+                              <div style="display:flex; align-items:center; flex-wrap:wrap; gap:5px;">
+                                <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#a49db4;">{{ c.time }}</span>
+                                <span style="margin-left:auto; font-size:10px; font-weight:600; padding:2px 7px; border-radius:99px; white-space:nowrap; flex-shrink:0; background:{{ c.stageBgDark }}; color:{{ c.stageFgDark }};">{{ c.stage }}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </sc-for>
+                      <sc-if value="{{ col.hasStack }}" hint-placeholder-val="{{ false }}">
+                        <div onClick="{{ col.onToggle }}" style="position:relative; height:40px; cursor:pointer;">
+                          <div style="position:absolute; inset:8px 6px 0; border-radius:11px; background:#191722; border:1px solid #272432;"></div>
+                          <div style="position:absolute; inset:4px 3px 4px; border-radius:11px; background:#1c1a26; border:1px solid #2c2937;"></div>
+                          <div style="position:absolute; inset:0 0 8px; border-radius:11px; background:#211e2b; border:1px solid #3a3547; display:flex; align-items:center; justify-content:center; gap:7px; transition:transform .22s ease;" style-hover="transform:translateY(-3px);">
+                            <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#cbc4da;">{{ col.stackLabel }}</span>
+                          </div>
+                        </div>
+                      </sc-if>
+                      <div onClick="{{ col.onAdd }}" style="margin-top:2px; padding:6px; border-radius:10px; border:1px dashed #2f2b3b; text-align:center; font-size:11px; color:#5f5a6d; cursor:pointer; transition:color .18s ease, border-color .18s ease;" style-hover="color:#f1ccff; border-color:#5b5170;">+ post</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ monthA }}" hint-placeholder-val="{{ false }}">
+                <div style="animation:fadeUp .4s ease both;">
+                  <div style="display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px; margin-bottom:8px;">
+                    <sc-for list="{{ dowNames }}" as="d" hint-placeholder-count="7">
+                      <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.16em; color:#605a6d; padding-left:4px;">{{ d.label }}</p>
+                    </sc-for>
+                  </div>
+                  <div style="display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px;">
+                    <sc-for list="{{ monthCells }}" as="m" hint-placeholder-count="35">
+                      <div style="min-height:112px; min-width:0; padding:8px; border-radius:13px; background:{{ m.bgDark }}; border:1px solid {{ m.borderDark }}; display:flex; flex-direction:column; gap:5px; transition:transform .22s ease, border-color .22s ease;" style-hover="transform:translateY(-3px); border-color:#453f57;">
+                        <span style="font-family:'Playfair Display',serif; font-size:17px; font-weight:600; color:{{ m.numDark }};">{{ m.num }}</span>
+                        <sc-for list="{{ m.items }}" as="it" hint-placeholder-count="2">
+                          <div style="display:flex; align-items:center; gap:6px; min-width:0; padding:4px 6px; border-radius:8px; background:#1c1a25; border:1px solid #282433;">
+                            <span style="width:16px; height:16px; border-radius:4px; flex-shrink:0; background-image:repeating-linear-gradient(135deg,#302c3d 0 4px,#25222f 4px 8px);"></span>
+                            <span style="font-family:'JetBrains Mono',monospace; font-size:9px; color:#9a94a9;">{{ it.time }}</span>
+                            <span style="font-size:10.5px; color:#d8d3e2; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ it.title }}</span>
+                            <span style="margin-left:auto; width:6px; height:6px; border-radius:2px; flex-shrink:0; background:{{ it.pfColor }};"></span>
+                          </div>
+                        </sc-for>
+                        <sc-if value="{{ m.more }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-family:'JetBrains Mono',monospace; font-size:9px; color:#6f6980; padding-left:4px;">{{ m.moreLabel }}</span>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+
+            <!-- today pane, no scroll -->
+            <div style="width:288px; flex-shrink:0; border-left:1px solid #26232e; background:#121118; padding:16px 15px; display:flex; flex-direction:column; gap:14px;">
+              <div>
+                <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.16em; color:#605a6d;">TODAY · SAT 25</p>
+                <h3 style="margin:6px 0 0; font-family:'Playfair Display',serif; font-size:22px; font-weight:600; color:#f6f4f2;">Three out the door</h3>
+              </div>
+              <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px;">
+                <sc-for list="{{ statsA }}" as="s" hint-placeholder-count="3">
+                  <div style="padding:10px 9px; border-radius:13px; background:#1a1822; border:1px solid #2a2733;">
+                    <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:26px; font-weight:700; line-height:1; color:{{ s.colorDark }};">{{ s.value }}</p>
+                    <p style="margin:6px 0 0; font-size:10.5px; color:#8d8798; line-height:1.3;">{{ s.label }}</p>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="padding:13px; border-radius:16px; background:linear-gradient(160deg,#1d1a26,#141219); border:1px solid #2b2735; display:flex; flex-direction:column; gap:11px;">
+                <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#605a6d;">READY REEL</p>
+                <div style="height:150px; perspective:620px; display:flex; align-items:center; justify-content:center;">
+                  <div style="position:relative; width:76px; height:118px; transform-style:preserve-3d; animation:reelSpin 22s linear infinite;">
+                    <div style="position:absolute; inset:0; border-radius:9px; transform:rotateY(0deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#3a3448 0 6px,#2b2736 6px 12px); border:1px solid #4a4359;"></div>
+                    <div style="position:absolute; inset:0; border-radius:9px; transform:rotateY(60deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#403854 0 6px,#2f2a3c 6px 12px); border:1px solid #4a4359;"></div>
+                    <div style="position:absolute; inset:0; border-radius:9px; transform:rotateY(120deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#37324a 0 6px,#282433 6px 12px); border:1px solid #4a4359;"></div>
+                    <div style="position:absolute; inset:0; border-radius:9px; transform:rotateY(180deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#3d3651 0 6px,#2c2838 6px 12px); border:1px solid #4a4359;"></div>
+                    <div style="position:absolute; inset:0; border-radius:9px; transform:rotateY(240deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#332e44 0 6px,#262231 6px 12px); border:1px solid #4a4359;"></div>
+                    <div style="position:absolute; inset:0; border-radius:9px; transform:rotateY(300deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#443c59 0 6px,#312c3f 6px 12px); border:1px solid #4a4359;"></div>
+                  </div>
+                </div>
+                <p style="margin:0; font-size:12px; color:#a49db4; line-height:1.45; text-wrap:pretty;">6 exports sitting in Dropbox / Ready to Post. Drag one onto a day to schedule.</p>
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:7px;">
+                <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#605a6d;">AGENDA</p>
+                <sc-for list="{{ agenda }}" as="a" hint-placeholder-count="4">
+                  <div style="display:flex; gap:9px; align-items:center; padding:7px 9px; border-radius:11px; background:#171520; border:1px solid #24212e;">
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#8d8798; width:42px;">{{ a.time }}</span>
+                    <span style="width:3px; height:20px; border-radius:99px; background:{{ a.color }};"></span>
+                    <span style="font-size:12px; color:#ded9e8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ a.title }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+
+          <!-- pipeline planes -->
+          <div style="border-top:1px solid #26232e; background:#111016; padding:16px 18px 22px;">
+            <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:12px;">
+              <h3 style="margin:0; font-family:'Playfair Display',serif; font-size:20px; color:#f6f4f2;">Pipeline</h3>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#6f6980;">DEPTH PLANES — LATER STAGES SIT CLOSER</span>
+            </div>
+            <div style="display:flex; gap:18px; perspective:1500px; perspective-origin:50% 40%;">
+              <sc-for list="{{ pipeline }}" as="s" hint-placeholder-count="6">
+                <div style="flex:1; min-width:0; transform:translateZ({{ s.z }}); transition:transform .35s cubic-bezier(.2,.8,.2,1);" style-hover="transform:translateZ(60px);">
+                  <div style="border-radius:15px; background:{{ s.bgDark }}; border:1px solid {{ s.borderDark }}; padding:10px; display:flex; flex-direction:column; gap:8px; box-shadow:0 18px 34px rgba(0,0,0,.45);">
+                    <div style="display:flex; align-items:center; gap:7px;">
+                      <span style="font-size:12px; font-weight:700; color:#e9e5f0; letter-spacing:.01em;">{{ s.name }}</span>
+                      <span style="margin-left:auto; font-family:'JetBrains Mono',monospace; font-size:11px; color:#8d8798;">{{ s.count }}</span>
+                    </div>
+                    <sc-for list="{{ s.cards }}" as="c" hint-placeholder-count="2">
+                      <div style="display:flex; gap:8px; padding:7px; border-radius:11px; background:#1a1822; border:1px solid #2a2733; cursor:pointer; transition:transform .25s ease, border-color .25s ease;" style-hover="transform:translateY(-3px); border-color:#453f57;">
+                        <span style="width:30px; height:38px; border-radius:6px; flex-shrink:0; background-image:repeating-linear-gradient(135deg,#312c3f 0 5px,#26222f 5px 10px);"></span>
+                        <div style="min-width:0;">
+                          <p style="margin:0; font-size:11.5px; font-weight:600; color:#e4dfec; line-height:1.3;">{{ c.title }}</p>
+                          <p style="margin:4px 0 0; font-family:'JetBrains Mono',monospace; font-size:9.5px; color:#8d8798;">{{ c.meta }}</p>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- mobile A -->
+      <div style="display:flex; gap:26px; align-items:flex-start; margin-top:10px;">
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="330px,700px">
+          <div style="height:100%; background:#0e0d11; padding:60px 12px 34px; display:flex; flex-direction:column; gap:12px; font-family:Inter,sans-serif;">
+            <div style="display:flex; align-items:baseline; gap:9px;">
+              <h2 style="margin:0; font-family:'Playfair Display',serif; font-size:24px; color:#f6f4f2;">Sat 25</h2>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#6f6980;">JULY</span>
+              <span style="margin-left:auto; width:8px; height:8px; border-radius:99px; background:#91e0ff; animation:livePulse 2.4s ease-in-out infinite;"></span>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:7px;">
+              <sc-for list="{{ statsA }}" as="s" hint-placeholder-count="3">
+                <div style="padding:8px; border-radius:12px; background:#1a1822; border:1px solid #2a2733;">
+                  <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:20px; font-weight:700; color:{{ s.colorDark }};">{{ s.value }}</p>
+                  <p style="margin:4px 0 0; font-size:9.5px; color:#8d8798;">{{ s.label }}</p>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:9px; overflow:hidden;">
+              <sc-for list="{{ mobileCards }}" as="c" hint-placeholder-count="4">
+                <div style="display:flex; gap:10px; padding:9px; border-radius:14px; background:#181621; border:1px solid #272433; animation:fadeUp .5s cubic-bezier(.2,.8,.2,1) both; animation-delay:{{ c.delay }};">
+                  <span style="width:52px; height:66px; border-radius:8px; flex-shrink:0; background-image:repeating-linear-gradient(135deg,#312c3f 0 6px,#26222f 6px 12px);"></span>
+                  <div style="min-width:0; display:flex; flex-direction:column; gap:5px;">
+                    <p style="margin:0; font-size:13px; font-weight:600; color:#ece8f3; line-height:1.3;">{{ c.title }}</p>
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#9a94a9;">{{ c.time }}</span>
+                    <span style="align-self:flex-start; font-size:10px; font-weight:600; padding:3px 8px; border-radius:99px; background:{{ c.stageBgDark }}; color:{{ c.stageFgDark }};">{{ c.stage }}</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </x-import>
+        <div style="width:300px; padding-top:8px; display:flex; flex-direction:column; gap:12px;">
+          <p style="margin:0; font-size:14px; line-height:1.6; color:#4a4450; text-wrap:pretty;">Dark shell means thumbnails carry the page — your media reads as media, not as a grey box on beige. Day numbers are Playfair at 30px so the week scans instantly, and the Today pane fits without scrolling: three counters, the ready-reel, four agenda rows.</p>
+          <p style="margin:0; font-size:14px; line-height:1.6; color:#4a4450; text-wrap:pretty;">Amethyst stays the single signal colour — it only ever marks <em>your</em> action or Instagram.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ 1b — PORCELAIN PRESS ═══════════ -->
+    <div id="1b" style="display:flex; flex-direction:column; gap:16px;">
+      <div style="display:flex; align-items:baseline; gap:14px;">
+        <span style="font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700; color:#f7f3ef; background:#3b2b4d; padding:4px 9px; border-radius:6px;">1b</span>
+        <span style="font-family:'Playfair Display',serif; font-size:26px; color:#1b141f;">Porcelain Press</span>
+        <span style="font-size:14px; color:#6b6470;">Your brand, rebuilt for contrast · editorial grid · ink-on-paper</span>
+      </div>
+
+      <div style="width:1420px; display:flex; background:#efebe7; border:1px solid #d6cfc8; border-radius:22px; overflow:hidden; box-shadow:0 40px 90px rgba(0,0,0,.5);">
+
+        <div style="width:212px; flex-shrink:0; background:#ffffff; border-right:1px solid #d6cfc8; display:flex; flex-direction:column; padding:18px 12px; gap:22px;">
+          <div style="display:flex; align-items:center; gap:11px; padding:0 4px;">
+            <div style="width:36px; height:36px; border-radius:11px; background:#141014; display:flex; align-items:center; justify-content:center;"><span style="font-family:'Playfair Display',serif; font-size:14px; font-weight:600; color:#f7f3ef;">MJ</span></div>
+            <div>
+              <p style="margin:0; font-size:14px; font-weight:600; color:#141014;">Mustache Journey</p>
+              <p style="margin:2px 0 0; font-size:12px; color:#5d5660;">Social Calendar</p>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:9px;">
+            <p style="margin:0 4px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.16em; color:#7a7280;">PLATFORMS</p>
+            <sc-for list="{{ platformRail }}" as="p" hint-placeholder-count="3">
+              <div style="display:flex; align-items:center; gap:10px; padding:7px 9px; border-radius:10px; background:#f5f1ee; border:1px solid #e0d9d3; transition:transform .18s ease, border-color .18s ease;" style-hover="transform:translateX(3px); border-color:#141014;">
+                <span style="width:9px; height:9px; border-radius:3px; background:{{ p.inkColor }};"></span>
+                <span style="font-size:13px; color:#2b2530; flex:1;">{{ p.name }}</span>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600; color:#5d5660;">{{ p.count }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:3px;">
+            <p style="margin:0 4px 6px; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.16em; color:#7a7280;">NAVIGATE</p>
+            <sc-for list="{{ nav }}" as="n" hint-placeholder-count="6">
+              <div style="display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:10px; font-size:14px; transition:background .16s ease, color .16s ease; background:{{ n.bgLight }}; color:{{ n.fgLight }}; font-weight:{{ n.weight }};" style-hover="background:#f1e6f7; color:#141014;">
+                <span style="width:6px; height:6px; border-radius:99px; background:{{ n.dotLight }};"></span>
+                {{ n.label }}
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin-top:auto; padding:12px; border-radius:14px; background:#141014;">
+            <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#9b93a3;">PUBLISH HEALTH</p>
+            <div style="display:flex; align-items:center; gap:8px; margin-top:9px;">
+              <span style="width:8px; height:8px; border-radius:99px; background:#91e0ff; animation:livePulse 2.4s ease-in-out infinite;"></span>
+              <span style="font-size:13px; color:#f7f3ef;">Worker live</span>
+            </div>
+            <p style="margin:8px 0 0; font-size:12px; color:#9b93a3; line-height:1.45;">IG token 41d · queue 2</p>
+          </div>
+        </div>
+
+        <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+          <div style="display:flex; align-items:center; gap:18px; padding:18px 22px; border-bottom:1px solid #d6cfc8; background:#ffffff;">
+            <div>
+              <h2 style="margin:0; font-family:'Playfair Display',serif; font-size:28px; font-weight:600; color:#141014;">July 2026</h2>
+              <p style="margin:3px 0 0; font-family:'JetBrains Mono',monospace; font-size:12px; color:#5d5660;">WEEK 30 · JUL 19 – 25</p>
+            </div>
+            <div style="display:flex; gap:4px; padding:4px; background:#efebe7; border:1px solid #ddd6cf; border-radius:12px;">
+              <sc-for list="{{ viewsB }}" as="v" hint-placeholder-count="3">
+                <div onClick="{{ v.onClick }}" style="padding:7px 16px; border-radius:9px; font-size:13px; font-weight:600; cursor:pointer; transition:background .22s cubic-bezier(.2,.8,.2,1), color .22s ease; background:{{ v.bgLight }}; color:{{ v.fgLight }};">{{ v.label }}</div>
+              </sc-for>
+            </div>
+            <div style="margin-left:auto; display:flex; align-items:center; gap:12px; padding:9px 14px; border-radius:12px; background:#e8f7ff; border:1px solid #a9d8ee;">
+              <span style="width:8px; height:8px; border-radius:99px; background:#0b4f6c; animation:livePulseInk 2.4s ease-in-out infinite;"></span>
+              <div>
+                <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#3d6a80;">NEXT PUBLISH</p>
+                <p style="margin:2px 0 0; font-size:13px; font-weight:600; color:#0b3a50;">Monaco night drive · 18:30</p>
+              </div>
+            </div>
+            <div style="padding:10px 18px; border-radius:12px; background:#141014; color:#f7f3ef; font-size:13px; font-weight:600; cursor:pointer; transition:transform .18s ease, box-shadow .18s ease;" style-hover="transform:translateY(-2px); box-shadow:0 12px 24px rgba(20,16,20,.3);">New post</div>
+          </div>
+
+          <div style="display:flex; min-height:660px;">
+            <div style="flex:1; min-width:0; padding:16px 14px 20px; background:#efebe7;">
+
+              <sc-if value="{{ weekB }}" hint-placeholder-val="{{ true }}">
+                <div style="display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:10px; perspective:1400px;">
+                  <sc-for list="{{ colsB }}" as="col" hint-placeholder-count="7">
+                    <div style="display:flex; flex-direction:column; gap:9px; min-width:0; padding:11px 9px 13px; border-radius:16px; background:{{ col.bgLight }}; border:1px solid {{ col.borderLight }};">
+                      <div style="display:flex; align-items:baseline; gap:7px;">
+                        <span style="font-family:'Playfair Display',serif; font-size:30px; font-weight:600; line-height:1; color:{{ col.numLight }};">{{ col.num }}</span>
+                        <span style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.14em; color:{{ col.dowLight }};">{{ col.dow }}</span>
+                      </div>
+                      <div>
+                        <div style="height:3px; border-radius:99px; background:#ded7d0; overflow:hidden;">
+                          <div style="height:100%; border-radius:99px; background:#141014; transition:width .9s cubic-bezier(.2,.8,.2,1); width:{{ col.pct }};"></div>
+                        </div>
+                        <p style="margin:5px 0 0; font-family:'JetBrains Mono',monospace; font-size:10px; color:#6b6470;">{{ col.readyLabel }}</p>
+                      </div>
+                      <sc-for list="{{ col.cards }}" as="c" hint-placeholder-count="2">
+                        <div style="animation:fadeUp .55s cubic-bezier(.2,.8,.2,1) both; animation-delay:{{ c.delay }};">
+                          <div style="border-radius:13px; overflow:hidden; background:#ffffff; border:1px solid #ddd6cf; cursor:pointer; transform-style:preserve-3d; transition:transform .3s cubic-bezier(.2,.8,.2,1), box-shadow .3s ease, border-color .3s ease; box-shadow:0 2px 4px rgba(20,16,20,.05);" style-hover="transform:translateY(-6px) rotateX(7deg) rotateY(-5deg) scale(1.03); box-shadow:0 22px 38px rgba(20,16,20,.22); border-color:#141014;">
+                            <sc-if value="{{ ui.showMedia }}" hint-placeholder-val="{{ true }}">
+                              <div style="position:relative; height:{{ ui.thumbH }}; background-image:repeating-linear-gradient(135deg,#ded7d0 0 7px,#eae4de 7px 14px);">
+                                <span style="position:absolute; left:7px; bottom:6px; font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:.06em; color:#6b6470;">{{ c.thumb }}</span>
+                                <span style="position:absolute; right:6px; top:6px; width:7px; height:7px; border-radius:99px; background:{{ c.pfInk }};"></span>
+                              </div>
+                            </sc-if>
+                            <div style="padding:8px 9px 9px; display:flex; flex-direction:column; gap:6px;">
+                              <p style="margin:0; font-size:12.5px; font-weight:600; line-height:1.35; overflow-wrap:anywhere; color:#141014; text-wrap:pretty;">{{ c.title }}</p>
+                              <div style="display:flex; align-items:center; flex-wrap:wrap; gap:5px;">
+                                <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#5d5660;">{{ c.time }}</span>
+                                <span style="margin-left:auto; font-size:10px; font-weight:600; padding:2px 7px; border-radius:99px; white-space:nowrap; flex-shrink:0; background:{{ c.stageBgLight }}; color:{{ c.stageFgLight }};">{{ c.stage }}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </sc-for>
+                      <sc-if value="{{ col.hasStack }}" hint-placeholder-val="{{ false }}">
+                        <div onClick="{{ col.onToggle }}" style="position:relative; height:40px; cursor:pointer;">
+                          <div style="position:absolute; inset:8px 6px 0; border-radius:11px; background:#e5ded7; border:1px solid #d6cfc8;"></div>
+                          <div style="position:absolute; inset:4px 3px 4px; border-radius:11px; background:#f0ebe6; border:1px solid #d6cfc8;"></div>
+                          <div style="position:absolute; inset:0 0 8px; border-radius:11px; background:#ffffff; border:1px solid #141014; display:flex; align-items:center; justify-content:center; gap:7px; transition:transform .22s ease;" style-hover="transform:translateY(-3px);">
+                            <span style="font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:600; color:#141014;">{{ col.stackLabel }}</span>
+                          </div>
+                        </div>
+                      </sc-if>
+                      <div onClick="{{ col.onAdd }}" style="margin-top:2px; padding:6px; border-radius:10px; border:1px dashed #c8c0b8; text-align:center; font-size:11px; color:#6b6470; cursor:pointer; transition:color .18s ease, border-color .18s ease;" style-hover="color:#141014; border-color:#141014;">+ post</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ monthB }}" hint-placeholder-val="{{ false }}">
+                <div style="animation:fadeUp .4s ease both;">
+                  <div style="display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px; margin-bottom:8px;">
+                    <sc-for list="{{ dowNames }}" as="d" hint-placeholder-count="7">
+                      <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.16em; color:#7a7280; padding-left:4px;">{{ d.label }}</p>
+                    </sc-for>
+                  </div>
+                  <div style="display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px;">
+                    <sc-for list="{{ monthCells }}" as="m" hint-placeholder-count="35">
+                      <div style="min-height:112px; min-width:0; padding:8px; border-radius:13px; background:{{ m.bgLight }}; border:1px solid {{ m.borderLight }}; display:flex; flex-direction:column; gap:5px; transition:transform .22s ease, border-color .22s ease;" style-hover="transform:translateY(-3px); border-color:#141014;">
+                        <span style="font-family:'Playfair Display',serif; font-size:17px; font-weight:600; color:{{ m.numLight }};">{{ m.num }}</span>
+                        <sc-for list="{{ m.items }}" as="it" hint-placeholder-count="2">
+                          <div style="display:flex; align-items:center; gap:6px; min-width:0; padding:4px 6px; border-radius:8px; background:#f4f0ec; border:1px solid #e2dbd4;">
+                            <span style="width:16px; height:16px; border-radius:4px; flex-shrink:0; background-image:repeating-linear-gradient(135deg,#d8d1ca 0 4px,#e8e2dc 4px 8px);"></span>
+                            <span style="font-family:'JetBrains Mono',monospace; font-size:9px; color:#5d5660;">{{ it.time }}</span>
+                            <span style="font-size:10.5px; font-weight:500; color:#241f28; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ it.title }}</span>
+                            <span style="margin-left:auto; width:6px; height:6px; border-radius:2px; flex-shrink:0; background:{{ it.pfInk }};"></span>
+                          </div>
+                        </sc-for>
+                        <sc-if value="{{ m.more }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-family:'JetBrains Mono',monospace; font-size:9px; color:#6b6470; padding-left:4px;">{{ m.moreLabel }}</span>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+
+            <div style="width:288px; flex-shrink:0; border-left:1px solid #d6cfc8; background:#ffffff; padding:16px 15px; display:flex; flex-direction:column; gap:14px;">
+              <div>
+                <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.16em; color:#7a7280;">TODAY · SAT 25</p>
+                <h3 style="margin:6px 0 0; font-family:'Playfair Display',serif; font-size:22px; font-weight:600; color:#141014;">Three out the door</h3>
+              </div>
+              <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px;">
+                <sc-for list="{{ statsA }}" as="s" hint-placeholder-count="3">
+                  <div style="padding:10px 9px; border-radius:13px; background:{{ s.tintLight }}; border:1px solid {{ s.borderLight }};">
+                    <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:26px; font-weight:700; line-height:1; color:{{ s.colorLight }};">{{ s.value }}</p>
+                    <p style="margin:6px 0 0; font-size:10.5px; color:#4a4450; line-height:1.3;">{{ s.label }}</p>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="padding:13px; border-radius:16px; background:#141014; display:flex; flex-direction:column; gap:11px;">
+                <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#9b93a3;">READY REEL</p>
+                <div style="height:150px; perspective:620px; display:flex; align-items:center; justify-content:center;">
+                  <div style="position:relative; width:76px; height:118px; transform-style:preserve-3d; animation:reelSpin 22s linear infinite;">
+                    <div style="position:absolute; inset:0; border-radius:9px; transform:rotateY(0deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#3a3448 0 6px,#2b2736 6px 12px); border:1px solid #4a4359;"></div>
+                    <div style="position:absolute; inset:0; border-radius:9px; transform:rotateY(60deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#403854 0 6px,#2f2a3c 6px 12px); border:1px solid #4a4359;"></div>
+                    <div style="position:absolute; inset:0; border-radius:9px; transform:rotateY(120deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#37324a 0 6px,#282433 6px 12px); border:1px solid #4a4359;"></div>
+                    <div style="position:absolute; inset:0; border-radius:9px; transform:rotateY(180deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#3d3651 0 6px,#2c2838 6px 12px); border:1px solid #4a4359;"></div>
+                    <div style="position:absolute; inset:0; border-radius:9px; transform:rotateY(240deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#332e44 0 6px,#262231 6px 12px); border:1px solid #4a4359;"></div>
+                    <div style="position:absolute; inset:0; border-radius:9px; transform:rotateY(300deg) translateZ(96px); background-image:repeating-linear-gradient(135deg,#443c59 0 6px,#312c3f 6px 12px); border:1px solid #4a4359;"></div>
+                  </div>
+                </div>
+                <p style="margin:0; font-size:12px; color:#cfc7d5; line-height:1.45; text-wrap:pretty;">6 exports sitting in Dropbox / Ready to Post. Drag one onto a day to schedule.</p>
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:7px;">
+                <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#7a7280;">AGENDA</p>
+                <sc-for list="{{ agenda }}" as="a" hint-placeholder-count="4">
+                  <div style="display:flex; gap:9px; align-items:center; padding:7px 9px; border-radius:11px; background:#f5f1ee; border:1px solid #e2dbd4;">
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#5d5660; width:42px;">{{ a.time }}</span>
+                    <span style="width:3px; height:20px; border-radius:99px; background:{{ a.inkColor }};"></span>
+                    <span style="font-size:12px; color:#241f28; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ a.title }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid #d6cfc8; background:#e9e4df; padding:16px 18px 22px;">
+            <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:12px;">
+              <h3 style="margin:0; font-family:'Playfair Display',serif; font-size:20px; color:#141014;">Pipeline</h3>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#6b6470;">DEPTH PLANES — LATER STAGES SIT CLOSER</span>
+            </div>
+            <div style="display:flex; gap:18px; perspective:1500px; perspective-origin:50% 40%;">
+              <sc-for list="{{ pipeline }}" as="s" hint-placeholder-count="6">
+                <div style="flex:1; min-width:0; transform:translateZ({{ s.z }}); transition:transform .35s cubic-bezier(.2,.8,.2,1);" style-hover="transform:translateZ(60px);">
+                  <div style="border-radius:15px; background:{{ s.bgLight }}; border:1px solid {{ s.borderLight }}; padding:10px; display:flex; flex-direction:column; gap:8px; box-shadow:0 14px 26px rgba(20,16,20,.13);">
+                    <div style="display:flex; align-items:center; gap:7px;">
+                      <span style="font-size:12px; font-weight:700; color:{{ s.inkLight }}; letter-spacing:.01em;">{{ s.name }}</span>
+                      <span style="margin-left:auto; font-family:'JetBrains Mono',monospace; font-size:11px; color:#5d5660;">{{ s.count }}</span>
+                    </div>
+                    <sc-for list="{{ s.cards }}" as="c" hint-placeholder-count="2">
+                      <div style="display:flex; gap:8px; padding:7px; border-radius:11px; background:#ffffff; border:1px solid #ddd6cf; cursor:pointer; transition:transform .25s ease, border-color .25s ease;" style-hover="transform:translateY(-3px); border-color:#141014;">
+                        <span style="width:30px; height:38px; border-radius:6px; flex-shrink:0; background-image:repeating-linear-gradient(135deg,#d8d1ca 0 5px,#e8e2dc 5px 10px);"></span>
+                        <div style="min-width:0;">
+                          <p style="margin:0; font-size:11.5px; font-weight:600; color:#141014; line-height:1.3;">{{ c.title }}</p>
+                          <p style="margin:4px 0 0; font-family:'JetBrains Mono',monospace; font-size:9.5px; color:#5d5660;">{{ c.meta }}</p>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:26px; align-items:flex-start; margin-top:10px;">
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="330px,700px">
+          <div style="height:100%; background:#efebe7; padding:60px 12px 34px; display:flex; flex-direction:column; gap:12px; font-family:Inter,sans-serif;">
+            <div style="display:flex; align-items:baseline; gap:9px;">
+              <h2 style="margin:0; font-family:'Playfair Display',serif; font-size:24px; color:#141014;">Sat 25</h2>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.14em; color:#7a7280;">JULY</span>
+              <span style="margin-left:auto; width:8px; height:8px; border-radius:99px; background:#0b4f6c; animation:livePulseInk 2.4s ease-in-out infinite;"></span>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:7px;">
+              <sc-for list="{{ statsA }}" as="s" hint-placeholder-count="3">
+                <div style="padding:8px; border-radius:12px; background:{{ s.tintLight }}; border:1px solid {{ s.borderLight }};">
+                  <p style="margin:0; font-family:'JetBrains Mono',monospace; font-size:20px; font-weight:700; color:{{ s.colorLight }};">{{ s.value }}</p>
+                  <p style="margin:4px 0 0; font-size:9.5px; color:#4a4450;">{{ s.label }}</p>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:9px; overflow:hidden;">
+              <sc-for list="{{ mobileCards }}" as="c" hint-placeholder-count="4">
+                <div style="display:flex; gap:10px; padding:9px; border-radius:14px; background:#ffffff; border:1px solid #ddd6cf; animation:fadeUp .5s cubic-bezier(.2,.8,.2,1) both; animation-delay:{{ c.delay }};">
+                  <span style="width:52px; height:66px; border-radius:8px; flex-shrink:0; background-image:repeating-linear-gradient(135deg,#d8d1ca 0 6px,#e8e2dc 6px 12px);"></span>
+                  <div style="min-width:0; display:flex; flex-direction:column; gap:5px;">
+                    <p style="margin:0; font-size:13px; font-weight:600; color:#141014; line-height:1.3;">{{ c.title }}</p>
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#5d5660;">{{ c.time }}</span>
+                    <span style="align-self:flex-start; font-size:10px; font-weight:600; padding:3px 8px; border-radius:99px; background:{{ c.stageBgLight }}; color:{{ c.stageFgLight }};">{{ c.stage }}</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </x-import>
+        <div style="width:300px; padding-top:8px; display:flex; flex-direction:column; gap:12px;">
+          <p style="margin:0; font-size:14px; line-height:1.6; color:#4a4450; text-wrap:pretty;">Same brand, no light-grey-on-light-grey anywhere: body copy is near-black on paper, secondary text never goes above #5d5660, and status uses filled ink chips instead of pale tints.</p>
+          <p style="margin:0; font-size:14px; line-height:1.6; color:#4a4450; text-wrap:pretty;">The month cells are 112px tall with real rows — thumbnail, time, title, platform — so a month tells you what's happening, not just that something is.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showMedia&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Density&quot;},&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;comfortable&quot;,&quot;compact&quot;],&quot;default&quot;:&quot;comfortable&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Density&quot;}}">
+const PF = {
+  instagram: { name: 'Instagram', color: '#f1ccff', ink: '#7b2f9e' },
+  tiktok:    { name: 'TikTok',    color: '#91e0ff', ink: '#0b4f6c' },
+  linkedin:  { name: 'LinkedIn',  color: '#ffd8a8', ink: '#8a4b06' },
+};
+
+const STAGE = {
+  idea:      { label: 'Idea',      bgD: '#2a2733', fgD: '#b9b2c6', bgL: '#eae4de', fgL: '#3d3743' },
+  scripted:  { label: 'Scripted',  bgD: '#2f2a3a', fgD: '#cbb6dd', bgL: '#efe1f7', fgL: '#5f2a7e' },
+  shot:      { label: 'Shot',      bgD: '#26333c', fgD: '#a8cede', bgL: '#dceefa', fgL: '#0b4f6c' },
+  editing:   { label: 'Editing',   bgD: '#33302a', fgD: '#dcc79f', bgL: '#f7ebd8', fgL: '#7a4c07' },
+  scheduled: { label: 'Scheduled', bgD: '#f1ccff', fgD: '#20182a', bgL: '#141014', fgL: '#f7f3ef' },
+  published: { label: 'Live',      bgD: '#1f3830', fgD: '#7fd8ab', bgL: '#dcf2e5', fgL: '#0d5136' },
+};
+
+const WEEK = [
+  { dow: 'SUN', num: '19', posts: [
+    { t: 'Amalfi B-roll pack', pf: 'instagram', time: '09:00', st: 'published', th: 'REEL 9:16' },
+  ] },
+  { dow: 'MON', num: '20', posts: [
+    { t: 'Cold open: the wrong turn', pf: 'tiktok', time: '12:15', st: 'published', th: 'REEL 9:16' },
+    { t: 'Hotel Metropole walkthrough', pf: 'instagram', time: '18:00', st: 'published', th: 'CAROUSEL' },
+  ] },
+  { dow: 'TUE', num: '21', posts: [
+    { t: 'Why I stopped renting supercars', pf: 'linkedin', time: '08:30', st: 'published', th: 'STILL 4:5' },
+  ] },
+  { dow: 'WED', num: '22', posts: [
+    { t: 'Ferrari dinner cutdown', pf: 'instagram', time: '19:00', st: 'editing', th: 'REEL 9:16' },
+    { t: 'Grid walk POV', pf: 'tiktok', time: '20:30', st: 'shot', th: 'REEL 9:16' },
+  ] },
+  { dow: 'THU', num: '23', posts: [
+    { t: 'Three hotels, one bill', pf: 'instagram', time: '17:45', st: 'scripted', th: 'CAROUSEL' },
+  ] },
+  { dow: 'FRI', num: '24', posts: [
+    { t: 'Casino Square at 6am', pf: 'instagram', time: '07:00', st: 'scheduled', th: 'REEL 9:16' },
+    { t: 'Brand-deal reality check', pf: 'linkedin', time: '11:00', st: 'scripted', th: 'STILL 4:5' },
+  ] },
+  { dow: 'SAT', num: '25', today: true, posts: [
+    { t: 'Monaco night drive', pf: 'instagram', time: '18:30', st: 'scheduled', th: 'REEL 9:16' },
+    { t: 'Tunnel exit audio test', pf: 'tiktok', time: '21:00', st: 'scheduled', th: 'REEL 9:16' },
+    { t: 'Sunday teaser still', pf: 'instagram', time: '22:30', st: 'editing', th: 'STILL 4:5' },
+    { t: 'Week recap thread', pf: 'linkedin', time: '23:00', st: 'idea', th: 'TEXT' },
+  ] },
+];
+
+const NAV = [
+  { label: 'Calendar', active: true },
+  { label: 'Content Pipeline' },
+  { label: 'UGC Tracker' },
+  { label: 'Ideas' },
+  { label: 'Inspiration' },
+  { label: 'Settings' },
+];
+
+const PIPE = [
+  { name: 'Idea', z: '-45px', cards: [{ title: 'Nürburgring day trip', meta: 'IG · no date' }, { title: 'Airport lounge tier list', meta: 'TT · no date' }] },
+  { name: 'Scripted', z: '-35px', cards: [{ title: 'Three hotels, one bill', meta: 'IG · Jul 23' }, { title: 'Brand-deal reality check', meta: 'LI · Jul 24' }] },
+  { name: 'Shot', z: '-25px', cards: [{ title: 'Grid walk POV', meta: 'TT · Jul 22' }] },
+  { name: 'Editing', z: '-15px', cards: [{ title: 'Ferrari dinner cutdown', meta: 'IG · Jul 22' }, { title: 'Sunday teaser still', meta: 'IG · Jul 25' }] },
+  { name: 'Scheduled', z: '-5px', cards: [{ title: 'Monaco night drive', meta: 'IG · 18:30' }, { title: 'Casino Square at 6am', meta: 'IG · Jul 24' }] },
+  { name: 'Published', z: '5px', cards: [{ title: 'Cold open: the wrong turn', meta: '41k views' }, { title: 'Amalfi B-roll pack', meta: '12k views' }] },
+];
+
+const MONTH = {
+  1:  [{ t: 'Lake Como sunrise', pf: 'instagram', time: '07:30' }],
+  2:  [{ t: 'Rental desk horror story', pf: 'tiktok', time: '12:00' }, { t: 'Villa tour part 1', pf: 'instagram', time: '18:00' }],
+  3:  [{ t: 'What a chase car costs', pf: 'linkedin', time: '08:30' }],
+  5:  [{ t: 'Stelvio switchbacks', pf: 'instagram', time: '17:00' }, { t: 'Espresso stop POV', pf: 'tiktok', time: '19:30' }, { t: 'Pass recap still', pf: 'instagram', time: '21:00' }],
+  6:  [{ t: 'Gear I actually packed', pf: 'instagram', time: '11:00' }],
+  8:  [{ t: 'Ferrari showroom walkthrough', pf: 'instagram', time: '16:00' }, { t: 'Badge nerd detail shots', pf: 'tiktok', time: '20:00' }],
+  9:  [{ t: 'Client brief teardown', pf: 'linkedin', time: '09:00' }],
+  10: [{ t: 'Portofino harbour drone', pf: 'instagram', time: '18:15' }],
+  12: [{ t: 'Hotel review: Splendido', pf: 'instagram', time: '10:00' }, { t: 'Room service ranking', pf: 'tiktok', time: '13:00' }],
+  13: [{ t: 'One bag, ten days', pf: 'instagram', time: '17:30' }],
+  15: [{ t: 'Night drive to Nice', pf: 'instagram', time: '21:30' }, { t: 'Border crossing bit', pf: 'tiktok', time: '22:15' }, { t: 'Tunnel audio raw', pf: 'instagram', time: '23:00' }, { t: 'Route notes', pf: 'linkedin', time: '23:30' }],
+  16: [{ t: 'Promenade morning set', pf: 'instagram', time: '08:00' }],
+  17: [{ t: 'Why brands pick creators', pf: 'linkedin', time: '09:30' }],
+  19: [{ t: 'Amalfi B-roll pack', pf: 'instagram', time: '09:00' }],
+  20: [{ t: 'Cold open: the wrong turn', pf: 'tiktok', time: '12:15' }, { t: 'Hotel Metropole walkthrough', pf: 'instagram', time: '18:00' }],
+  21: [{ t: 'Why I stopped renting supercars', pf: 'linkedin', time: '08:30' }],
+  22: [{ t: 'Ferrari dinner cutdown', pf: 'instagram', time: '19:00' }, { t: 'Grid walk POV', pf: 'tiktok', time: '20:30' }],
+  23: [{ t: 'Three hotels, one bill', pf: 'instagram', time: '17:45' }],
+  24: [{ t: 'Casino Square at 6am', pf: 'instagram', time: '07:00' }, { t: 'Brand-deal reality check', pf: 'linkedin', time: '11:00' }],
+  25: [{ t: 'Monaco night drive', pf: 'instagram', time: '18:30' }, { t: 'Tunnel exit audio test', pf: 'tiktok', time: '21:00' }, { t: 'Sunday teaser still', pf: 'instagram', time: '22:30' }],
+  26: [{ t: 'Rest day carousel', pf: 'instagram', time: '15:00' }],
+  27: [{ t: 'Éze village climb', pf: 'tiktok', time: '13:45' }],
+  28: [{ t: 'Pirelli deliverable v1', pf: 'instagram', time: '19:00' }, { t: 'Behind the brief', pf: 'linkedin', time: '10:00' }],
+  30: [{ t: 'Cap Ferrat swim spot', pf: 'instagram', time: '08:45' }, { t: 'Coast road cutdown', pf: 'tiktok', time: '18:30' }],
+  31: [{ t: 'Month in six frames', pf: 'instagram', time: '20:00' }],
+};
+
+class Component extends DCLogic {
+  state = { viewA: 'week', viewB: 'week', viewC: 'week', openA: false, openB: false, openC: false, ready: 0, behind: 0, queued: 0 };
+
+  componentDidMount() {
+    const targets = { ready: 9, behind: 3, queued: 2 };
+    const t0 = performance.now();
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / 1100);
+      const e = 1 - Math.pow(1 - p, 3);
+      this.setState({
+        ready: Math.round(targets.ready * e),
+        behind: Math.round(targets.behind * e),
+        queued: Math.round(targets.queued * e),
+      });
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
+  buildCols(open) {
+    let n = 0;
+    // Sun + Sat share one hue (amethyst), Mon–Fri share a deeper blue.
+    const WEEKEND = [0, 6];
+    const HUES = [];
+    const HUE_BORDER = [];
+    for (let i = 0; i < 7; i++) {
+      const wknd = WEEKEND.indexOf(i) !== -1;
+      HUES.push(wknd ? 'rgba(252,222,130,.62)' : 'rgba(74,152,206,.52)');
+      HUE_BORDER.push(wknd ? 'rgba(140,98,10,.42)' : 'rgba(9,66,94,.4)');
+    }
+    return WEEK.map((d, di) => {
+      const all = d.posts.map((p) => {
+        const pf = PF[p.pf];
+        const st = STAGE[p.st];
+        n += 1;
+        return {
+          title: p.t, time: p.time, thumb: p.th,
+          pfColor: pf.color, pfInk: pf.ink,
+          stage: st.label,
+          stageBgDark: st.bgD, stageFgDark: st.fgD,
+          stageBgLight: st.bgL, stageFgLight: st.fgL,
+          delay: (n * 45) + 'ms',
+        };
+      });
+      const limit = open ? all.length : 2;
+      const hidden = Math.max(0, all.length - limit);
+      const ready = d.posts.filter((p) => p.st === 'scheduled' || p.st === 'published').length;
+      return {
+        num: d.num, dow: d.dow,
+        cards: all.slice(0, limit),
+        hasStack: hidden > 0 || (open && all.length > 2),
+        stackLabel: hidden > 0 ? ('+ ' + hidden + ' more') : 'collapse',
+        onToggle: null,
+        onAdd: () => {},
+        pct: all.length ? Math.round((ready / all.length) * 100) + '%' : '0%',
+        readyLabel: ready + '/' + all.length + ' ready',
+        bgDark: d.today ? '#181622' : '#131218',
+        borderDark: d.today ? '#4a4160' : '#232029',
+        numDark: d.today ? '#f1ccff' : '#efecf4',
+        dowDark: d.today ? '#c2a8d6' : '#7d7789',
+        bgLight: d.today ? '#ffffff' : '#f4f1ed',
+        borderLight: d.today ? '#141014' : '#e0d9d3',
+        numLight: '#141014',
+        dowLight: d.today ? '#141014' : '#6b6470',
+        bgGlass: HUES[di],
+        borderGlass: d.today ? 'rgba(20,16,20,.62)' : HUE_BORDER[di],
+        numGlass: '#150f19',
+        dowGlass: d.today ? '#150f19' : 'rgba(21,15,25,.7)',
+      };
+    });
+  }
+
+  monthCells() {
+    const cells = [];
+    for (let i = 0; i < 35; i++) {
+      const day = i - 2; // Jul 1 lands on cell index 3
+      const dim = day < 1 || day > 31;
+      const num = dim ? (day < 1 ? String(30 + day) : String(day - 31)) : String(day);
+      const src = dim ? [] : (MONTH[day] || []);
+      const CODE = { instagram: 'IG', tiktok: 'TT', linkedin: 'LI' };
+      const items = src.slice(0, 3).map((p) => ({
+        time: p.time, title: p.t, pfColor: PF[p.pf].color, pfInk: PF[p.pf].ink,
+        code: CODE[p.pf],
+        codeTint: p.pf === 'instagram' ? 'rgba(226,180,246,.5)' : (p.pf === 'tiktok' ? 'rgba(126,196,231,.45)' : 'rgba(255,216,168,.55)'),
+      }));
+      const extra = Math.max(0, src.length - items.length);
+      const today = day === 25;
+      cells.push({
+        num, items,
+        more: extra > 0, moreLabel: '+' + extra + ' more',
+        bgDark: today ? '#1d1929' : (dim ? '#100f14' : '#141318'),
+        borderDark: today ? '#5b4d75' : '#232029',
+        numDark: today ? '#f1ccff' : (dim ? '#403c49' : '#e6e2ee'),
+        bgLight: today ? '#ffffff' : (dim ? '#e8e3de' : '#f6f3f0'),
+        borderLight: today ? '#141014' : '#e0d9d3',
+        numLight: dim ? '#a49c94' : '#141014',
+        bgGlass: today ? 'rgba(255,255,255,.88)' : (dim ? 'rgba(214,222,231,.3)' : ((i % 7 === 0 || i % 7 === 6) ? 'rgba(252,222,130,.5)' : 'rgba(74,152,206,.42)')),
+        borderGlass: today ? 'rgba(20,16,20,.62)' : (dim ? 'rgba(11,79,108,.14)' : ((i % 7 === 0 || i % 7 === 6) ? 'rgba(140,98,10,.36)' : 'rgba(9,66,94,.32)')),
+        numGlass: dim ? 'rgba(27,20,31,.34)' : '#150f19',
+        countLabel: src.length ? String(src.length) : '',
+        hasAny: src.length > 0,
+      });
+    }
+    return cells;
+  }
+
+  seg(which) {
+    const cur = which === 'A' ? this.state.viewA : (which === 'B' ? this.state.viewB : this.state.viewC);
+    return ['week', 'month'].map((v) => {
+      const on = cur === v;
+      return {
+        label: v === 'week' ? 'Week' : 'Month',
+        bgDark: on ? '#f1ccff' : 'transparent',
+        fgDark: on ? '#1b1820' : '#9a94a9',
+        bgLight: on ? '#141014' : 'transparent',
+        fgLight: on ? '#f7f3ef' : '#5d5660',
+        bgGlass: on ? 'rgba(255,255,255,.92)' : 'transparent',
+        fgGlass: on ? '#1b141f' : 'rgba(27,20,31,.6)',
+        onClick: () => this.setState(which === 'A' ? { viewA: v } : (which === 'B' ? { viewB: v } : { viewC: v })),
+      };
+    });
+  }
+
+  weekStrip() {
+    return WEEK.map((d, i) => {
+      const wknd = i === 0 || i === 6;
+      const ready = d.posts.filter((p) => p.st === 'scheduled' || p.st === 'published').length;
+      return {
+        dow: d.dow, num: d.num,
+        count: String(d.posts.length),
+        pct: d.posts.length ? Math.round((ready / d.posts.length) * 100) + '%' : '0%',
+        bg: wknd ? 'rgba(252,222,130,.62)' : 'rgba(74,152,206,.52)',
+        border: d.today ? 'rgba(20,16,20,.62)' : (wknd ? 'rgba(140,98,10,.42)' : 'rgba(9,66,94,.4)'),
+        ring: d.today ? '0 0 0 2px rgba(20,16,20,.5)' : 'none',
+      };
+    });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const p = this.props;
+    const dense = (p.density ?? 'comfortable') === 'compact';
+    const colsA = this.buildCols(s.openA);
+    const colsB = this.buildCols(s.openB);
+    const colsC = this.buildCols(s.openC);
+    colsA.forEach((c) => { c.onToggle = () => this.setState({ openA: !s.openA }); });
+    colsB.forEach((c) => { c.onToggle = () => this.setState({ openB: !s.openB }); });
+    colsC.forEach((c) => { c.onToggle = () => this.setState({ openC: !s.openC }); });
+
+    return {
+      ui: { showMedia: p.showMedia ?? true, thumbH: dense ? '42px' : '58px' },
+      weekA: s.viewA === 'week', monthA: s.viewA === 'month',
+      weekB: s.viewB === 'week', monthB: s.viewB === 'month',
+      weekC: s.viewC === 'week', monthC: s.viewC === 'month',
+      viewsA: this.seg('A'), viewsB: this.seg('B'), viewsC: this.seg('C'),
+      colsA, colsB, colsC,
+      monthCells: this.monthCells(),
+      dowNames: ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((l) => ({ label: l })),
+      nav: NAV.map((n) => ({
+        label: n.label,
+        weight: n.active ? '600' : '500',
+        bgDark: n.active ? '#241f30' : 'transparent',
+        fgDark: n.active ? '#f6f4f2' : '#a49db4',
+        dotDark: n.active ? '#f1ccff' : '#3d3849',
+        bgLight: n.active ? '#f1e6f7' : 'transparent',
+        fgLight: n.active ? '#141014' : '#4a4450',
+        dotLight: n.active ? '#7b2f9e' : '#c8c0b8',
+        bgGlass: n.active ? 'rgba(255,255,255,.86)' : 'rgba(255,255,255,.28)',
+        fgGlass: n.active ? '#1b141f' : 'rgba(27,20,31,.68)',
+        dotGlass: n.active ? '#7b2f9e' : 'rgba(27,20,31,.24)',
+      })),
+      platformRail: [
+        { name: 'Instagram', count: '14', color: PF.instagram.color, inkColor: PF.instagram.ink },
+        { name: 'TikTok', count: '6', color: PF.tiktok.color, inkColor: PF.tiktok.ink },
+        { name: 'LinkedIn', count: '3', color: PF.linkedin.color, inkColor: PF.linkedin.ink },
+      ],
+      statsA: [
+        { value: String(s.ready), label: 'ready to go', colorDark: '#7fd8ab', colorLight: '#0d5136', tintLight: '#dcf2e5', borderLight: '#a9d4bd', tintGlass: 'rgba(196,240,214,.55)', borderGlass: 'rgba(13,81,54,.22)' },
+        { value: String(s.behind), label: 'behind', colorDark: '#ffb3a1', colorLight: '#8a2b12', tintLight: '#fbe3dc', borderLight: '#e8b9ab', tintGlass: 'rgba(255,205,190,.55)', borderGlass: 'rgba(138,43,18,.22)' },
+        { value: String(s.queued), label: 'queued', colorDark: '#91e0ff', colorLight: '#0b4f6c', tintLight: '#e0f2fb', borderLight: '#a9d8ee', tintGlass: 'rgba(145,224,255,.5)', borderGlass: 'rgba(11,79,108,.22)' },
+      ],
+      agenda: [
+        { time: '10:00', title: 'Edit: tunnel exit audio', color: '#f1ccff', inkColor: '#7b2f9e' },
+        { time: '14:30', title: 'Call — Pirelli brief', color: '#ffd8a8', inkColor: '#8a4b06' },
+        { time: '18:30', title: 'Publish: Monaco night drive', color: '#91e0ff', inkColor: '#0b4f6c' },
+        { time: '21:00', title: 'Publish: tunnel exit', color: '#91e0ff', inkColor: '#0b4f6c' },
+      ],
+      pipeline: PIPE.map((c, i) => ({
+        name: c.name, z: c.z, count: String(c.cards.length), cards: c.cards,
+        bgDark: i > 3 ? '#1b1826' : '#151420',
+        borderDark: i > 3 ? '#443c59' : '#272433',
+        bgLight: i > 3 ? '#ffffff' : '#f4f1ed',
+        borderLight: i > 3 ? '#141014' : '#ddd6cf',
+        inkLight: '#141014',
+        bgGlass: i > 3 ? 'rgba(255,255,255,.78)' : 'rgba(255,255,255,.42)',
+        borderGlass: i > 3 ? 'rgba(20,16,20,.5)' : 'rgba(255,255,255,.7)',
+      })),
+      weekStrip: this.weekStrip(),
+      hero: {
+        title: 'Monaco night drive', platform: 'Instagram · Reel', time: '18:30',
+        countdown: 'in 3h 41m', thumb: 'REEL 9:16 · 2.1K MASTER',
+        caption: 'Tunnel exit, second lap, no music — just the engine.',
+        mode: 'Auto-publish', dropbox: '/Social Media/Ready to Post/monaco-night-v4.mp4',
+      },
+      stageBars: PIPE.map((c) => ({
+        name: c.name, count: String(c.cards.length),
+        pct: Math.round((c.cards.length / 2) * 100) + '%',
+      })),
+      platformBalance: [
+        { name: 'Instagram', count: '14 planned', pct: '82%', tint: 'rgba(226,180,246,.6)', ink: '#5f1c80', note: 'on pace' },
+        { name: 'TikTok', count: '6 planned', pct: '48%', tint: 'rgba(126,196,231,.6)', ink: '#0b3a50', note: 'light this week' },
+        { name: 'LinkedIn', count: '3 planned', pct: '24%', tint: 'rgba(252,222,130,.7)', ink: '#7a4c07', note: 'underfed' },
+      ],
+      quickActions: [
+        { label: 'New post', hint: 'from Ready to Post' },
+        { label: 'Capture idea', hint: 'goes to Ideas' },
+        { label: 'Paste an event', hint: 'Claude parses it' },
+      ],
+      mobileCards: WEEK[6].posts.map((post, i) => {
+        const st = STAGE[post.st];
+        return {
+          title: post.t, time: post.time, stage: st.label,
+          stageBgDark: st.bgD, stageFgDark: st.fgD,
+          stageBgLight: st.bgL, stageFgLight: st.fgL,
+          delay: (i * 70) + 'ms',
+        };
+      }),
+    };
+  }
+}
+</script>
+</body>
+</html>

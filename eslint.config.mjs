@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Design-handoff reference files. They are written against the repo but
+    // are documentation, not build inputs — they import modules that only
+    // exist once the redesign lands. Also excluded in tsconfig.json.
+    "docs/**",
   ]),
 ]);
 
