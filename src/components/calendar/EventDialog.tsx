@@ -93,6 +93,7 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
     }
 
     setSaving(true)
+    try {
     const payload = {
       title: title.trim(),
       description: description || null,
@@ -109,9 +110,18 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
     const { error: writeError } = event
       ? await supabase.from('calendar_events').update(payload).eq('id', event.id)
       : await supabase.from('calendar_events').insert(payload)
-    setSaving(false)
-    if (writeError) return setError(writeError.message)
-    onSave()
+      setSaving(false)
+      if (writeError) return setError(writeError.message)
+      onSave()
+    } catch (err) {
+      // Belt and braces. supabase-js returns network failures in `error`
+      // rather than throwing, but anything that DOES throw here would
+      // otherwise reject unhandled and leave the dialog looking inert with
+      // nothing on screen — which is the exact failure mode this whole change
+      // exists to eliminate. Never fail silently.
+      setSaving(false)
+      setError(err instanceof Error ? err.message : 'Could not save the event.')
+    }
   }
 
   return (
