@@ -1,3 +1,14 @@
+> # ⛔ SUPERSEDED — do not plan work from this file
+>
+> **Stage 4 is DONE and merged (PR #25).** This file says it is next. Reading it
+> cold is what let two parallel sessions build Stage 4 twice on 26 July.
+>
+> **Current handoff: `handoff-riviera-glass-2026-07-26-consolidated.md`.**
+>
+> Also stale here: the 38-problem lint baseline (it is 37), and the claim that
+> no PRs are open (#26 is open). Kept for its record of the Stage 1–3 work and
+> the event-creation saga.
+
 # Session Handoff — Riviera Glass redesign, Stages 1–3 MERGED, Stage 4 next
 
 **Written: July 26, 2026. Updated later the same day** — Stages 1–3 are all
