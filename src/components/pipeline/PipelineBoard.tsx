@@ -242,9 +242,13 @@ function KanbanView({
                 }}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[12px] font-bold" style={{ color: INK.primary }}>{label}</span>
+                  {/* Larger than the plan's 12/700 and 11/600 — Kevin, looking
+                      at it on a phone: the column is 256px wide and the header
+                      had room to spare. The depth planes shrink the furthest
+                      column by about 6%, so this keeps Idea legible too. */}
+                  <span className="text-[15px] font-bold" style={{ color: INK.primary }}>{label}</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-semibold" style={{ ...MONO, color: INK.tertiary }}>
+                    <span className="text-[13px] font-semibold" style={{ ...MONO, color: INK.tertiary }}>
                       {stagePosts.length}
                     </span>
                     <button
@@ -253,7 +257,7 @@ function KanbanView({
                       className="transition-colors hover:text-[#150f19]"
                       style={{ color: INK.tertiary }}
                     >
-                      <Plus size={14} />
+                      <Plus size={16} />
                     </button>
                   </div>
                 </div>
