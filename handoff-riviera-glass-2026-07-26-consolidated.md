@@ -1,6 +1,7 @@
-# Session Handoff — Riviera Glass redesign, Stages 1–4 merged
+# Session Handoff — Riviera Glass redesign, Stages 1–4 and 8 merged
 
-**Written 26 July 2026, evening. Consolidates two sessions.** Supersedes
+**Written 26 July 2026, evening. Consolidates two sessions. Updated later the
+same evening** after Stages 4 and 8 merged. Supersedes
 `handoff-riviera-glass-stage4-2026-07-26.md` entirely — that file says "Stage 4
 next", which is no longer true and is exactly the stale picture that let two
 sessions build Stage 4 twice.
@@ -50,9 +51,9 @@ only the remote does.
 
 ## Where things stand
 
-- **`main` is at `c68bdc5`.** Stages 1–4 merged, plus the event-creation fixes.
-- **PR #26 is open at `8713275`**, branch `claude/riviera-glass-punch-list-qhs5y8`.
-  Conflict-free, CI green, `tsc` clean, preview deployed. Awaiting Kevin's merge.
+- **`main` is at `1485c94`.** Stages 1–4 and 8 merged, the design-review punch
+  list fully discharged, plus the event-creation fixes.
+- **No open PRs. Only `main` exists on the remote.**
 - `tsc --noEmit` is clean on both. **Lint baseline is 37 problems (17 errors,
   20 warnings).** Older docs quote 38 and 42 — both stale. The error/warning
   split moved 16/21 → 17/20 in Stage 4: the phone day-view default costs one
@@ -69,39 +70,19 @@ only the remote does.
 | #23 | Event-creation fixes (off `main`, unrelated to the redesign) |
 | #24 | Handoff docs |
 | #25 | Stage 4 — month view extracted to `MonthGrid.tsx`, contrast pass, phone day-view default, `eventCoversDay` → `src/lib/calendar-utils.ts`, `canHover` → `glass.ts`. Screenshots in `docs/screenshots/stage4-month/`. |
+| #26 | Punch list: week-view drop lands where released + opens target, days fan independently, `PLATFORM_NEUTRAL`/`platformStyle()`, **12-hour times everywhere**. Preserved `docs/design/pipeline/`. |
+| #27 | Month view: neutral `'any'`, failed-post `#8a2b12` left edge, `+n more` opens the day, `backdrop-filter` dropped from the 42 cells, **and phones tap-to-open-day** (below `sm:` the cells are dots, so the cell tap was the only interaction and it opened the create-event dialog). |
+| #28 | Stage 8 — pipeline board. Depth planes **`xl:`+** (moved from `lg` — at 1024 six columns share ~110px each), empty-column recession + `EMPTY` marker, 15px/13px headers, resting shadows/colours as classes. Screenshots in `docs/screenshots/stage8-pipeline/`. |
 
-### In PR #26, not yet on `main`
+### Design specs preserved on `main`
 
-- `docs/design/pipeline/riviera-glass-pipeline-plan.md` — **Claude Design's
-  content-pipeline spec. This is the only copy.** Merging #26 is what puts it
-  on `main`.
-- Week view: cross-column drops land where released and open the target column;
-  day decks fan **independently** (a Set, not one dateKey — with one key,
-  dragging a card out of a fanned day folded that day up behind you).
-- `PLATFORM_NEUTRAL` + `platformStyle()` in `glass.ts` — neutral grey `ANY`
-  instead of mislabelling `platform: 'any'` posts as Instagram.
-- **12-hour times everywhere.** No `HH:mm` remains under
-  `src/components/calendar`.
+Both exist **only** in the repo — they were session uploads and would have been
+lost otherwise. Preserving them before implementing is the rule, not a nicety.
 
----
-
-## Outstanding — four month-view items
-
-All agreed in the design review, none started. Line numbers against
-`src/components/calendar/MonthGrid.tsx` on `main`. Recommended as **one small
-follow-up commit** after #26 merges, so it reverts on its own.
-
-| Item | Line | Effect |
-|---|---|---|
-| `PLATFORM[…] ?? PLATFORM.instagram` | 91 | An `'any'` post gets an IG dot and code. `platformStyle()` already exists in `glass.ts` — the month view just doesn't call it. |
-| Failed posts have no coloured edge | 98 | `edge: pf.ink` unconditionally. A failed post is invisible in month view; the row has no space for the week card's `PublishStatusBadge`, so the 3px left edge should carry it (`#8a2b12`, the glass error ink). |
-| `+n more` lacks `stopPropagation` | ~232 | Clicking it falls through to the cell's `onDayClick` and opens the **create-event dialog** instead of showing the day. |
-| `backdropFilter: blur(10px)` | 121 | On all 42 cells, against the design's own rule ("never on cards"). Cells sit on a flat wash so there is nothing to blur. Perf flag, not a bug — likeliest jank source in the installed PWA on iOS. |
-
-Hover-gating from the same review is **already done** — `canHover()` is applied.
-
-Note: below `sm:` the month cells render coloured dots, not text rows, so the
-failed-edge and `+n more` fixes only affect ≥640px.
+- `docs/design/riviera-glass/` — the v2 bundle (README, code, mock, screenshots).
+- `docs/design/pipeline/riviera-glass-pipeline-plan.md` — Stage 8's spec. Built.
+- `docs/design/home/riviera-glass-home-plan.md` — the `/home` dashboard plan.
+  **Not built.** Rulings from it are folded into the decisions table below.
 
 ---
 
@@ -118,7 +99,12 @@ failed-edge and `+n more` fixes only affect ≥640px.
 | **Publish badge stays on the week card** | Stage and publish status are different axes. |
 | **`/home` nav link stays out** | Route doesn't exist; would 404. |
 | **`counts` / `health` props unpassed** | No endpoint reports them. Absent beats fabricated. |
-| **Content pipeline is in scope** | Kevin. Spec is in `docs/design/pipeline/` (via #26). |
+| **Content pipeline is in scope** | Kevin. Spec in `docs/design/pipeline/`. **Built and merged (#28).** |
+| **Week view is a content board — permanently** | Kevin, and formalized as Ruling 2 of the home plan. `WeeklyBoard` builds columns from posts and ideas only; calendar events have never rendered there and **now never will**. The model is: week = production cockpit, month = everything, home = where events are created and seen. This closes the long-running "should the week view show events" question — the answer is no. |
+| **No time-grid week view** | Kevin, asked directly about an Apple-Calendar-style layout: "It's more useful to have it as a content board." `TimeGrid.tsx` already does the one-day version and stays in the right panel. |
+| **Token-expiry display is cut** | Home plan Ruling 1. `app_credentials` is service-role only, `expires_at` is often null, and `PublishHealth`'s `live` state asserts a running cron with **no heartbeat to verify it**. Publish health becomes problems-only. `PublishHealth.tsx` stays in the tree unused — do not delete, do not wire. |
+| **Event creation moves to home, with a visible outcome** | Home plan Ruling 3. The "new event dialog does nothing" report was really the visibility gap: the dialog saves correctly, the week view just can't show the result. Home gets the AI input *and* an upcoming-events list, shipped together or not at all. |
+| **Pipeline load / stage counts cut** | Kevin — "not useful". Takes the CONGESTED / overdue-per-stage / oldest-days machinery with it. |
 | **Dashboard home (Stage 7) out of scope** | Being respecced separately. |
 | **No "published" celebration animation** | Design README line 65. |
 | **Dark mode is a non-issue** | `.dark` exists but nothing sets the class. |
@@ -134,10 +120,14 @@ failed-edge and `+n more` fixes only affect ≥640px.
    elapse and claim the gesture. Warning comment sits in `SortablePostCard`.
    The highlight is a deliberate open trade — a real fix needs `touch-action`,
    which trades against swipe-to-scroll.
-2. **An inline style beats a Tailwind `sm:` variant.** Cost time three separate
-   times: inline `minWidth: 0` collapsing the mobile snap columns, then
-   `minHeight` and `fontSize` in the month cell. **If a value needs a
-   breakpoint, it must be a class.**
+2. **An inline style beats a Tailwind class — including `hover:`.** Cost time
+   five times now. Three were breakpoints: inline `minWidth: 0` collapsing the
+   mobile snap columns, then `minHeight` and `fontSize` in the month cell. Two
+   were pseudo-classes, found in review of Stage 8: an inline `boxShadow`
+   alongside `hover:shadow-[…]` left every pipeline card lifting without
+   deepening, and inline `color` alongside `hover:text-[…]` killed the hover
+   colour on three controls (the underline still worked, which masked it).
+   **If a value has any variant — breakpoint or state — it must be a class.**
 3. **`h-dvh`, never `h-screen`.** In mobile WebKit (including Chrome on iOS)
    `100vh` is the *large* viewport; with `overflow-hidden` the bottom of every
    column was unreachable.
@@ -148,6 +138,15 @@ failed-edge and `+n more` fixes only affect ≥640px.
 6. **Tailwind v4 auto-gates `hover:` behind `@media (hover: hover)`** — verified
    against the installed 4.2.4 by compiling. So CSS hover classes are safe on
    touch; only *imperative* `onMouseEnter` handlers need the `canHover()` guard.
+   Prefer classes for new work; the week board's gated handlers are phone-tested
+   and not worth churning.
+8. **Screenshots cannot verify hover or touch.** Stage 8 shipped two dead hover
+   styles past a screenshot pass. If a change is a hover state, drive it with
+   Playwright's `.hover()` and compare computed styles; if it is touch, say
+   plainly that it is untested.
+9. **A responsive breakpoint is not verified until the boundary is.** Stage 8's
+   planes were checked at 1440 and 390 and were worst at 1024. Test the width
+   either side of the switch.
 7. **`min-w` is only a floor** — `shrink-0` columns still grow to content. Week
    columns need a definite `w-[44vw] sm:w-auto`.
 
@@ -203,47 +202,43 @@ fetched from here.
 
 | # | Stage | Status |
 |---|---|---|
-| 5 | ReadyReel | **Blocked.** Verify `/2/files/get_thumbnail_v2` returns thumbnails for large videos with real credentials before building. Fallback needing no thumbnail API: a muted `<video preload="metadata" src={temporaryLink}#t=0.1>` face shows the first frame, and `getTemporaryLink()` already exists. Expect the **n=1** state — the Ready folder holds one file. Also: the reel's cylinder radius is fixed at 104px but needed radius is `(FACE_W/2)/tan(π/n)` — faces interpenetrate past ~8. Cap at 8 or compute it. And its copy promises drag that isn't wired (only `onPick` exists) — ship click-to-schedule and reword. |
-| 6 | Today pane | **Blocked on Kevin:** merge (keep Calendars toggles + TimeGrid, restyle) vs replace (follow README §4, losing per-calendar toggles and the day time-grid) vs defer. Recommended: defer, then merge. |
-| 7 | Dashboard home | Out of scope. |
-| 8 | **Content pipeline** | **Ready to build.** Spec: `docs/design/pipeline/riviera-glass-pipeline-plan.md` (arrives on `main` with #26). Touches only `src/components/pipeline/PipelineBoard.tsx`. Verified against the code: its Tailwind-hover claim holds, its must-not-change anchors all exist. **Two corrections to that plan:** its lint baseline of 42 is wrong (37), and `PLATFORM_CONFIG` is already `Record<Platform, …>` so the board never had the `'any'` bug — keep the exhaustive typing but source the neutral from `glass.ts`'s `PLATFORM_NEUTRAL` rather than restating literals. Its §4b/§4e (header, grid view) are acknowledged extrapolation, not designer intent. |
-| 9 | Two-way Google Calendar sync | **After the last stage**, Kevin's explicit call. Sync is read-only today; nothing created in the app has ever reached Google. OAuth scope is already `auth/calendar`, so **no re-consent needed**. Care goes into: local row saving while the Google push fails, duplicate prevention on the next sync, and which side wins. |
+| **/home** | Dashboard | **Ready to build.** Spec: `docs/design/home/riviera-glass-home-plan.md`, verified against the code (see its errata below). Three phases, one commit each. **Phase A** — route + `HomeView`: greeting, next-publish hero, stat tiles, week strip, needs-attention. One posts query, no new endpoints. **Phase B** — quick actions, the events block, **the `src/lib/events.ts` extraction**, and re-adding the `/home` nav entry. **Phase C** — ReadyReel into Row 3; hard-gated on Stage 5. |
+| 5 | ReadyReel | **Blocked.** Verify `/2/files/get_thumbnail_v2` returns thumbnails for large videos with real credentials before building. Fallback needing no thumbnail API: a muted `<video preload="metadata" src={temporaryLink}#t=0.1>` face shows the first frame; `getTemporaryLink()` already exists. Expect the **n=1** state. Also: cylinder radius is fixed at 104px but needed radius is `(FACE_W/2)/tan(π/n)` — faces interpenetrate past ~8, so cap at 8 or compute it. And its copy promises drag that isn't wired (only `onPick` exists) — ship click-to-schedule and reword. |
+| 6 | Today pane | **Blocked on Kevin:** merge (keep Calendars toggles + TimeGrid, restyle) vs replace (README §4, losing per-calendar toggles and the day time-grid) vs defer. Recommended: defer, then merge. Note the home plan may absorb part of its purpose. |
+| 7 | Dashboard home | Superseded by the `/home` plan above. |
+| 8 | Content pipeline | **Done** (#28). |
+| 9 | Two-way Google Calendar sync | **After the last stage**, Kevin's call — but he has restated he wants it: *"I would still want the new event dialogue to actually work alongside 2-way sync."* Sync is one-way pull today; `google-calendar.ts` has **no function that creates anything in Google**, so nothing the app has ever made has reached it. **No re-consent needed** — the OAuth scope is already `auth/calendar`. |
 
----
+### Stage 9's hook point — why the home plan's extraction matters
 
-## Open decisions awaiting Kevin
+There are **two** app-side event write paths today, verified: `EventDialog.tsx`
+lines 115–116 (its own insert/update) and `CalendarView.tsx` line 388
+(`handleAIEvent`, 23 lines). `src/lib/events.ts` does not exist yet.
 
-1. **The week view renders no calendar events at all.** `WeeklyBoard` has no
-   `events` prop and never has; month, day and list all receive `visibleEvents`.
-   An event created from the week toolbar's "+ New Event" can only be seen by
-   switching view — Kevin hit exactly this. Proposal on the table: compact rows
-   above the post cards using the calendar's colour as a left border, mirroring
-   `MonthGrid`.
-2. **Stage 6 Today pane** — merge vs replace vs defer (above).
-3. **`IdeaCard` is still the old flat white/amber card**, unchanged, so ideas
-   look like a different app inside the glass week columns. A ~20-line glass
-   variant would close it.
-4. **Stat-tile naming** — "ready to go" counts already-published posts, which
-   reads inflated. Rename to "on track", or count scheduled only.
-5. **Publish Health semantics** — the suggested server shape maps "any failed
-   post in 24h" → `error` / "Publishing blocked", which overstates. Reserve
-   `error` for config/token failure; one failed post is `warning`.
+Phase B of the home plan routes **both** through `src/lib/events.ts`
+(`createEventFromParsed` + `createEvent`/`updateEvent`). Do that properly and
+Stage 9 adds push-to-Google in one file. Skip it and Stage 9 has two places to
+patch and will miss one. Leave `external_id` null on app-created events — Stage
+9 backfills it from Google's insert response.
 
-## Ideas worth proposing, not yet agreed
+The care in Stage 9 is not the insert. It is: the local row saving while the
+Google push fails (don't leave the user thinking it synced), preventing the two
+ends duplicating on the next sync, and deciding which side wins when both
+changed.
 
-- **ReadyReel drag-to-day as a fast-follow.** The gesture the copy accidentally
-  promised is genuinely good — dragging an export onto a day to create a
-  pre-filled post is the core loop in one motion. Needs real scoping:
-  `DndContext` lifted to `CalendarView`, a shared droppable id scheme, and a
-  post-dialog prefill path.
-- **Merged agenda in the Today pane** — the mock mixes calendar events with
-  "Publish: …" rows. Arguably more useful than the raw TimeGrid for a creator.
-- **"Oldest export" as a nudge** — tint the reel caption amber past a threshold
-  (say 7 days), same philosophy as the CONGESTED chip.
-- **Failed-post rollup in the sidebar** — `derivePublishState` and the posts are
-  already client-side; a small red "1 post failed" line under the nav would
-  surface the state that matters most without waiting for a Publish Health
-  endpoint.
+### Errata in the home plan — corrected here, not in the file
+
+The plan is accurate about the codebase; these three are stale or now settled:
+
+1. **Lint baseline is 37**, not the 42 it quotes. Third document with a wrong
+   number — check, don't inherit.
+2. **Stage 8 is merged**, not "PR #28, under review".
+3. **Time format is settled: 12-hour `h:mm a`.** The plan says "match whatever
+   Kevin ruled" — he ruled, and every calendar surface already complies.
+
+Verified present, as the plan assumes: `IdeaDialog` at
+`src/components/ideas/IdeaDialog.tsx`, `media_dropbox_path` on `SocialPost`,
+`/` redirecting to `/calendar`, and `source: 'app'` on both write paths.
 
 ---
 
