@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import {
   format,
   startOfMonth,
@@ -14,7 +13,6 @@ import {
   subWeeks,
   addDays,
   subDays,
-  startOfDay,
   isSameMonth,
   isSameDay,
   isSameWeek,
@@ -36,6 +34,8 @@ import { createClient } from '@/lib/supabase/client'
 import type { CalendarEvent, Calendar, SocialPost, Idea } from '@/types/database'
 import { EventDialog } from './EventDialog'
 import { CalendarManageDialog } from './CalendarManageDialog'
+import { MonthGrid } from './MonthGrid'
+import { eventCoversDay } from '@/lib/calendar-utils'
 import { AIEventInput, type ParsedEvent } from './AIEventInput'
 import { PlatformIcon, PLATFORM_COLORS } from '@/components/ui/PlatformIcon'
 import { PostDialog } from '@/components/pipeline/PostDialog'
@@ -166,6 +166,16 @@ function DatePickerPopup({
 export function CalendarView() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [view, setView] = useState<ViewMode>('week')
+
+  // Phones open on the day view. Seven columns is a desktop shape; on a phone
+  // the week board shows about two days at a time, so landing there means
+  // scrolling to find today. Set in an effect rather than a lazy useState
+  // initialiser because reading window during render would not match what the
+  // server rendered and would fail hydration. Empty deps: this is a default on
+  // first load, not a lock — switching to week or month afterwards sticks.
+  useEffect(() => {
+    if (window.innerWidth < 640) setView('day')
+  }, [])
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [calendars, setCalendars] = useState<Calendar[]>([])
   const [posts, setPosts] = useState<SocialPost[]>([])
@@ -597,139 +607,6 @@ export function CalendarView() {
         onDelete={handleDeleteCalendar}
         calendar={editingCalendar}
       />
-    </div>
-  )
-}
-
-// ─────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────
-function eventCoversDay(event: CalendarEvent, day: Date): boolean {
-  const start = startOfDay(parseISO(event.starts_at))
-  const end = event.ends_at ? startOfDay(parseISO(event.ends_at)) : start
-  const d = startOfDay(day)
-  return d >= start && d <= end
-}
-
-function PostChip({ post }: { post: SocialPost }) {
-  const router = useRouter()
-  const color = PLATFORM_COLORS[post.platform]
-  return (
-    <button
-      onClick={(e) => { e.stopPropagation(); router.push(`/pipeline?post=${post.id}`) }}
-      className="w-full flex items-center gap-1.5 text-xs rounded font-medium overflow-hidden hover:opacity-80 transition-opacity"
-      style={{ backgroundColor: color + '15' }}
-    >
-      <div className="relative shrink-0 w-7 h-7">
-        {post.media_url ? (
-          <img src={post.media_url} alt="" className="w-7 h-7 object-cover" />
-        ) : (
-          <div className="w-7 h-7 flex items-center justify-center" style={{ backgroundColor: color + '30' }}>
-            <PlatformIcon platform={post.platform} size={14} />
-          </div>
-        )}
-        {post.media_url && (
-          <span className="absolute bottom-0 right-0">
-            <PlatformIcon platform={post.platform} size={10} />
-          </span>
-        )}
-      </div>
-      <span className="truncate pr-1 capitalize" style={{ color }}>
-        {post.title ?? post.post_type}
-      </span>
-    </button>
-  )
-}
-
-function IdeaChip({ idea }: { idea: Idea }) {
-  const router = useRouter()
-  return (
-    <button
-      onClick={(e) => { e.stopPropagation(); router.push(`/ideas?idea=${idea.id}`) }}
-      className="w-full flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-[6px] font-medium truncate border border-dashed border-[#d6d6d6] text-[#7b7b7b] bg-[#f5f2f0] hover:opacity-80 transition-opacity"
-    >
-      <span className="truncate">{idea.title}</span>
-    </button>
-  )
-}
-
-// ─────────────────────────────────────────────
-// Month Grid
-// ─────────────────────────────────────────────
-function MonthGrid({
-  currentDate, events, posts, ideas, onDayClick, onEventClick,
-}: {
-  currentDate: Date
-  events: CalendarEvent[]
-  posts: SocialPost[]
-  ideas: Idea[]
-  onDayClick: (d: Date) => void
-  onEventClick: (e: CalendarEvent) => void
-}) {
-  const monthStart = startOfMonth(currentDate)
-  const monthEnd = endOfMonth(currentDate)
-  const gridStart = startOfWeek(monthStart, { weekStartsOn: 0 })
-  const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 0 })
-  const days = eachDayOfInterval({ start: gridStart, end: gridEnd })
-
-  return (
-    <div className="h-full flex flex-col">
-      <div className="grid grid-cols-7 border-b border-border">
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-          <div key={d} className="py-2.5 text-center text-[11px] font-semibold text-[#bcbcbc] uppercase tracking-widest">{d}</div>
-        ))}
-      </div>
-      <div className="flex-1 grid grid-cols-7 auto-rows-fr">
-        {days.map((day) => {
-          const dayEvents = events.filter((e) => eventCoversDay(e, day))
-          const dayPosts = posts.filter((p) => p.scheduled_at && isSameDay(parseISO(p.scheduled_at), day))
-          const dayIdeas = ideas.filter((i) => i.date_start && isSameDay(parseISO(i.date_start), day))
-          const outside = !isSameMonth(day, currentDate)
-          const today = isToday(day)
-          const allItems = dayEvents.length + dayPosts.length + dayIdeas.length
-          const maxShow = 3
-          const shown = { events: Math.min(dayEvents.length, maxShow), posts: 0, ideas: 0 }
-          let remaining = maxShow - shown.events
-          shown.posts = Math.min(dayPosts.length, remaining); remaining -= shown.posts
-          shown.ideas = Math.min(dayIdeas.length, remaining)
-          const overflow = allItems - shown.events - shown.posts - shown.ideas
-
-          return (
-            <div
-              key={day.toISOString()}
-              className={cn(
-                'border-b border-r border-[#d6d6d6] p-1.5 min-h-[90px] cursor-pointer hover:bg-[#f1ccff]/10 transition-colors',
-                outside && 'bg-[#f5f2f0]/50'
-              )}
-              onClick={() => onDayClick(day)}
-            >
-              <div className={cn(
-                'text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full mb-1',
-                today && 'bg-black text-white',
-                outside && 'text-[#bcbcbc]'
-              )}>
-                {format(day, 'd')}
-              </div>
-              <div className="space-y-0.5">
-                {dayEvents.slice(0, shown.events).map((event) => (
-                  <button
-                    key={event.id}
-                    onClick={(e) => { e.stopPropagation(); onEventClick(event) }}
-                    className="w-full text-left text-xs px-1.5 py-0.5 rounded-[6px] truncate text-white font-medium"
-                    style={{ backgroundColor: (event.calendar as Calendar | undefined)?.color ?? '#6366f1' }}
-                  >
-                    {event.all_day ? '' : format(parseISO(event.starts_at), 'h:mma') + ' '}
-                    {event.title}
-                  </button>
-                ))}
-                {dayPosts.slice(0, shown.posts).map((post) => <PostChip key={post.id} post={post} />)}
-                {dayIdeas.slice(0, shown.ideas).map((idea) => <IdeaChip key={idea.id} idea={idea} />)}
-                {overflow > 0 && <p className="text-xs text-muted-foreground px-1">+{overflow} more</p>}
-              </div>
-            </div>
-          )
-        })}
-      </div>
     </div>
   )
 }
