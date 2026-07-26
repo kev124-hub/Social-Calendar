@@ -1,32 +1,45 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type CSSProperties } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Plus, ExternalLink, LayoutGrid, Columns } from 'lucide-react'
 import { format, parseISO, isBefore, isToday, addDays } from 'date-fns'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase/client'
+import { GLASS, INK, MOTION, PLATFORM, PLATFORM_NEUTRAL, STAGE } from '@/lib/glass'
 import type { SocialPost, PostStage, Platform } from '@/types/database'
 import { PublishStatusBadge, derivePublishState } from '@/components/ui/PublishStatusBadge'
 import { PostDialog } from './PostDialog'
 import { cn } from '@/lib/utils'
 
-const STAGES: { key: PostStage; label: string; color: string; dot: string }[] = [
-  { key: 'idea',      label: 'Idea',      color: 'bg-[#fafafa] border-[#d6d6d6]',  dot: 'bg-[#d6d6d6]' },
-  { key: 'scripted',  label: 'Scripted',  color: 'bg-[#fafafa] border-[#d6d6d6]',  dot: 'bg-[#d6d6d6]' },
-  { key: 'shot',      label: 'Shot',      color: 'bg-[#f0faff] border-[#c0eaff]',  dot: 'bg-[#91e0ff]' },
-  { key: 'editing',   label: 'Editing',   color: 'bg-[#f0faff] border-[#c0eaff]',  dot: 'bg-[#91e0ff]' },
-  { key: 'scheduled', label: 'Scheduled', color: 'bg-[#fdf4ff] border-[#e8c0ff]',  dot: 'bg-[#f1ccff]' },
-  { key: 'published', label: 'Published', color: 'bg-[#fdf4ff] border-[#e8c0ff]',  dot: 'bg-[#c080e0]' },
+// The column keeps the label "Published" even though its chip reads "Live" —
+// as a Move: target, "Published" is the clearer verb.
+const STAGES: { key: PostStage; label: string }[] = [
+  { key: 'idea',      label: 'Idea' },
+  { key: 'scripted',  label: 'Scripted' },
+  { key: 'shot',      label: 'Shot' },
+  { key: 'editing',   label: 'Editing' },
+  { key: 'scheduled', label: 'Scheduled' },
+  { key: 'published', label: 'Published' },
 ]
 
-const PLATFORM_CONFIG: Record<Platform, { label: string; color: string }> = {
-  instagram: { label: 'IG', color: 'bg-[#f1ccff] text-black' },
-  tiktok:    { label: 'TT', color: 'bg-[#f0f0f0] text-[#333]' },
-  linkedin:  { label: 'LI', color: 'bg-[#e8f0ff] text-[#1d4ed8]' },
-  any:       { label: 'Any', color: 'bg-[#f0f0f0] text-[#7b7b7b]' },
+// Depth planes, idea → published (design README §6). Applied at lg+ only; see
+// KanbanView for why perspective and horizontal scrolling can't coexist.
+const PLANE_Z = [-90, -70, -50, -30, -10, 10]
+
+// Kept as Record<Platform, …> so TypeScript still forces an entry for every
+// platform — that exhaustiveness is why this board never had the 'any'-renders-
+// as-Instagram bug the calendar did. The neutral values come from glass.ts
+// rather than being restated, so the two can't drift apart.
+const PF: Record<Platform, { code: string; ink: string; fill: string }> = {
+  instagram: { code: PLATFORM.instagram.code, ink: PLATFORM.instagram.ink, fill: PLATFORM.instagram.fill },
+  tiktok:    { code: PLATFORM.tiktok.code,    ink: PLATFORM.tiktok.ink,    fill: PLATFORM.tiktok.fill },
+  linkedin:  { code: PLATFORM.linkedin.code,  ink: PLATFORM.linkedin.ink,  fill: PLATFORM.linkedin.fill },
+  any:       { code: PLATFORM_NEUTRAL.code,   ink: PLATFORM_NEUTRAL.ink,   fill: PLATFORM_NEUTRAL.fill },
 }
+
+const MONO = { fontFamily: 'var(--font-mono-num)' } as const
+const ERROR_INK = '#8a2b12'
 
 const POST_TYPE_LABELS: Record<string, string> = {
   reel: 'Reel', carousel: 'Carousel', story: 'Story',
@@ -100,41 +113,48 @@ export function PipelineBoard() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border gap-2">
-        <h1 className="font-heading text-2xl font-normal tracking-tight">Content Pipeline</h1>
+      <div
+        className="flex items-center justify-between gap-2 px-4 py-3 backdrop-blur-[14px]"
+        style={{ background: GLASS.panelSoft, borderBottom: `1px solid ${GLASS.hairline}` }}
+      >
+        <h1 className="font-heading text-2xl font-normal tracking-tight" style={{ color: INK.primary }}>Content Pipeline</h1>
         <div className="flex items-center gap-2">
           {/* Platform filter */}
-          <div className="flex gap-0.5">
+          <div
+            className="flex gap-[2px] rounded-[13px] p-[3px]"
+            style={{ background: 'rgba(255,255,255,.50)', border: '1px solid rgba(255,255,255,.9)' }}
+          >
             {(['all', 'instagram', 'tiktok', 'linkedin'] as const).map((p) => (
               <button
                 key={p}
                 onClick={() => setFilterPlatform(p)}
                 className={cn(
-                  'px-3 py-1.5 text-xs font-medium transition-colors rounded-[42px]',
-                  filterPlatform === p ? 'bg-[#f1ccff] text-black' : 'text-[#7b7b7b] hover:text-black'
+                  'rounded-[10px] px-3 py-1.5 text-xs font-semibold transition-colors',
+                  filterPlatform === p ? 'bg-[rgba(255,255,255,.92)]' : 'hover:text-[#150f19]'
                 )}
+                style={{ color: filterPlatform === p ? INK.primary : 'rgba(27,20,31,.6)' }}
               >
-                {p === 'all' ? 'All' : p === 'instagram' ? 'IG' : p === 'tiktok' ? 'TT' : 'LI'}
+                {p === 'all' ? 'All' : PF[p].code}
               </button>
             ))}
           </div>
 
           {/* View toggle */}
-          <div className="flex gap-0.5">
-            <button
-              onClick={() => setViewMode('kanban')}
-              title="Kanban"
-              className={cn('px-2.5 py-1.5 rounded-[42px] transition-colors', viewMode === 'kanban' ? 'bg-black text-white' : 'text-[#7b7b7b] hover:text-black')}
-            >
-              <Columns size={14} />
-            </button>
-            <button
-              onClick={() => setViewMode('grid')}
-              title="Grid preview"
-              className={cn('px-2.5 py-1.5 rounded-[42px] transition-colors', viewMode === 'grid' ? 'bg-black text-white' : 'text-[#7b7b7b] hover:text-black')}
-            >
-              <LayoutGrid size={14} />
-            </button>
+          <div
+            className="flex gap-[2px] rounded-[13px] p-[3px]"
+            style={{ background: 'rgba(255,255,255,.50)', border: '1px solid rgba(255,255,255,.9)' }}
+          >
+            {([['kanban', Columns, 'Kanban'], ['grid', LayoutGrid, 'Grid preview']] as const).map(([mode, Icon, title]) => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                title={title}
+                className={cn('rounded-[10px] px-2.5 py-1.5 transition-colors', viewMode === mode && 'bg-[rgba(255,255,255,.92)]')}
+                style={{ color: viewMode === mode ? INK.primary : 'rgba(27,20,31,.6)' }}
+              >
+                <Icon size={14} />
+              </button>
+            ))}
           </div>
 
           <Button size="sm" onClick={() => openNew()}>
@@ -183,24 +203,51 @@ function KanbanView({
 }) {
   return (
     <div className="flex-1 overflow-x-auto">
-      <div className="flex gap-4 p-6 h-full min-w-max">
-        {stages.map(({ key, label, color }) => {
+      {/* Depth planes are lg+ only. The mock's pipeline is a strip that fits its
+          container; this board is w-64 columns in overflow-x-auto, and
+          perspective plus horizontal scrolling skews each column by a different
+          amount as you scroll — it reads as broken, not as depth. Below lg the
+          columns stay flat and scroll exactly as they do today. */}
+      <div className="flex h-full min-w-max gap-[14px] p-[18px] lg:min-w-0 lg:[perspective:1500px] lg:[perspective-origin:50%_40%]">
+        {stages.map(({ key, label }, i) => {
           const stagePosts = filtered.filter((p) => p.stage === key)
+          // scheduled + published sit forward and read as more solid: these are
+          // the committed columns.
+          const elevated = i > 3
           return (
-            <div key={key} className={cn('flex flex-col w-64 rounded-[24px] border', color)}>
-              <div className="flex items-center justify-between px-3 py-3 border-b border-inherit">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold">{label}</span>
-                  <Badge variant="secondary" className="text-xs h-5 px-1.5">{stagePosts.length}</Badge>
+            <div
+              key={key}
+              style={{ '--plane-z': `${PLANE_Z[i]}px` } as CSSProperties}
+              className="w-64 shrink-0 transition-transform duration-[350ms] ease-[cubic-bezier(.2,.8,.2,1)] lg:w-auto lg:min-w-0 lg:flex-1 lg:shrink lg:[transform:translateZ(var(--plane-z))] lg:hover:[transform:translateZ(70px)]"
+            >
+              <div
+                className="flex h-full flex-col gap-2 rounded-[16px] p-[10px] shadow-[0_16px_28px_rgba(63,43,80,.16)] backdrop-blur-[12px]"
+                style={{
+                  background: elevated ? 'rgba(255,255,255,.78)' : 'rgba(255,255,255,.42)',
+                  border: `1px solid ${elevated ? 'rgba(20,16,20,.50)' : 'rgba(255,255,255,.70)'}`,
+                }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[12px] font-bold" style={{ color: INK.primary }}>{label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold" style={{ ...MONO, color: INK.tertiary }}>
+                      {stagePosts.length}
+                    </span>
+                    <button
+                      onClick={() => onNew(key)}
+                      title={`New post in ${label}`}
+                      className="transition-colors hover:text-[#150f19]"
+                      style={{ color: INK.tertiary }}
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
                 </div>
-                <button onClick={() => onNew(key)} className="text-muted-foreground hover:text-foreground">
-                  <Plus size={14} />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                {stagePosts.map((post) => (
-                  <PostCard key={post.id} post={post} stages={stages} onEdit={() => onEdit(post)} onMove={(s) => onMove(post, s)} />
-                ))}
+                <div className="flex-1 space-y-2 overflow-y-auto">
+                  {stagePosts.map((post, idx) => (
+                    <PostCard key={post.id} post={post} index={idx} stages={stages} onEdit={() => onEdit(post)} onMove={(s) => onMove(post, s)} />
+                  ))}
+                </div>
               </div>
             </div>
           )
@@ -226,8 +273,8 @@ function GridView({ posts, onEdit }: { posts: SocialPost[]; onEdit: (p: SocialPo
 
   if (posts.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-muted-foreground">
-        <p className="text-sm">No posts yet</p>
+      <div className="flex-1 flex items-center justify-center">
+        <p className="text-sm" style={{ color: INK.secondary }}>No posts yet</p>
       </div>
     )
   }
@@ -235,7 +282,7 @@ function GridView({ posts, onEdit }: { posts: SocialPost[]; onEdit: (p: SocialPo
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-8">
       {overdue.length > 0 && (
-        <GridSection title="Overdue" titleClass="text-destructive" posts={overdue} onEdit={onEdit} />
+        <GridSection title="Overdue" titleColor={ERROR_INK} posts={overdue} onEdit={onEdit} />
       )}
       {thisWeek.length > 0 && (
         <GridSection title="This Week" posts={thisWeek} onEdit={onEdit} />
@@ -254,16 +301,19 @@ function GridView({ posts, onEdit }: { posts: SocialPost[]; onEdit: (p: SocialPo
 }
 
 function GridSection({
-  title, titleClass, posts, onEdit,
+  title, titleColor, posts, onEdit,
 }: {
   title: string
-  titleClass?: string
+  titleColor?: string
   posts: SocialPost[]
   onEdit: (p: SocialPost) => void
 }) {
   return (
     <div>
-      <h2 className={cn('text-sm font-semibold mb-3', titleClass ?? 'text-foreground')}>{title} <span className="text-muted-foreground font-normal">({posts.length})</span></h2>
+      <h2 className="font-heading mb-3 text-[19px] font-semibold" style={{ color: titleColor ?? INK.primary }}>
+        {title}{' '}
+        <span className="text-[11px] font-normal" style={{ ...MONO, color: INK.tertiary }}>({posts.length})</span>
+      </h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
         {posts.map((post) => (
           <GridCard key={post.id} post={post} onEdit={() => onEdit(post)} />
@@ -274,52 +324,55 @@ function GridSection({
 }
 
 function GridCard({ post, onEdit }: { post: SocialPost; onEdit: () => void }) {
-  const platform = PLATFORM_CONFIG[post.platform]
-  const stage = STAGES.find((s) => s.key === post.stage)
+  const pf = PF[post.platform]
+  const stage = STAGE[post.stage as keyof typeof STAGE] ?? STAGE.idea
 
   return (
     <div
       onClick={onEdit}
-      className="group cursor-pointer rounded-[16px] border border-[#d6d6d6] bg-white hover:shadow-[rgba(0,0,0,0.04)_0px_8px_16px_0px] transition-all overflow-hidden"
+      // Same hover classes as the kanban card, and no backdrop blur — cards
+      // never get it, only the six column panels do.
+      className="group cursor-pointer overflow-hidden rounded-[14px] transition-[translate,scale,box-shadow] duration-[250ms] hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_14px_22px_rgba(63,43,80,.2)]"
+      style={{ background: GLASS.card, border: `1px solid ${GLASS.hairline}`, boxShadow: GLASS.shadowCard }}
     >
-      {/* Thumbnail placeholder / media indicator */}
-      <div className="aspect-square bg-muted/50 relative flex items-center justify-center">
+      <div className={cn('relative flex aspect-square items-center justify-center', !post.media_url && 'glass-thumb-placeholder')}>
         {post.media_url ? (
           <a
             href={post.media_url}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="absolute inset-0 flex items-center justify-center bg-black/5 hover:bg-black/10 transition-colors"
+            className="absolute inset-0 flex items-center justify-center bg-black/5 transition-colors hover:bg-black/10"
           >
-            <ExternalLink size={20} className="text-muted-foreground" />
+            <ExternalLink size={20} style={{ color: INK.secondary }} />
           </a>
         ) : (
-          <span className="text-2xl text-muted-foreground/30 font-bold select-none">
-            {post.platform === 'instagram' ? '📸' : post.platform === 'tiktok' ? '🎵' : '💼'}
+          <span className="text-[10px] tracking-[.06em]" style={{ ...MONO, color: INK.tertiary }}>
+            {(post.post_type ?? pf.code).toUpperCase()}
           </span>
         )}
-        {/* Stage dot */}
-        <div className={cn('absolute top-2 right-2 w-2.5 h-2.5 rounded-full', stage?.dot ?? 'bg-slate-400')} title={stage?.label} />
-        <PublishStatusBadge post={post} size="xs" className="absolute top-1.5 left-1.5" />
+        {/* Stage becomes a filled pill rather than a bare dot — this is where
+            "Live" appears, matching the week card. */}
+        <span
+          className="absolute right-1.5 top-1.5 rounded-full px-[6px] py-[2px] text-[9px] font-semibold"
+          style={{ background: stage.bg, color: stage.fg }}
+        >
+          {stage.label}
+        </span>
+        <PublishStatusBadge post={post} size="xs" className="absolute left-1.5 top-1.5" />
       </div>
 
-      {/* Info */}
       <div className="p-2.5">
-        <p className="text-xs font-medium truncate leading-snug">
+        <p className="truncate text-[11.5px] font-semibold leading-snug" style={{ color: INK.primary }}>
           {post.title || post.caption?.slice(0, 40) || 'Untitled'}
         </p>
-        <div className="flex items-center justify-between mt-1.5 gap-1">
-          <span className={cn('text-xs font-semibold px-1.5 py-0.5 rounded-[10px]', platform.color)}>
-            {platform.label}
+        <div className="mt-1.5 flex items-center justify-between gap-1 text-[9.5px]" style={MONO}>
+          <span style={{ color: pf.ink, fontWeight: 600 }}>{pf.code}</span>
+          <span className="truncate" style={{ color: INK.tertiary }}>
+            {post.scheduled_at
+              ? format(parseISO(post.scheduled_at), 'MMM d')
+              : (post.post_type ? POST_TYPE_LABELS[post.post_type] : '')}
           </span>
-          {post.scheduled_at ? (
-            <span className="text-xs text-muted-foreground truncate">
-              {format(parseISO(post.scheduled_at), 'MMM d')}
-            </span>
-          ) : post.post_type ? (
-            <span className="text-xs text-muted-foreground">{POST_TYPE_LABELS[post.post_type]}</span>
-          ) : null}
         </div>
       </div>
     </div>
@@ -330,62 +383,111 @@ function GridCard({ post, onEdit }: { post: SocialPost; onEdit: () => void }) {
 // Kanban Post Card
 // ─────────────────────────────────────────────
 function PostCard({
-  post, stages, onEdit, onMove,
+  post, stages, index, onEdit, onMove,
 }: {
   post: SocialPost
   stages: typeof STAGES
+  index: number
   onEdit: () => void
   onMove: (stage: PostStage) => void
 }) {
-  const platform = PLATFORM_CONFIG[post.platform]
+  const pf = PF[post.platform]
+  const meta = post.scheduled_at
+    ? format(parseISO(post.scheduled_at), 'MMM d')
+    : (post.post_type ? POST_TYPE_LABELS[post.post_type] : 'no date')
+
   return (
-    <div className="bg-white rounded-[16px] border border-[#d6d6d6] p-3 shadow-[rgba(0,0,0,0.04)_0px_8px_16px_0px] hover:shadow-md transition-shadow cursor-pointer" onClick={onEdit}>
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <p className="text-sm font-medium leading-snug flex-1 min-w-0">
-          {post.title || post.caption?.slice(0, 50) || 'Untitled post'}
-        </p>
-        <span className={cn('text-xs font-semibold px-1.5 py-0.5 rounded-[10px] shrink-0', platform.color)}>
-          {platform.label}
-        </span>
-      </div>
-      {post.post_type && <p className="text-xs text-muted-foreground mb-2">{POST_TYPE_LABELS[post.post_type]}</p>}
-      {post.caption && <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{post.caption}</p>}
-      <div className="flex items-center justify-between gap-2 mt-2">
-        {post.scheduled_at ? (
-          <span className="text-xs text-muted-foreground">{format(parseISO(post.scheduled_at), 'MMM d')}</span>
-        ) : <span />}
-        <div className="flex items-center gap-1.5 shrink-0">
-          <PublishStatusBadge post={post} />
-          {post.ig_permalink && (
-            <a
-              href={post.ig_permalink}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              title="View on Instagram"
-              className="text-[#8b3fb0] hover:text-[#6b2f88]"
-            >
-              <ExternalLink size={12} />
-            </a>
-          )}
-          {post.media_url && !post.ig_permalink && (
-            <a href={post.media_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-muted-foreground hover:text-foreground">
-              <ExternalLink size={12} />
-            </a>
-          )}
+    // Entry animation on the wrapper, hover on the card — same split as the
+    // week's GlassPostCard, so the keyframe's transform can't fight the hover.
+    // The stagger is capped: a column can hold dozens of cards and an
+    // uncapped delay would leave the last ones arriving seconds late.
+    <div style={{ animation: `glass-fade-up .55s ${MOTION.ease} both`, animationDelay: `${Math.min(index, 8) * MOTION.staggerMs}ms` }}>
+      <div
+        onClick={onEdit}
+        // Hover is a CSS class, never onMouseEnter: Tailwind v4 compiles the
+        // hover: variant inside @media (hover: hover), so a tap on iOS can't
+        // leave a card stuck mid-lift. translate and scale are separate
+        // properties in v4, so they compose instead of clobbering each other.
+        className="cursor-pointer rounded-[12px] p-3 transition-[translate,scale,box-shadow] duration-[250ms] hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_14px_22px_rgba(63,43,80,.2)]"
+        style={{ background: GLASS.card, border: `1px solid ${GLASS.hairline}`, boxShadow: GLASS.shadowCard }}
+      >
+        <div className="flex gap-2">
+          {/* 30x38 thumb, striped placeholder when there is no media — the same
+              language as the week card. No backdrop-filter on cards. */}
+          <div
+            className={cn('h-[38px] w-[30px] shrink-0 overflow-hidden rounded-[7px]', !post.media_url && 'glass-thumb-placeholder')}
+          >
+            {post.media_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={post.media_url} alt="" className="h-full w-full object-cover" />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="line-clamp-2 text-[11.5px] font-semibold leading-[1.3]" style={{ color: INK.primary }}>
+              {post.title || post.caption?.slice(0, 50) || 'Untitled post'}
+            </p>
+            <p className="mt-[3px] text-[9.5px]" style={{ ...MONO, color: INK.tertiary }}>
+              <span style={{ color: pf.ink, fontWeight: 600 }}>{pf.code}</span>
+              {' · '}{meta}
+            </p>
+          </div>
         </div>
-      </div>
-      {/* Why a post didn't go out belongs on the card — an email is easy to miss. */}
-      {derivePublishState(post) === 'failed' && post.publish_error && (
-        <p className="text-[11px] text-destructive line-clamp-2 mt-1.5 leading-snug">{post.publish_error}</p>
-      )}
-      <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-border/50" onClick={(e) => e.stopPropagation()}>
-        <p className="text-xs text-muted-foreground">Move:</p>
-        {stages.filter((s) => s.key !== post.stage).map((s) => (
-          <button key={s.key} onClick={() => onMove(s.key)} className="text-xs text-[#7b7b7b] hover:text-black hover:underline">
-            {s.label}
-          </button>
-        ))}
+
+        {post.caption && (
+          <p className="mt-2 line-clamp-2 text-[10.5px] leading-snug" style={{ color: INK.tertiary }}>{post.caption}</p>
+        )}
+
+        <div className="mt-2 flex items-center gap-1.5">
+          <PublishStatusBadge post={post} />
+          <span className="ml-auto flex shrink-0 items-center gap-1.5">
+            {post.ig_permalink && (
+              <a
+                href={post.ig_permalink}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                title="View on Instagram"
+                style={{ color: PLATFORM.instagram.ink }}
+              >
+                <ExternalLink size={12} />
+              </a>
+            )}
+            {post.media_url && !post.ig_permalink && (
+              <a
+                href={post.media_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                style={{ color: INK.tertiary }}
+              >
+                <ExternalLink size={12} />
+              </a>
+            )}
+          </span>
+        </div>
+
+        {/* Why a post didn't go out belongs on the card — an email is easy to miss. */}
+        {derivePublishState(post) === 'failed' && post.publish_error && (
+          <p className="mt-1.5 line-clamp-2 text-[11px] leading-snug" style={{ color: ERROR_INK }}>{post.publish_error}</p>
+        )}
+
+        <div
+          className="mt-2 flex flex-wrap items-center gap-1 pt-2"
+          style={{ borderTop: '1px solid rgba(21,15,25,.08)' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="text-[10px]" style={{ color: INK.tertiary }}>Move:</p>
+          {stages.filter((s) => s.key !== post.stage).map((s) => (
+            <button
+              key={s.key}
+              onClick={() => onMove(s.key)}
+              className="text-[10px] transition-colors hover:text-[#150f19] hover:underline"
+              style={{ color: INK.tertiary }}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   )
