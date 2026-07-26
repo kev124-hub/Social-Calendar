@@ -202,15 +202,13 @@ function SortablePostCard({ post, onClick, index }: { post: SocialPost; onClick:
   return (
     <div
       ref={setNodeRef}
-      // select-none + touch-callout: the touch sensor needs a 200ms press before
-      // a drag starts, and iOS spends that press selecting text — the media
-      // strip's type label ("REEL") highlighted every time before the card
-      // lifted. Nothing inside a card is meant to be selectable.
-      className="select-none"
-      style={{
-        transform: CSS.Transform.toString(transform), transition,
-        opacity: isDragging ? 0.35 : 1, WebkitTouchCallout: 'none',
-      }}
+      // Deliberately selectable. Suppressing selection here (select-none +
+      // -webkit-touch-callout) removed the "REEL" highlight during a press, but
+      // broke dragging on iOS outright: the text selection is what stops the
+      // browser claiming the long press as a pan, so without it the board just
+      // scrolls and dnd-kit's 200ms delay never activates. The highlight is
+      // cosmetic; the drag is not. Do not re-apply without a way to test touch.
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.35 : 1 }}
       {...attributes}
       {...listeners}
     >
@@ -224,11 +222,7 @@ function SortableIdeaCard({ idea }: { idea: Idea }) {
   return (
     <div
       ref={setNodeRef}
-      className="select-none"
-      style={{
-        transform: CSS.Transform.toString(transform), transition,
-        opacity: isDragging ? 0.35 : 1, WebkitTouchCallout: 'none',
-      }}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.35 : 1 }}
       {...attributes}
       {...listeners}
     >
