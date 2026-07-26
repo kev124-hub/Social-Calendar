@@ -202,7 +202,15 @@ function SortablePostCard({ post, onClick, index }: { post: SocialPost; onClick:
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.35 : 1 }}
+      // select-none + touch-callout: the touch sensor needs a 200ms press before
+      // a drag starts, and iOS spends that press selecting text — the media
+      // strip's type label ("REEL") highlighted every time before the card
+      // lifted. Nothing inside a card is meant to be selectable.
+      className="select-none"
+      style={{
+        transform: CSS.Transform.toString(transform), transition,
+        opacity: isDragging ? 0.35 : 1, WebkitTouchCallout: 'none',
+      }}
       {...attributes}
       {...listeners}
     >
@@ -216,7 +224,11 @@ function SortableIdeaCard({ idea }: { idea: Idea }) {
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.35 : 1 }}
+      className="select-none"
+      style={{
+        transform: CSS.Transform.toString(transform), transition,
+        opacity: isDragging ? 0.35 : 1, WebkitTouchCallout: 'none',
+      }}
       {...attributes}
       {...listeners}
     >
