@@ -21,7 +21,7 @@ export interface ParsedEvent {
 }
 
 interface Props {
-  onEventParsed: (event: ParsedEvent) => void
+  onEventParsed: (event: ParsedEvent) => void | Promise<void>
 }
 
 export function AIEventInput({ onEventParsed }: Props) {
@@ -50,7 +50,7 @@ export function AIEventInput({ onEventParsed }: Props) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to parse event')
 
-      onEventParsed(data.event)
+      await onEventParsed(data.event)
       setText('')
       setSuccess(true)
       setSheetOpen(false)

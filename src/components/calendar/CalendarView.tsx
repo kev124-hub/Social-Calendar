@@ -364,7 +364,10 @@ export function CalendarView() {
         return new Date(s + (isEnd ? 'T23:59:59' : 'T00:00:00')).toISOString()
       return new Date(s).toISOString()
     }
-    await supabase.from('calendar_events').insert({
+    // Surface a failed write. This used to discard the result, so a rejected
+    // insert was indistinguishable from success — the input reported "added"
+    // and nothing appeared. AIEventInput awaits this and shows what it throws.
+    const { error } = await supabase.from('calendar_events').insert({
       title: parsed.title,
       description: parsed.description,
       location: parsed.location,
@@ -374,6 +377,7 @@ export function CalendarView() {
       calendar_id: defaultCalendar?.id ?? null,
       source: 'app' as const,
     })
+    if (error) throw new Error(`Could not save the event: ${error.message}`)
     await loadData()
   }
 

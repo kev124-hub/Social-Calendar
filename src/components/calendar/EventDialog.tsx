@@ -32,6 +32,15 @@ const labelClass = 'text-[13px] font-medium text-[#333] block mb-1.5 tracking-ti
 function toDatetimeLocal(iso: string) { return iso.slice(0, 16) }
 function toDateLocal(iso: string) { return iso.slice(0, 10) }
 
+// The start/end inputs switch between type="date" and type="datetime-local"
+// with the all-day toggle, but the value in state does not follow. A browser
+// silently rejects a value the input's type can't parse — it blanks the field
+// WITHOUT firing onChange — so state kept the old datetime string and
+// `new Date('2026-07-26T14:31' + 'T00:00:00')` threw "Invalid time value"
+// before the row was ever written. Convert on toggle so the two stay in step.
+const asDate = (v: string) => (v ? v.slice(0, 10) : v)
+const asDatetime = (v: string, time = 'T09:00') => (v && v.length <= 10 ? v + time : v)
+
 export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDate, calendars }: Props) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -41,11 +50,13 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
   const [allDay, setAllDay] = useState(false)
   const [calendarId, setCalendarId] = useState('')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const supabase = createClient()
 
   useEffect(() => {
     if (!open) return
+    setError(null)
     if (event) {
       setTitle(event.title)
       setDescription(event.description ?? '')
@@ -67,24 +78,39 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
   }, [open, event, defaultDate, calendars])
 
   async function handleSave() {
-    if (!title.trim() || !startsAt) return
+    setError(null)
+    if (!title.trim()) return setError('Give the event a title.')
+    if (!startsAt) return setError('Pick a start date.')
+
+    const starts = new Date(allDay ? asDate(startsAt) + 'T00:00:00' : startsAt)
+    if (Number.isNaN(starts.getTime())) return setError('That start date is not valid.')
+
+    let ends: Date | null = null
+    if (endsAt) {
+      ends = new Date(allDay ? asDate(endsAt) + 'T23:59:59' : endsAt)
+      if (Number.isNaN(ends.getTime())) return setError('That end date is not valid.')
+      if (ends < starts) return setError('The end is before the start.')
+    }
+
     setSaving(true)
     const payload = {
       title: title.trim(),
       description: description || null,
       location: location || null,
-      starts_at: allDay ? new Date(startsAt + 'T00:00:00').toISOString() : new Date(startsAt).toISOString(),
-      ends_at: endsAt ? (allDay ? new Date(endsAt + 'T23:59:59').toISOString() : new Date(endsAt).toISOString()) : null,
+      starts_at: starts.toISOString(),
+      ends_at: ends ? ends.toISOString() : null,
       all_day: allDay,
       calendar_id: calendarId || null,
       source: 'app' as const,
     }
-    if (event) {
-      await supabase.from('calendar_events').update(payload).eq('id', event.id)
-    } else {
-      await supabase.from('calendar_events').insert(payload)
-    }
+    // Both writes used to discard their result, so an RLS refusal, a bad
+    // foreign key or a stale schema cache looked exactly like success: the
+    // dialog closed and the event silently never appeared.
+    const { error: writeError } = event
+      ? await supabase.from('calendar_events').update(payload).eq('id', event.id)
+      : await supabase.from('calendar_events').insert(payload)
     setSaving(false)
+    if (writeError) return setError(writeError.message)
     onSave()
   }
 
@@ -114,7 +140,12 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
             <input
               type="checkbox"
               checked={allDay}
-              onChange={(e) => setAllDay(e.target.checked)}
+              onChange={(e) => {
+                const on = e.target.checked
+                setAllDay(on)
+                setStartsAt((v) => (on ? asDate(v) : asDatetime(v)))
+                setEndsAt((v) => (on ? asDate(v) : asDatetime(v, 'T10:00')))
+              }}
               className="sr-only"
             />
             <div className={cn(
@@ -186,6 +217,15 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
             </div>
           )}
         </div>
+
+        {error && (
+          <p
+            role="alert"
+            className="text-[13px] text-destructive bg-destructive/10 border border-destructive/20 px-3 py-2 rounded-[10px]"
+          >
+            {error}
+          </p>
+        )}
 
         <DialogFooter className="gap-2">
           {event && (

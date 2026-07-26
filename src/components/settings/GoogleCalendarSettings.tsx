@@ -8,10 +8,16 @@ import type { GoogleCalendarListEntry } from '@/lib/google-calendar'
 
 interface Props {
   connected: boolean
+  /** A row exists but the stored grant no longer yields a token. */
+  needsReconnect?: boolean
   lastSynced?: string | null
 }
 
-export function GoogleCalendarSettings({ connected: initialConnected, lastSynced: initialLastSynced }: Props) {
+export function GoogleCalendarSettings({
+  connected: initialConnected,
+  needsReconnect = false,
+  lastSynced: initialLastSynced,
+}: Props) {
   const [connected, setConnected] = useState(initialConnected)
   const [calendars, setCalendars] = useState<GoogleCalendarListEntry[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -75,14 +81,26 @@ export function GoogleCalendarSettings({ connected: initialConnected, lastSynced
             Google Calendar
           </h2>
           <p className="text-xs text-muted-foreground mt-1">
-            {connected ? 'Connected — events sync automatically' : 'Sync your Google calendars as read/write events'}
+            {/* One-way by design: syncGoogleCalendar reads Google and upserts
+                into calendar_events. Nothing pushes app events back to Google,
+                so the old "events sync automatically" was misleading. */}
+            {!connected
+              ? 'Import your Google calendars into this app'
+              : needsReconnect
+                ? 'Reconnect needed — the stored Google authorisation is no longer valid'
+                : 'Importing from Google. Events created here stay here — they are not sent to Google.'}
           </p>
         </div>
-        {connected ? (
+        {connected && !needsReconnect && (
           <span className="flex items-center gap-1.5 text-xs font-semibold text-[#166534] bg-[#f0fdf0] px-3 py-1 rounded-[10px] border border-[#bbf7d0]">
             <Check size={10} /> Connected
           </span>
-        ) : null}
+        )}
+        {connected && needsReconnect && (
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-[#8a4b06] bg-[#fdf6e7] px-3 py-1 rounded-[10px] border border-[#f5dda1]">
+            <X size={10} /> Reconnect
+          </span>
+        )}
       </div>
 
       {!connected ? (
@@ -120,6 +138,21 @@ export function GoogleCalendarSettings({ connected: initialConnected, lastSynced
                   </label>
                 ))}
               </div>
+            </div>
+          )}
+
+          {needsReconnect && (
+            <div className="space-y-2 rounded-[10px] border border-[#f5dda1] bg-[#fdf6e7] px-3 py-2.5">
+              <p className="text-xs text-[#8a4b06]">
+                Google is no longer accepting the saved authorisation, so syncing will fail
+                until it is reconnected.
+              </p>
+              <a href="/api/auth/google-calendar">
+                <Button variant="outline" size="sm" className="rounded-[10px]">
+                  <GoogleIcon />
+                  <span className="ml-2">Reconnect Google Calendar</span>
+                </Button>
+              </a>
             </div>
           )}
 
