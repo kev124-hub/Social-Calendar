@@ -9,9 +9,11 @@
 ## ⚠️ Corrections to this file — read before building
 
 `handoff-riviera-glass-2026-07-26-consolidated.md` governs current state and is
-the file to read alongside this one. Four things below were written before
-later rulings landed. They are **corrected in place** as of 26 July, but the
-two marked **load-bearing** are the ones that will cost you real work:
+the file to read alongside this one. The items below were written before later
+rulings landed, or were contradicted by building Phase A. They are **corrected
+in place**; the ones marked **load-bearing** are those that will cost you real
+work. (Deliberately unnumbered as a group — an earlier "three things" lead-in
+drifted out of date the moment a fourth was added.)
 
 1. **Lint baseline is 37 problems (17 errors, 20 warnings) — not 42.**
    **Load-bearing.** Re-verified by running `npm run lint` on `main` at
@@ -23,11 +25,11 @@ two marked **load-bearing** are the ones that will cost you real work:
 
 2. **The `src/lib/events.ts` extraction in Phase B is load-bearing, not
    tidying.** It reads like a refactor in the Phase B table; it is not. It is
-   the single hook point Stage 9 (two-way Google sync) patches. Both existing
-   write paths must go through it — see the verified inventory in Part 2's
-   extraction section. Route only one and Stage 9 has two places to patch and
-   will miss one. Do not defer it, do not "do it later in Stage 9", do not
-   copy-paste the body into `HomeView`.
+   the single hook point Stage 9 (two-way Google sync) patches. **All four**
+   existing write paths must go through it — see the verified inventory in
+   Part 2's extraction section. Route some but not all and Stage 9 has more
+   than one place to patch and will miss one. Do not defer it, do not "do it
+   later in Stage 9", do not copy-paste the body into `HomeView`.
 
 3. **Stage 8 (pipeline board) is merged** (PR #28), not "under review" as
    Part 3's stage-numbering note says.
@@ -35,6 +37,33 @@ two marked **load-bearing** are the ones that will cost you real work:
 4. **Time format is settled: 12-hour `h:mm a`.** Ruling-3 §"Also settled"
    below says "match whatever Kevin ruled" — he ruled, on 26 July, and every
    calendar surface already complies. Do not ship `HH:mm`.
+
+5. **The `prefers-reduced-motion` guard must be written in JS. The plan is
+   wrong about this.** **Load-bearing** for any animated block — which means
+   Phase C's ReadyReel, not just the stat tiles. Part 2's stat-tile section
+   says the counter ramp is "inside the `prefers-reduced-motion` guard (the
+   global block already covers it)". It is not and it cannot be. The block in
+   `globals.css` sets `animation-duration` and `transition-duration` to
+   ~0ms — it neutralises **CSS** animation. A `requestAnimationFrame` loop is
+   JavaScript; no media query can reach it, and the ramp would run at full
+   length for exactly the users who asked it not to. Guard it yourself:
+
+   ```ts
+   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { /* jump to final value */ }
+   ```
+
+   Shipped that way in `StatTiles.tsx` (PR #31) with a comment; copy the
+   pattern rather than trusting the sentence in Part 2.
+
+6. **`CalendarView` accepts `?date=` and `?view=` — but only since PR #31.**
+   Before that it read **nothing** from the URL: `currentDate` was
+   `useState(new Date())`, so every link into `/calendar` landed on today no
+   matter which day it named. This is why `/home`'s week strip appeared to
+   ignore the day you tapped. Any older document describing a deep link into
+   the calendar was describing something that did not exist. It does now:
+   `?date=YYYY-MM-DD` and `?view=day|week|month|list`, an explicit `?view=`
+   beats the phone day-view default, and a malformed date falls back to today
+   rather than producing an `Invalid Date`.
 
 ---
 
@@ -346,7 +375,7 @@ over its hooks:
 
 | Phase | Contents | Dependencies |
 |---|---|---|
-| **A** | Route + `HomeView`: header + greeting, next-publish hero (with empty state + auto/notify label rule), stat tiles, week strip, needs-attention (incl. problems-only health per Ruling 1) | None. One posts query. |
+| **A** | **Built and merged (PR #31).** Route + `HomeView`: header + greeting, next-publish hero (with empty state + auto/notify label rule), stat tiles, week strip, needs-attention (incl. problems-only health per Ruling 1). Shipped beyond the spec: hero/tiles/day-chips are links (they looked tappable and were not), and the posts query is bounded by a 12s abort — a failed or hung read renders a stated error with a retry instead of the layout, since zeros plus "All clear" would assert four things we cannot know. | None. One posts query. |
 | **B** | Quick actions (`PostDialog`, `IdeaDialog`), events block (`AIEventInput`, `EventDialog`, upcoming-events list, inline confirmation). **Plus the `src/lib/events.ts` extraction — load-bearing, not tidying: all four app-side write paths route through it or Stage 9 misses one. See Part 2's extraction section for the verified inventory and the grep done-check.** **Re-add the `/home` sidebar nav entry in this commit.** | Calendars + events queries. |
 | **C** | ReadyReel into Row 3 right; upcoming events moves to Row 4 full-width | Stage 5's thumbnail resolution — hard gate. |
 
