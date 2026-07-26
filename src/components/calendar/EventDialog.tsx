@@ -32,6 +32,15 @@ const labelClass = 'text-[13px] font-medium text-[#333] block mb-1.5 tracking-ti
 function toDatetimeLocal(iso: string) { return iso.slice(0, 16) }
 function toDateLocal(iso: string) { return iso.slice(0, 10) }
 
+// The start/end inputs switch between type="date" and type="datetime-local"
+// with the all-day toggle, but the value in state does not follow. A browser
+// silently rejects a value the input's type can't parse — it blanks the field
+// WITHOUT firing onChange — so state kept the old datetime string and
+// `new Date('2026-07-26T14:31' + 'T00:00:00')` threw "Invalid time value"
+// before the row was ever written. Convert on toggle so the two stay in step.
+const asDate = (v: string) => (v ? v.slice(0, 10) : v)
+const asDatetime = (v: string, time = 'T09:00') => (v && v.length <= 10 ? v + time : v)
+
 export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDate, calendars }: Props) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -41,11 +50,17 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
   const [allDay, setAllDay] = useState(false)
   const [calendarId, setCalendarId] = useState('')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  // Calendars un-hidden from inside this dialog. The parent reloads on save,
+  // but until then its `calendars` prop still says hidden.
+  const [unhidden, setUnhidden] = useState<string[]>([])
 
   const supabase = createClient()
 
   useEffect(() => {
     if (!open) return
+    setError(null)
+    setUnhidden([])
     if (event) {
       setTitle(event.title)
       setDescription(event.description ?? '')
@@ -67,25 +82,50 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
   }, [open, event, defaultDate, calendars])
 
   async function handleSave() {
-    if (!title.trim() || !startsAt) return
+    setError(null)
+    if (!title.trim()) return setError('Give the event a title.')
+    if (!startsAt) return setError('Pick a start date.')
+
+    const starts = new Date(allDay ? asDate(startsAt) + 'T00:00:00' : startsAt)
+    if (Number.isNaN(starts.getTime())) return setError('That start date is not valid.')
+
+    let ends: Date | null = null
+    if (endsAt) {
+      ends = new Date(allDay ? asDate(endsAt) + 'T23:59:59' : endsAt)
+      if (Number.isNaN(ends.getTime())) return setError('That end date is not valid.')
+      if (ends < starts) return setError('The end is before the start.')
+    }
+
     setSaving(true)
+    try {
     const payload = {
       title: title.trim(),
       description: description || null,
       location: location || null,
-      starts_at: allDay ? new Date(startsAt + 'T00:00:00').toISOString() : new Date(startsAt).toISOString(),
-      ends_at: endsAt ? (allDay ? new Date(endsAt + 'T23:59:59').toISOString() : new Date(endsAt).toISOString()) : null,
+      starts_at: starts.toISOString(),
+      ends_at: ends ? ends.toISOString() : null,
       all_day: allDay,
       calendar_id: calendarId || null,
       source: 'app' as const,
     }
-    if (event) {
-      await supabase.from('calendar_events').update(payload).eq('id', event.id)
-    } else {
-      await supabase.from('calendar_events').insert(payload)
+    // Both writes used to discard their result, so an RLS refusal, a bad
+    // foreign key or a stale schema cache looked exactly like success: the
+    // dialog closed and the event silently never appeared.
+    const { error: writeError } = event
+      ? await supabase.from('calendar_events').update(payload).eq('id', event.id)
+      : await supabase.from('calendar_events').insert(payload)
+      setSaving(false)
+      if (writeError) return setError(writeError.message)
+      onSave()
+    } catch (err) {
+      // Belt and braces. supabase-js returns network failures in `error`
+      // rather than throwing, but anything that DOES throw here would
+      // otherwise reject unhandled and leave the dialog looking inert with
+      // nothing on screen — which is the exact failure mode this whole change
+      // exists to eliminate. Never fail silently.
+      setSaving(false)
+      setError(err instanceof Error ? err.message : 'Could not save the event.')
     }
-    setSaving(false)
-    onSave()
   }
 
   return (
@@ -114,7 +154,12 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
             <input
               type="checkbox"
               checked={allDay}
-              onChange={(e) => setAllDay(e.target.checked)}
+              onChange={(e) => {
+                const on = e.target.checked
+                setAllDay(on)
+                setStartsAt((v) => (on ? asDate(v) : asDatetime(v)))
+                setEndsAt((v) => (on ? asDate(v) : asDatetime(v, 'T10:00')))
+              }}
               className="sr-only"
             />
             <div className={cn(
@@ -171,7 +216,7 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
             />
           </div>
 
-          {calendars.length > 1 && (
+          {calendars.length > 0 && (
             <div>
               <label className={labelClass}>Calendar</label>
               <select
@@ -180,12 +225,57 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
                 className={inputClass}
               >
                 {calendars.map((cal) => (
-                  <option key={cal.id} value={cal.id}>{cal.name}</option>
+                  <option key={cal.id} value={cal.id}>
+                    {cal.name}{cal.is_visible === false && !unhidden.includes(cal.id) ? ' (hidden)' : ''}
+                  </option>
                 ))}
               </select>
+              {/* An event saved to a hidden calendar is filtered straight back
+                  out of every view (CalendarView's visibleEvents), so it looks
+                  like the save silently failed. The picker used to be hidden
+                  entirely when there was only one calendar, which made the
+                  destination invisible as well as the consequence.
+                  The un-hide button matters as much as the warning: the only
+                  other visibility control lives in RightPanel, which is
+                  `hidden md:flex`, so on a phone there was no way out of this
+                  at all. */}
+              {calendars.find((c) => c.id === calendarId)?.is_visible === false
+                && !unhidden.includes(calendarId) && (
+                <div className="mt-1.5 space-y-1.5">
+                  <p className="text-[12px] text-[#8a4b06]">
+                    This calendar is hidden, so the event won&apos;t show on the calendar
+                    until you make it visible again.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-[10px]"
+                    onClick={async () => {
+                      const { error: showError } = await supabase
+                        .from('calendars')
+                        .update({ is_visible: true })
+                        .eq('id', calendarId)
+                      if (showError) return setError(showError.message)
+                      setUnhidden((u) => [...u, calendarId])
+                    }}
+                  >
+                    Show this calendar
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>
+
+        {error && (
+          <p
+            role="alert"
+            className="text-[13px] text-destructive bg-destructive/10 border border-destructive/20 px-3 py-2 rounded-[10px]"
+          >
+            {error}
+          </p>
+        )}
 
         <DialogFooter className="gap-2">
           {event && (

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { GoogleCalendarSettings } from '@/components/settings/GoogleCalendarSettings'
+import { getValidAccessToken } from '@/lib/google-calendar'
 
 async function getIntegrations() {
   try {
@@ -24,7 +25,14 @@ export default async function SettingsPage({
   const params = await searchParams
   const integrations = await getIntegrations()
   const googleIntegration = integrations.find((i) => i.provider === 'google_calendar')
+  // The badge used to be `!!googleIntegration` — the mere presence of a row.
+  // That reported "Connected" while every sync failed with "Not authenticated
+  // with Google", because the stored refresh token had been revoked or had
+  // expired. Ask for a real token instead; getValidAccessToken refreshes and
+  // returns null when the grant is dead.
+  const googleToken = googleIntegration ? await getValidAccessToken().catch(() => null) : null
   const isGoogleConnected = !!googleIntegration
+  const googleNeedsReconnect = !!googleIntegration && !googleToken
   const lastSynced = (googleIntegration?.metadata as any)?.last_synced ?? null
 
   return (
@@ -46,6 +54,7 @@ export default async function SettingsPage({
       <div className="space-y-6">
         <GoogleCalendarSettings
           connected={isGoogleConnected}
+          needsReconnect={googleNeedsReconnect}
           lastSynced={lastSynced}
         />
 
