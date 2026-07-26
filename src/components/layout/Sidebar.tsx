@@ -204,7 +204,9 @@ export function Sidebar({ counts, health }: { counts?: Partial<Record<RealPlatfo
     <>
       <aside
         className={cn(
-          'sticky top-0 hidden h-screen shrink-0 flex-col overflow-hidden md:flex',
+          // h-dvh for the same reason as the app shell in (app)/layout.tsx:
+          // 100vh overshoots the visible viewport in mobile browsers.
+          'sticky top-0 hidden h-dvh shrink-0 flex-col overflow-hidden md:flex',
           'transition-[width] duration-200 ease-in-out',
           collapsed ? 'w-[3.75rem]' : 'w-64',
         )}
