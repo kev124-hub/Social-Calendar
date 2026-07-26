@@ -130,9 +130,10 @@ export function PipelineBoard() {
                 onClick={() => setFilterPlatform(p)}
                 className={cn(
                   'rounded-[10px] px-3 py-1.5 text-xs font-semibold transition-colors',
-                  filterPlatform === p ? 'bg-[rgba(255,255,255,.92)]' : 'hover:text-[#150f19]'
+                  filterPlatform === p
+                    ? 'bg-[rgba(255,255,255,.92)] text-[#150f19]'
+                    : 'text-[rgba(27,20,31,.6)] hover:text-[#150f19]',
                 )}
-                style={{ color: filterPlatform === p ? INK.primary : 'rgba(27,20,31,.6)' }}
               >
                 {p === 'all' ? 'All' : PF[p].code}
               </button>
@@ -149,8 +150,12 @@ export function PipelineBoard() {
                 key={mode}
                 onClick={() => setViewMode(mode)}
                 title={title}
-                className={cn('rounded-[10px] px-2.5 py-1.5 transition-colors', viewMode === mode && 'bg-[rgba(255,255,255,.92)]')}
-                style={{ color: viewMode === mode ? INK.primary : 'rgba(27,20,31,.6)' }}
+                className={cn(
+                  'rounded-[10px] px-2.5 py-1.5 transition-colors',
+                  viewMode === mode
+                    ? 'bg-[rgba(255,255,255,.92)] text-[#150f19]'
+                    : 'text-[rgba(27,20,31,.6)] hover:text-[#150f19]',
+                )}
               >
                 <Icon size={14} />
               </button>
@@ -208,7 +213,7 @@ function KanbanView({
           perspective plus horizontal scrolling skews each column by a different
           amount as you scroll — it reads as broken, not as depth. Below lg the
           columns stay flat and scroll exactly as they do today. */}
-      <div className="flex h-full min-w-max gap-[14px] p-[18px] lg:min-w-0 lg:[perspective:1500px] lg:[perspective-origin:50%_40%]">
+      <div className="flex h-full min-w-max gap-[14px] p-[18px] xl:min-w-0 xl:[perspective:1500px] xl:[perspective-origin:50%_40%]">
         {stages.map(({ key, label }, i) => {
           const stagePosts = filtered.filter((p) => p.stage === key)
           // scheduled + published sit forward and read as more solid: these are
@@ -223,7 +228,7 @@ function KanbanView({
             <div
               key={key}
               style={{ '--plane-z': `${PLANE_Z[i]}px` } as CSSProperties}
-              className="w-64 shrink-0 transition-transform duration-[350ms] ease-[cubic-bezier(.2,.8,.2,1)] lg:w-auto lg:min-w-0 lg:flex-1 lg:shrink lg:[transform:translateZ(var(--plane-z))] lg:hover:[transform:translateZ(70px)]"
+              className="w-64 shrink-0 transition-transform duration-[350ms] ease-[cubic-bezier(.2,.8,.2,1)] xl:w-auto xl:min-w-0 xl:flex-1 xl:shrink xl:[transform:translateZ(var(--plane-z))] xl:hover:[transform:translateZ(70px)]"
             >
               <div
                 className={cn(
@@ -254,8 +259,7 @@ function KanbanView({
                     <button
                       onClick={() => onNew(key)}
                       title={`New post in ${label}`}
-                      className="transition-colors hover:text-[#150f19]"
-                      style={{ color: INK.tertiary }}
+                      className="text-[#5d5660] transition-colors hover:text-[#150f19]"
                     >
                       <Plus size={16} />
                     </button>
@@ -360,8 +364,9 @@ function GridCard({ post, onEdit }: { post: SocialPost; onEdit: () => void }) {
       onClick={onEdit}
       // Same hover classes as the kanban card, and no backdrop blur — cards
       // never get it, only the six column panels do.
-      className="group cursor-pointer overflow-hidden rounded-[14px] transition-[translate,scale,box-shadow] duration-[250ms] hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_14px_22px_rgba(63,43,80,.2)]"
-      style={{ background: GLASS.card, border: `1px solid ${GLASS.hairline}`, boxShadow: GLASS.shadowCard }}
+      // Resting shadow as a class — see the kanban card for why inline loses.
+      className="group cursor-pointer overflow-hidden rounded-[14px] shadow-[0_3px_8px_rgba(63,43,80,.10)] transition-[translate,scale,box-shadow] duration-[250ms] hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_14px_22px_rgba(63,43,80,.2)]"
+      style={{ background: GLASS.card, border: `1px solid ${GLASS.hairline}` }}
     >
       <div className={cn('relative flex aspect-square items-center justify-center', !post.media_url && 'glass-thumb-placeholder')}>
         {post.media_url ? (
@@ -436,8 +441,13 @@ function PostCard({
         // hover: variant inside @media (hover: hover), so a tap on iOS can't
         // leave a card stuck mid-lift. translate and scale are separate
         // properties in v4, so they compose instead of clobbering each other.
-        className="cursor-pointer rounded-[12px] p-3 transition-[translate,scale,box-shadow] duration-[250ms] hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_14px_22px_rgba(63,43,80,.2)]"
-        style={{ background: GLASS.card, border: `1px solid ${GLASS.hairline}`, boxShadow: GLASS.shadowCard }}
+        // The resting shadow is a CLASS, not an inline style. Inline styles beat
+        // stylesheet rules whatever the pseudo-class, so an inline boxShadow
+        // here silently kills hover:shadow-… — the card lifted but stayed flat,
+        // losing the depth cue. Same family as the inline-vs-sm: trap the week
+        // board hit; this is its :hover form.
+        className="cursor-pointer rounded-[12px] p-3 shadow-[0_3px_8px_rgba(63,43,80,.10)] transition-[translate,scale,box-shadow] duration-[250ms] hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_14px_22px_rgba(63,43,80,.2)]"
+        style={{ background: GLASS.card, border: `1px solid ${GLASS.hairline}` }}
       >
         <div className="flex gap-2">
           {/* 30x38 thumb, striped placeholder when there is no media — the same
@@ -509,8 +519,7 @@ function PostCard({
             <button
               key={s.key}
               onClick={() => onMove(s.key)}
-              className="text-[10px] transition-colors hover:text-[#150f19] hover:underline"
-              style={{ color: INK.tertiary }}
+              className="text-[10px] text-[#5d5660] transition-colors hover:text-[#150f19] hover:underline"
             >
               {s.label}
             </button>
