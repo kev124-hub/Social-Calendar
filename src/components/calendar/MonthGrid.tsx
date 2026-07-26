@@ -23,10 +23,19 @@ import {
   eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO,
 } from 'date-fns'
 import type { CalendarEvent, Calendar, SocialPost, Idea } from '@/types/database'
-import { GLASS, INK, MOTION, PLATFORM, canHover, dayTint, TODAY_BORDER } from '@/lib/glass'
+import { GLASS, INK, MOTION, canHover, dayTint, platformStyle, TODAY_BORDER } from '@/lib/glass'
+import { derivePublishState } from '@/components/ui/PublishStatusBadge'
 import { eventCoversDay } from '@/lib/calendar-utils'
 
 const MAX_ROWS = 3
+
+// Glass error ink — the same value PipelineBoard uses for publish_error.
+const FAILED_EDGE = '#8a2b12'
+
+// Matches Tailwind's sm: breakpoint (640px). Below it the cell renders dots
+// instead of rows, which changes what a tap on the cell should do.
+const isNarrow = () =>
+  typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches
 
 type Row = {
   kind: 'event' | 'post' | 'idea'
@@ -38,7 +47,7 @@ type Row = {
 }
 
 export function MonthGrid({
-  currentDate, events, posts, ideas, onDayClick, onEventClick,
+  currentDate, events, posts, ideas, onDayClick, onEventClick, onDayOpen,
 }: {
   currentDate: Date
   events: CalendarEvent[]
@@ -46,6 +55,8 @@ export function MonthGrid({
   ideas: Idea[]
   onDayClick: (d: Date) => void
   onEventClick: (e: CalendarEvent) => void
+  /** "+n more" — show the whole day rather than starting a new event. */
+  onDayOpen: (d: Date) => void
 }) {
   const router = useRouter()
   const monthStart = startOfMonth(currentDate)
@@ -88,14 +99,19 @@ export function MonthGrid({
               edge: (e.calendar as Calendar | undefined)?.color ?? '#0b3a50',
             })),
             ...posts.filter((p) => p.scheduled_at && isSameDay(parseISO(p.scheduled_at), day)).map<Row>((p) => {
-              const pf = PLATFORM[p.platform as keyof typeof PLATFORM] ?? PLATFORM.instagram
+              const pf = platformStyle(p.platform)
               return {
                 kind: 'post',
                 id: p.id,
                 time: format(parseISO(p.scheduled_at!), 'h:mm a'),
                 label: pf.code,
                 title: p.title ?? `${p.platform} ${p.post_type ?? ''}`,
-                edge: pf.ink,
+                // A failed post is otherwise indistinguishable from a healthy
+                // one here: the row has no space for the week card's
+                // PublishStatusBadge. The 3px left edge carries it instead —
+                // and because the phone dots use the same value, a failed post
+                // shows up there too.
+                edge: derivePublishState(p) === 'failed' ? FAILED_EDGE : pf.ink,
               }
             }),
             ...ideas.filter((i) => i.date_start && isSameDay(parseISO(i.date_start), day)).map<Row>((i) => ({
@@ -109,7 +125,18 @@ export function MonthGrid({
           return (
             <div
               key={day.toISOString()}
-              onClick={() => onDayClick(day)}
+              // Below sm: the cell shows dots, not rows, and "+n more" lives in
+              // the sm:-only column — so on a phone a tap on the cell was the
+              // ONLY interaction, and it opened the create-event dialog. There
+              // was no route at all from the month grid to a day's contents:
+              // the dots say a day holds six things and never which six.
+              // Narrow taps therefore open the day; creating an event stays on
+              // the header's "+ New", which is on screen the whole time.
+              //
+              // Read at click time rather than into state — a click handler only
+              // ever runs on the client, so there is no hydration risk and no
+              // extra effect (which the set-state-in-effect rule would flag).
+              onClick={() => (isNarrow() ? onDayOpen(day) : onDayClick(day))}
               // min-height as classes, not inline: an inline value would beat
               // the sm: variant (the trap that nearly re-broke the week board).
               // 158px is a desktop cell; at 390px seven of them are ~45px wide,
@@ -118,7 +145,12 @@ export function MonthGrid({
               style={{
                 minWidth: 0,
                 borderRadius: 15,
-                backdropFilter: 'blur(10px)',
+                // No backdrop-filter. The spec asks for blur(10px) per cell, but
+                // that contradicts its own rule ("never on cards — it costs
+                // more than it gives"): cells sit directly on the flat wash, so
+                // there is nothing behind them worth blurring, and 42 blur
+                // layers plus hover transforms is the likeliest source of jank
+                // in the installed PWA on iOS. The tint is kept.
                 background: outside ? 'rgba(214,222,231,.30)' : (today ? 'rgba(255,255,255,.88)' : tint.bg),
                 border: `1px solid ${today ? TODAY_BORDER : (outside ? 'rgba(11,79,108,.14)' : tint.border)}`,
                 transition: `transform .26s ${MOTION.ease}, box-shadow .26s ease`,
@@ -230,9 +262,17 @@ export function MonthGrid({
               {/* Derived from the real row count, so it never appears on an
                   empty day. */}
               {overflow > 0 && (
-                <span className="pl-[3px]" style={{ fontFamily: 'var(--font-mono-num)', fontSize: 9, fontWeight: 600, color: '#0b3a50' }}>
+                <button
+                  type="button"
+                  // stopPropagation, or this falls through to the cell's
+                  // onDayClick and opens the create-event dialog — surprising
+                  // when the intent was plainly "show me the rest".
+                  onClick={(e) => { e.stopPropagation(); onDayOpen(day) }}
+                  className="rounded-[6px] pl-[3px] text-left"
+                  style={{ fontFamily: 'var(--font-mono-num)', fontSize: 9, fontWeight: 600, color: '#0b3a50' }}
+                >
                   +{overflow} more
-                </span>
+                </button>
               )}
               </div>
             </div>

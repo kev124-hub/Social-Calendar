@@ -526,6 +526,7 @@ export function CalendarView() {
               ideas={ideas}
               onDayClick={openNewEvent}
               onEventClick={openEditEvent}
+              onDayOpen={(d) => { setCurrentDate(d); setView('day') }}
             />
           )}
           {view === 'day' && (
