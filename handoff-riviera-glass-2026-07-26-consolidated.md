@@ -51,8 +51,10 @@ only the remote does.
 
 ## Where things stand
 
-- **`main` is at `1485c94`.** Stages 1–4 and 8 merged, the design-review punch
-  list fully discharged, plus the event-creation fixes.
+- **`main` is at `13b027e`.** Stages 1–4 and 8 merged, the design-review punch
+  list fully discharged, plus the event-creation fixes. (This line read
+  `1485c94` until #29 merged — re-check it with `git log origin/main -1`
+  rather than trusting it.)
 - **No open PRs. Only `main` exists on the remote.**
 - `tsc --noEmit` is clean on both. **Lint baseline is 37 problems (17 errors,
   20 warnings).** Older docs quote 38 and 42 — both stale. The error/warning
@@ -73,6 +75,7 @@ only the remote does.
 | #26 | Punch list: week-view drop lands where released + opens target, days fan independently, `PLATFORM_NEUTRAL`/`platformStyle()`, **12-hour times everywhere**. Preserved `docs/design/pipeline/`. |
 | #27 | Month view: neutral `'any'`, failed-post `#8a2b12` left edge, `+n more` opens the day, `backdrop-filter` dropped from the 42 cells, **and phones tap-to-open-day** (below `sm:` the cells are dots, so the cell tap was the only interaction and it opened the create-event dialog). |
 | #28 | Stage 8 — pipeline board. Depth planes **`xl:`+** (moved from `lg` — at 1024 six columns share ~110px each), empty-column recession + `EMPTY` marker, 15px/13px headers, resting shadows/colours as classes. Screenshots in `docs/screenshots/stage8-pipeline/`. |
+| #29 | Docs — preserved `docs/design/home/riviera-glass-home-plan.md`, brought this handoff current. |
 
 ### Design specs preserved on `main`
 
@@ -226,15 +229,29 @@ Google push fails (don't leave the user thinking it synced), preventing the two
 ends duplicating on the next sync, and deciding which side wins when both
 changed.
 
-### Errata in the home plan — corrected here, not in the file
+### Errata in the home plan — now corrected IN the file
 
-The plan is accurate about the codebase; these three are stale or now settled:
+The plan is accurate about the codebase; these three were stale or since
+settled. **All three are now fixed in
+`docs/design/home/riviera-glass-home-plan.md` itself**, under a "Corrections"
+banner at the top, because a session that opens the plan directly never sees
+this handoff:
 
-1. **Lint baseline is 37**, not the 42 it quotes. Third document with a wrong
-   number — check, don't inherit.
+1. **Lint baseline is 37**, not the 42 it quoted. Third document with a wrong
+   number — check, don't inherit. Re-verified by running `npm run lint`.
 2. **Stage 8 is merged**, not "PR #28, under review".
-3. **Time format is settled: 12-hour `h:mm a`.** The plan says "match whatever
+3. **Time format is settled: 12-hour `h:mm a`.** The plan said "match whatever
    Kevin ruled" — he ruled, and every calendar surface already complies.
+
+Also corrected in the plan: the `src/lib/events.ts` extraction now reads as
+load-bearing rather than tidying, with a verified write-path inventory and a
+grep done-check.
+
+**A fourth app-side write path exists that the table above misses:**
+`CalendarView.tsx:326`, a `delete`. It must route through `events.ts` too —
+otherwise Stage 9 pushes creates and updates to Google but not deletions,
+leaving ghost events in Kevin's calendar. The full inventory is now in the
+plan.
 
 Verified present, as the plan assumes: `IdeaDialog` at
 `src/components/ideas/IdeaDialog.tsx`, `media_dropbox_path` on `SocialPost`,
