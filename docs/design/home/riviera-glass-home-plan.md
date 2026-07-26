@@ -230,8 +230,11 @@ some but not all and Stage 9 has two places to patch and will miss one — the
 missed path then writes events that silently never reach Google, which is
 precisely the class of invisible-failure bug Ruling 3 exists to close.
 
-**Verified inventory of app-side write paths** (`grep -rn "from('calendar_events')" src/`,
-run on `main` at `13b027e`; `src/lib/events.ts` does not exist yet):
+**Verified inventory of app-side write paths**, run on `main` at `13b027e`;
+`src/lib/events.ts` does not exist yet. This is the **writes only** — a plain
+`grep -rn "from('calendar_events')" src/` also returns a `.select()` read at
+`CalendarView.tsx:221` and the pull-side `upsert` at `google-calendar.ts:209`,
+neither of which is in scope. See the done-check below for the exact command:
 
 | Path | Location | Operation |
 |---|---|---|
@@ -267,10 +270,39 @@ covering the remaining rows — `createEvent(supabase, fields)`,
 them. `EventDialog` keeping its private insert is the specific failure mode to
 avoid.
 
-**Done-check for this item:** after the extraction,
-`grep -rn "from('calendar_events')" src/` returns hits in **exactly two**
-files — `src/lib/events.ts` and `src/lib/google-calendar.ts`. Any hit in a
-component means a path was missed.
+**Done-check for this item.** Two properties matter and a naive grep gets both
+wrong, so use this command:
+
+```bash
+rg -U -l "from\('calendar_events'\)[\s\S]{0,120}?\.(insert|update|upsert|delete)\(" src/
+```
+
+- **Run it BEFORE you start.** On `main` at `13b027e` it must list exactly
+  three files: `EventDialog.tsx`, `CalendarView.tsx`, `google-calendar.ts`. If
+  it lists something else, the pattern is wrong — fix the pattern, not the
+  code. A check you have not seen succeed is not a check.
+- **Run it after the extraction.** It must list exactly two:
+  `src/lib/events.ts` and `src/lib/google-calendar.ts`. Any component still
+  listed means a write path was missed.
+
+Two traps this command exists to avoid, both of which a simpler grep walks
+into:
+
+1. **It must not match reads.** `grep -rn "from('calendar_events')" src/`
+   matches `.select()` too, and there is a legitimate read at
+   `CalendarView.tsx:221` that stays in the component after the extraction —
+   plus the one Phase B adds to `HomeView`. Against a plain grep a *correct*
+   Phase B looks like a failure, which sends you either to churn or to route
+   reads through `events.ts` to quiet it. Don't: `events.ts` is a write choke
+   point because Stage 9 patches writes. Reads in components are expected and
+   fine.
+2. **It must match multi-line chains.** `.from('calendar_events')` and its
+   `.insert(...)` are frequently on separate lines — `google-calendar.ts:209`
+   already is, and a formatter will do the same to the helpers in `events.ts`.
+   A single-line `grep … | grep -E "\.(insert|update|delete)\("` silently
+   matches **nothing** in that case, so the check passes while verifying
+   nothing at all. Hence `rg -U`. This is also why the before-run above is not
+   optional: it is what distinguishes "clean" from "broken pattern".
 
 Preserve the existing error handling while moving it. `EventDialog`'s write
 deliberately captures `error` and surfaces it (see its comment: both writes

@@ -214,15 +214,33 @@ fetched from here.
 
 ### Stage 9's hook point — why the home plan's extraction matters
 
-There are **two** app-side event write paths today, verified: `EventDialog.tsx`
-lines 115–116 (its own insert/update) and `CalendarView.tsx` line 388
-(`handleAIEvent`, 23 lines). `src/lib/events.ts` does not exist yet.
+There are **four** app-side event write paths today — this section said "two"
+until 26 July, and the missing pair is the point. `src/lib/events.ts` does not
+exist yet.
 
-Phase B of the home plan routes **both** through `src/lib/events.ts`
-(`createEventFromParsed` + `createEvent`/`updateEvent`). Do that properly and
-Stage 9 adds push-to-Google in one file. Skip it and Stage 9 has two places to
-patch and will miss one. Leave `external_id` null on app-created events — Stage
-9 backfills it from Google's insert response.
+| Path | Location | Operation |
+|---|---|---|
+| `EventDialog` save | `EventDialog.tsx:115` | `update` |
+| `EventDialog` save | `EventDialog.tsx:116` | `insert` |
+| `CalendarView.handleAIEvent` | `CalendarView.tsx:380` | `insert` |
+| `CalendarView` delete | `CalendarView.tsx:326` | `delete` |
+
+The delete was missed entirely. Without it routed through the choke point,
+Stage 9 pushes creates and updates to Google but not deletions, leaving ghost
+events behind — the same invisible-failure class, one verb over. The earlier
+citation of `CalendarView.tsx:388` was also off: 388 is the
+`source: 'app' as const` line *inside* the insert payload; the insert starts
+at 380.
+
+**`docs/design/home/riviera-glass-home-plan.md` is authoritative on this** —
+it carries the same inventory plus a `rg -U` done-check with a before-and-after
+baseline. Use it rather than re-deriving from here.
+
+Phase B of the home plan routes **all four** through `src/lib/events.ts`
+(`createEventFromParsed` + `createEvent`/`updateEvent`/`deleteEvent`). Do that
+properly and Stage 9 adds push-to-Google in one file. Skip it and Stage 9 has
+several places to patch and will miss one. Leave `external_id` null on
+app-created events — Stage 9 backfills it from Google's insert response.
 
 The care in Stage 9 is not the insert. It is: the local row saving while the
 Google push fails (don't leave the user thinking it synced), preventing the two
@@ -231,8 +249,8 @@ changed.
 
 ### Errata in the home plan — now corrected IN the file
 
-The plan is accurate about the codebase; these three were stale or since
-settled. **All three are now fixed in
+The plan is accurate about the codebase; the items below were stale or since
+settled. **All of them are now fixed in
 `docs/design/home/riviera-glass-home-plan.md` itself**, under a "Corrections"
 banner at the top, because a session that opens the plan directly never sees
 this handoff:
@@ -243,15 +261,12 @@ this handoff:
 3. **Time format is settled: 12-hour `h:mm a`.** The plan said "match whatever
    Kevin ruled" — he ruled, and every calendar surface already complies.
 
-Also corrected in the plan: the `src/lib/events.ts` extraction now reads as
-load-bearing rather than tidying, with a verified write-path inventory and a
-grep done-check.
-
-**A fourth app-side write path exists that the table above misses:**
-`CalendarView.tsx:326`, a `delete`. It must route through `events.ts` too —
-otherwise Stage 9 pushes creates and updates to Google but not deletions,
-leaving ghost events in Kevin's calendar. The full inventory is now in the
-plan.
+4. **The `src/lib/events.ts` extraction** now reads as load-bearing rather
+   than tidying, with a verified write-path inventory and a `rg -U` done-check
+   that has a before-and-after baseline.
+5. **A fourth app-side write path** — `CalendarView.tsx:326`, a `delete` —
+   which the "Stage 9's hook point" section above missed until it was
+   corrected in the same pass. Full inventory in both files now.
 
 Verified present, as the plan assumes: `IdeaDialog` at
 `src/components/ideas/IdeaDialog.tsx`, `media_dropbox_path` on `SocialPost`,
