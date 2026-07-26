@@ -212,7 +212,7 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
             />
           </div>
 
-          {calendars.length > 1 && (
+          {calendars.length > 0 && (
             <div>
               <label className={labelClass}>Calendar</label>
               <select
@@ -221,9 +221,22 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
                 className={inputClass}
               >
                 {calendars.map((cal) => (
-                  <option key={cal.id} value={cal.id}>{cal.name}</option>
+                  <option key={cal.id} value={cal.id}>
+                    {cal.name}{cal.is_visible === false ? ' (hidden)' : ''}
+                  </option>
                 ))}
               </select>
+              {/* An event saved to a hidden calendar is filtered straight back
+                  out of every view (CalendarView's visibleEvents), so it looks
+                  like the save silently failed. The picker used to be hidden
+                  entirely when there was only one calendar, which made the
+                  destination invisible as well as the consequence. */}
+              {calendars.find((c) => c.id === calendarId)?.is_visible === false && (
+                <p className="mt-1.5 text-[12px] text-[#8a4b06]">
+                  This calendar is hidden, so the event won&apos;t show on the calendar
+                  until you make it visible again.
+                </p>
+              )}
             </div>
           )}
         </div>
