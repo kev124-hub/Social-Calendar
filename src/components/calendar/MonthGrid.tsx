@@ -32,6 +32,11 @@ const MAX_ROWS = 3
 // Glass error ink — the same value PipelineBoard uses for publish_error.
 const FAILED_EDGE = '#8a2b12'
 
+// Matches Tailwind's sm: breakpoint (640px). Below it the cell renders dots
+// instead of rows, which changes what a tap on the cell should do.
+const isNarrow = () =>
+  typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches
+
 type Row = {
   kind: 'event' | 'post' | 'idea'
   id: string
@@ -120,7 +125,18 @@ export function MonthGrid({
           return (
             <div
               key={day.toISOString()}
-              onClick={() => onDayClick(day)}
+              // Below sm: the cell shows dots, not rows, and "+n more" lives in
+              // the sm:-only column — so on a phone a tap on the cell was the
+              // ONLY interaction, and it opened the create-event dialog. There
+              // was no route at all from the month grid to a day's contents:
+              // the dots say a day holds six things and never which six.
+              // Narrow taps therefore open the day; creating an event stays on
+              // the header's "+ New", which is on screen the whole time.
+              //
+              // Read at click time rather than into state — a click handler only
+              // ever runs on the client, so there is no hydration risk and no
+              // extra effect (which the set-state-in-effect rule would flag).
+              onClick={() => (isNarrow() ? onDayOpen(day) : onDayClick(day))}
               // min-height as classes, not inline: an inline value would beat
               // the sm: variant (the trap that nearly re-broke the week board).
               // 158px is a desktop cell; at 390px seven of them are ~45px wide,
