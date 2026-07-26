@@ -95,3 +95,10 @@ export const MOTION = {
   liftSmall: 'translateY(-4px)',
   staggerMs: 45,
 } as const;
+
+// Imperative hover effects (the card tilt, the month-cell lift) must not run on
+// touch: mouseenter fires on tap with no matching mouseleave, so the element
+// keeps its transform and sits visibly skewed afterwards. Measured on Kevin's
+// phone during Stage 3. Gate every such handler on this.
+export const canHover = () =>
+  typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches

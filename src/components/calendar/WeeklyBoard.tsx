@@ -35,7 +35,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { addDays, format, isSameDay, isToday, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 import type { SocialPost, Idea } from '@/types/database'
-import { GLASS, INK, MOTION, STAGE, dayTint, platformStyle, TODAY_BORDER } from '@/lib/glass'
+import { GLASS, INK, MOTION, STAGE, canHover, dayTint, platformStyle, TODAY_BORDER } from '@/lib/glass'
 import { PublishStatusBadge } from '@/components/ui/PublishStatusBadge'
 import { IdeaCard } from './IdeaCard'
 
@@ -48,14 +48,6 @@ interface Props {
   onMovePost: (postId: string, newDate: Date) => Promise<void>
   onMoveIdea: (ideaId: string, newDate: Date) => Promise<void>
 }
-
-// The hover tilt is applied imperatively, and on a touch screen mouseenter
-// fires on tap with no matching mouseleave — measured: a tapped card kept
-// `translateY(-7px) rotateX(7deg) ... scale(1.04)` after the tap ended, so it
-// sat visibly tilted in the installed PWA. Gate the handlers on a real hover
-// pointer. (The design README also asks for hover-only, never focus.)
-const canHover = () =>
-  typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches
 
 // Drop where the finger is. closestCorners ranks droppables by corner distance,
 // which in tall sparse columns picks a neighbour: dropping into the empty lower

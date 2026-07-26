@@ -60,17 +60,17 @@ cramped, week dates hard to read, Today pane needing scrolling.
 - **PR #23 — event-creation fixes**. Merged. Off `main`, unrelated to the
   redesign — see "The event-creation saga" below.
 
-`main` is at `ebe5ec1`. **There are no open PRs and no armed check-ins.**
+- **PR #24 — this handoff**. Merged.
 
-### Open
+`main` is at `4adb70f`. **No open PRs, nothing in flight.**
 
-### ⚠️ Branch auto-delete — this has bitten three times
+### ⚠️ Branch auto-delete — this has bitten four times
 The repo has **Settings → General → Automatically delete head branches**
 enabled. After every merge the remote branch disappears and the local
 remote-tracking ref goes stale, so the next push fails with
 `! [rejected] ... (stale info)`.
 
-**After PR #22 merges, do this before Stage 4 work:**
+**After every merge, before starting the next stage:**
 ```bash
 git fetch --prune origin
 git checkout -B claude/redesign-visual-elements-blxj78 origin/main
