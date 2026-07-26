@@ -35,7 +35,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { addDays, format, isSameDay, isToday, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 import type { SocialPost, Idea } from '@/types/database'
-import { GLASS, INK, MOTION, PLATFORM, STAGE, canHover, dayTint, TODAY_BORDER } from '@/lib/glass'
+import { GLASS, INK, MOTION, STAGE, canHover, dayTint, platformStyle, TODAY_BORDER } from '@/lib/glass'
 import { PublishStatusBadge } from '@/components/ui/PublishStatusBadge'
 import { IdeaCard } from './IdeaCard'
 
@@ -77,7 +77,7 @@ export function GlassPostCard({
   index?: number
   dragging?: boolean
 }) {
-  const pf = PLATFORM[post.platform as keyof typeof PLATFORM] ?? PLATFORM.instagram
+  const pf = platformStyle(post.platform)
   const stage = STAGE[post.stage as keyof typeof STAGE] ?? STAGE.idea
 
   // media_url is whatever was pasted into the post dialog — often a Dropbox or
@@ -151,7 +151,7 @@ export function GlassPostCard({
           <div className="flex flex-wrap items-center gap-[5px]">
             {post.scheduled_at && (
               <span style={{ fontFamily: 'var(--font-mono-num)', fontSize: 10, fontWeight: 500, color: INK.tertiary }}>
-                {format(parseISO(post.scheduled_at), 'HH:mm')}
+                {format(parseISO(post.scheduled_at), 'h:mm a')}
               </span>
             )}
             {/* Stage and publish status are different axes — a post can be
@@ -229,7 +229,17 @@ export function WeeklyBoard({
 }: Props) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [expanded, setExpanded] = useState<string | null>(null) // dateKey of the fanned-out deck
+  // Which day decks are fanned open. This is a Set, not a single dateKey: with
+  // one key, opening the drop target necessarily closed whatever was already
+  // open, so dragging a card OUT of a fanned day collapsed that day back to
+  // "+ n more" behind you. Days fan independently.
+  const [expandedDays, setExpandedDays] = useState<ReadonlySet<string>>(() => new Set())
+  const toggleExpanded = (dateKey: string) =>
+    setExpandedDays((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(dateKey)) next.add(dateKey)
+      return next
+    })
 
   const todayColRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -294,11 +304,26 @@ export function WeeklyBoard({
       const parsed = parseItemId(activeItemId)
       if (!parsed) return
       const newDate = parseISO(overDateKey)
-      setColOrder((prev) => ({
-        ...prev,
-        [activeDateKey]: (prev[activeDateKey] ?? []).filter((id) => id !== activeItemId),
-        [overDateKey]: [...(prev[overDateKey] ?? []), activeItemId],
-      }))
+      setColOrder((prev) => {
+        const target = prev[overDateKey] ?? []
+        // Insert where the card was released, not at the end. `over` is either
+        // the column itself (`day-<key>`) or a card inside it; appending in the
+        // second case sent a card dropped onto the top of a column to the
+        // bottom of it.
+        const overIndex = target.indexOf(overId)
+        const insertAt = overIndex === -1 ? target.length : overIndex
+        return {
+          ...prev,
+          [activeDateKey]: (prev[activeDateKey] ?? []).filter((id) => id !== activeItemId),
+          [overDateKey]: [...target.slice(0, insertAt), activeItemId, ...target.slice(insertAt)],
+        }
+      })
+      // A collapsed column renders only its first two cards, so a card landing
+      // past that vanished under "+n more" the moment it was released — which
+      // reads as a drop that failed. Spread the target. The source day keeps
+      // whatever state it had — dragging a card out of a fanned day must not
+      // fold that day up behind you.
+      setExpandedDays((prev) => new Set(prev).add(overDateKey))
       if (parsed.type === 'post') await onMovePost(parsed.rawId, newDate)
       else await onMoveIdea(parsed.rawId, newDate)
     }
@@ -336,7 +361,7 @@ export function WeeklyBoard({
           const postMap = new Map(dayPosts.map((p) => [toPostId(p.id), p]))
           const ideaMap = new Map(dayIdeas.map((i) => [toIdeaId(i.id), i]))
 
-          const isOpen = expanded === dateKey
+          const isOpen = expandedDays.has(dateKey)
           const visible = isOpen ? colItems : colItems.slice(0, 2)
           const hidden = colItems.length - visible.length
 
@@ -416,7 +441,7 @@ export function WeeklyBoard({
               {/* Stacked deck — fans the column open */}
               {(hidden > 0 || isOpen) && (
                 <button
-                  onClick={() => setExpanded(isOpen ? null : dateKey)}
+                  onClick={() => toggleExpanded(dateKey)}
                   className="relative h-[40px] w-full"
                   type="button"
                 >

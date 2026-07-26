@@ -82,7 +82,7 @@ export function MonthGrid({
             ...events.filter((e) => eventCoversDay(e, day)).map<Row>((e) => ({
               kind: 'event',
               id: e.id,
-              time: e.all_day ? 'ALL DAY' : format(parseISO(e.starts_at), 'HH:mm'),
+              time: e.all_day ? 'ALL DAY' : format(parseISO(e.starts_at), 'h:mm a'),
               label: 'EVT',
               title: e.title,
               edge: (e.calendar as Calendar | undefined)?.color ?? '#0b3a50',
@@ -92,7 +92,7 @@ export function MonthGrid({
               return {
                 kind: 'post',
                 id: p.id,
-                time: format(parseISO(p.scheduled_at!), 'HH:mm'),
+                time: format(parseISO(p.scheduled_at!), 'h:mm a'),
                 label: pf.code,
                 title: p.title ?? `${p.platform} ${p.post_type ?? ''}`,
                 edge: pf.ink,

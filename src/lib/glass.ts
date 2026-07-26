@@ -50,6 +50,20 @@ export const PLATFORM = {
   linkedin:  { label: 'LinkedIn',  code: 'LI', fill: '#ffd8a8', ink: '#8a4b06', chip: 'rgba(252,222,130,.60)' },
 } as const;
 
+// 'any' is a real Platform value — a post deliberately not yet committed to a
+// network — and there is no fourth brand colour for it. Every consumer so far
+// wrote `PLATFORM[post.platform] ?? PLATFORM.instagram`, which labelled those
+// posts as Instagram: purple dot, "IG" code. Neutral grey is the honest answer.
+// `ink` is INK.secondary, comfortably darker than the #5d5660 text floor.
+export const PLATFORM_NEUTRAL = {
+  label: 'Any platform', code: 'ANY', fill: '#e5e1e6', ink: '#3d3743', chip: 'rgba(93,86,96,.20)',
+} as const;
+
+/** Platform tokens for any post, including 'any' and unrecognised values. */
+export function platformStyle(platform: string | null | undefined) {
+  return PLATFORM[platform as keyof typeof PLATFORM] ?? PLATFORM_NEUTRAL;
+}
+
 // Stage chips: filled ink pills, never pale-on-pale.
 export const STAGE = {
   idea:      { label: 'Idea',      bg: '#eae4de', fg: '#3d3743' },
