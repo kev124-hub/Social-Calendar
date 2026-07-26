@@ -51,12 +51,16 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
   const [calendarId, setCalendarId] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Calendars un-hidden from inside this dialog. The parent reloads on save,
+  // but until then its `calendars` prop still says hidden.
+  const [unhidden, setUnhidden] = useState<string[]>([])
 
   const supabase = createClient()
 
   useEffect(() => {
     if (!open) return
     setError(null)
+    setUnhidden([])
     if (event) {
       setTitle(event.title)
       setDescription(event.description ?? '')
@@ -222,7 +226,7 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
               >
                 {calendars.map((cal) => (
                   <option key={cal.id} value={cal.id}>
-                    {cal.name}{cal.is_visible === false ? ' (hidden)' : ''}
+                    {cal.name}{cal.is_visible === false && !unhidden.includes(cal.id) ? ' (hidden)' : ''}
                   </option>
                 ))}
               </select>
@@ -230,12 +234,35 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
                   out of every view (CalendarView's visibleEvents), so it looks
                   like the save silently failed. The picker used to be hidden
                   entirely when there was only one calendar, which made the
-                  destination invisible as well as the consequence. */}
-              {calendars.find((c) => c.id === calendarId)?.is_visible === false && (
-                <p className="mt-1.5 text-[12px] text-[#8a4b06]">
-                  This calendar is hidden, so the event won&apos;t show on the calendar
-                  until you make it visible again.
-                </p>
+                  destination invisible as well as the consequence.
+                  The un-hide button matters as much as the warning: the only
+                  other visibility control lives in RightPanel, which is
+                  `hidden md:flex`, so on a phone there was no way out of this
+                  at all. */}
+              {calendars.find((c) => c.id === calendarId)?.is_visible === false
+                && !unhidden.includes(calendarId) && (
+                <div className="mt-1.5 space-y-1.5">
+                  <p className="text-[12px] text-[#8a4b06]">
+                    This calendar is hidden, so the event won&apos;t show on the calendar
+                    until you make it visible again.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-[10px]"
+                    onClick={async () => {
+                      const { error: showError } = await supabase
+                        .from('calendars')
+                        .update({ is_visible: true })
+                        .eq('id', calendarId)
+                      if (showError) return setError(showError.message)
+                      setUnhidden((u) => [...u, calendarId])
+                    }}
+                  >
+                    Show this calendar
+                  </Button>
+                </div>
               )}
             </div>
           )}
