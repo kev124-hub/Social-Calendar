@@ -1,3 +1,33 @@
+> # ⚠️ MOSTLY HISTORICAL — one section is still current
+>
+> **Do not plan work from this file.** It was written on 25 July, before
+> Stages 1–4 and 8 shipped. Current state lives in
+> **`handoff-riviera-glass-2026-07-26-consolidated.md`**.
+>
+> **Still current — the one reason this file exists:**
+> - **§ "The Design Bundle"** — the inventory of the v2 bundle and what the
+>   designer fixed between v1 and v2. Nothing else records this. The bundle
+>   itself is preserved at `docs/design/riviera-glass/`.
+> - § "Notes on Working With Kevin" — accurate, though the consolidated
+>   handoff carries the same guidance.
+>
+> **Stale — every other section:**
+> - § "Current State", § "Branch & Git State" — from before Stages 1–4 and 8.
+> - § "The Plan — Seven Stages" — Stages 1–4 and 8 are **merged**; Stage 7 was
+>   superseded by the `/home` plan; Stages 5 and 6 are blocked. The
+>   consolidated handoff's "Remaining stages" table replaces this.
+> - § "Stage 1 — Detailed Instructions" — **built and merged (PR #20)**.
+>   Following it now would re-apply work that already exists.
+> - § "Findings from the Assessment" — all four were addressed in Stages 1–4
+>   and the #26 punch list.
+> - § "Open Questions", § "Key Decisions" — superseded by the consolidated
+>   handoff's "Settled decisions" table, which is authoritative.
+> - Any lint baseline quoted below. **It is 37 (17 errors, 20 warnings)** —
+>   re-run `npm run lint` rather than trusting any document.
+>
+> This banner exists because an unmarked file with plausible-but-stale state is
+> exactly what caused two sessions to build Stage 4 twice on 26 July.
+
 # Session Handoff — "Riviera Glass" Visual Redesign
 
 **Written: July 25, 2026.** Scope: the visual redesign workstream only.

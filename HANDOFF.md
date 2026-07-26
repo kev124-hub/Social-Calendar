@@ -141,11 +141,15 @@ variant (§ Stage B0 — not needed; URL ingest reaches quality parity on its ow
 - `node_modules` is NOT present in a fresh container — run `npm ci` first, or the
   `node_modules/next/dist/docs/` guides that `AGENTS.md` mandates won't exist.
 - `npm run build` now succeeds with **no env vars set at all**.
-- `npm run lint` reports **42 pre-existing problems** on `main` (20 errors, 22
+- `npm run lint` reports **37 pre-existing problems** on `main` (17 errors, 20
   warnings) in older files. Don't mistake them for regressions; check whether your
-  changed files appear before investigating.
-- `handoff-b4-start-2026-07-24.md` is now **historical** — B4 is finished. This
-  file is the source of truth.
+  changed files appear before investigating. (This line read "42 (20 errors, 22
+  warnings)" until 26 July — the fourth document to carry a wrong baseline.
+  Re-verified by running the linter. **Re-run it yourself rather than trusting
+  any document, including this one.**)
+- `handoff-b4-start-2026-07-24.md` was deleted on 26 July — B4 is finished and
+  the file was superseded. It is in git history if you need it. This file is
+  the source of truth.
 
 ---
 
@@ -1032,11 +1036,11 @@ Treat this README as the closing stage of the project — it is part of "done."
 
 ## Next Steps
 
-> **Status as of July 24, 2026:** Workstream A (A1–A3) is shipped. **B0 is closed
-> (both arms pass), and B1, B2, B3 are shipped and live.** The next task is
-> **Stage B4**, whose gate is now open. Steps 1–4 below are the original plan and
-> are kept for provenance; the live checklist is in
-> `handoff-b4-start-2026-07-24.md` § "Next steps".
+> **Status as of July 24, 2026 — since overtaken; B4 shipped and was verified in
+> production on July 25.** Steps 1–4 below are the original plan, kept for
+> provenance only. For current state read this file's "📍 CURRENT STATE" block
+> at the top. (This pointed at `handoff-b4-start-2026-07-24.md` § "Next steps"
+> until that file was deleted on 26 July as superseded; it is in git history.)
 
 1. ~~Read `AGENTS.md`, skim `docs/build-phases.md` and `docs/database-schema.md`,
    and the two key files: `src/components/calendar/CalendarView.tsx` and

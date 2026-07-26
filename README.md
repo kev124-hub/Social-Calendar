@@ -275,9 +275,11 @@ Notes:
 - **`npm run build` succeeds with no environment variables set.** Clients are
   constructed lazily, per request, precisely so builds and Vercel Preview
   deployments don't fail on missing env vars.
-- **`npm run lint` reports 42 pre-existing problems** (20 errors, 22 warnings) in
+- **`npm run lint` reports 37 pre-existing problems** (17 errors, 20 warnings) in
   older files. That is the known baseline — check whether *your* changed files
-  appear before investigating.
+  appear before investigating. **Re-run the linter rather than trusting this
+  number**: it read "42 (20 errors, 22 warnings)" until 26 July, and five
+  separate documents had carried a wrong baseline by then.
 - There are **no automated tests**. Verification is done per change; UI work is
   checked with Playwright screenshots at 390×844 and desktop widths.
 - `AGENTS.md` requires reading the guides in `node_modules/next/dist/docs/` before
