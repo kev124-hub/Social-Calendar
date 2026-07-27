@@ -1,12 +1,16 @@
 // Stage 9: proves the Google payload conversion, especially all-day dates.
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 const { toGoogleEvent } = await import('../src/lib/google-calendar.ts')
 const { formatInZone } = await import('../src/lib/zoned-time.ts')
 
 let pass = 0
 const ok = (n) => { pass++; console.log(`  ✓ ${n}`) }
 
-const ev = (o) => ({ id: 'evt-1', title: 'T', description: null, location: null, ends_at: null, all_day: false, external_id: null, source: 'app', ...o })
+// `time_zone: null` by default on purpose: the assertions below it were written
+// before the column existed, and a null keeps them testing the fallback path —
+// the caller's zone — which is exactly the behaviour that had to survive step 5.
+const ev = (o) => ({ id: 'evt-1', title: 'T', description: null, location: null, ends_at: null, all_day: false, time_zone: null, external_id: null, source: 'app', ...o })
 
 console.log('\nall-day dates survive the timezone round trip:')
 // An all-day event is stored as LOCAL midnight converted to UTC. For a user
@@ -196,6 +200,113 @@ console.log('\ntoAppEventRow — zone capture from Google:')
   assert.equal(pulled.starts_at, original.starts_at, 'round trip moved the start')
   assert.equal(pulled.ends_at, original.ends_at, 'round trip moved the end')
   ok2('an all-day event survives push -> pull byte-identically, span included')
+}
+
+// ── Step 5: the push sends the zone ─────────────────────────────────────
+console.log('\nstep 5 — an app event reaches Google as a wall clock:')
+{
+  const MONACO = 'Europe/Monaco'
+  const FROM_NY = 'America/New_York'   // the pushing browser's zone
+
+  // A timed event now carries its zone on both ends. `dateTime` already fixed
+  // the instant; the zone is what stops Google rendering it in the target
+  // calendar's default zone instead of the one it was meant in.
+  const timed = toGoogleEvent(ev({
+    all_day: false, time_zone: MONACO,
+    starts_at: '2026-07-29T18:00:00.000Z', ends_at: '2026-07-29T20:00:00.000Z',
+  }), FROM_NY)
+  assert.equal(timed.start.timeZone, MONACO)
+  assert.equal(timed.end.timeZone, MONACO)
+  // The instant must NOT move — this step adds information, it does not reinterpret.
+  assert.equal(timed.start.dateTime, '2026-07-29T18:00:00.000Z')
+  assert.equal(timed.end.dateTime, '2026-07-29T20:00:00.000Z')
+  ok('a timed event sends its zone on start and end, with the instant untouched')
+
+  // No zone: no key. Google then applies the calendar's own, which is today's
+  // behaviour — sending the pusher's device zone would assert what we do not know.
+  const unzoned = toGoogleEvent(ev({
+    all_day: false, time_zone: null, starts_at: '2026-07-29T18:00:00.000Z',
+  }), FROM_NY)
+  assert.ok(!('timeZone' in unzoned.start), 'a null zone must send no timeZone key')
+  assert.ok(!('timeZone' in unzoned.end))
+  ok('a row with no zone sends no timeZone at all, rather than a fabricated one')
+
+  // ── The all-day bug step 4 made reachable ─────────────────────────────
+  // Since step 3 an all-day row sits at midnight in ITS zone, so deriving the
+  // date in the pusher's zone is off by one whenever they differ. Reachable
+  // without the picker: create it in Monaco, lose the wifi, and the sweep
+  // retries from wherever you are by then.
+  const allDay = ev({
+    all_day: true, time_zone: MONACO,
+    starts_at: '2026-07-31T22:00:00.000Z',   // 1 Aug 00:00 Monaco
+    ends_at: '2026-08-01T21:59:59.000Z',     // 1 Aug 23:59:59 Monaco
+  })
+  const pushedFromNY = toGoogleEvent(allDay, FROM_NY)
+  assert.equal(pushedFromNY.start.date, '2026-08-01', 'was 2026-07-31 — a day early')
+  assert.equal(pushedFromNY.end.date, '2026-08-02', 'exclusive end for a one-day event')
+  ok('an all-day event pushed from another zone keeps its own date — was a day early, and a two-day span')
+
+  // And the date must not depend on where it is pushed from at all.
+  const dates = new Set(
+    ['UTC', FROM_NY, 'Asia/Singapore', 'Pacific/Auckland', 'America/Los_Angeles']
+      .map((tz) => toGoogleEvent(allDay, tz).start.date)
+  )
+  assert.equal(dates.size, 1, `date varied by pusher: ${[...dates].join(' | ')}`)
+  assert.equal([...dates][0], '2026-08-01')
+  ok('the same all-day event pushes as 1 August from all five pushing zones')
+
+  // ── Round trip, now with the zone included ────────────────────────────
+  const original = ev({
+    id: 'rt2', all_day: false, time_zone: MONACO, external_id: 'g-rt2',
+    starts_at: '2026-07-29T18:00:00.000Z', ends_at: '2026-07-29T20:00:00.000Z',
+  })
+  const body = toGoogleEvent(original, FROM_NY)
+  const back = toAppEventRow(
+    { id: 'g-rt2', summary: original.title, start: body.start, end: body.end },
+    'cal-1', 'Some/Other_Zone')
+  assert.equal(back.starts_at, original.starts_at)
+  assert.equal(back.ends_at, original.ends_at)
+  // The zone survives, and comes from the EVENT rather than the calendar
+  // fallback — which is what proves the push actually carried it.
+  assert.equal(back.time_zone, MONACO)
+  ok('a timed event survives push -> pull with its instant AND its zone intact')
+}
+
+// ── The binding constraint on step 5 ────────────────────────────────────
+// The plan states as an absolute that this work never modifies an event in
+// Google, and names what makes it true: every calendar-mutating path is behind
+// a `source === 'app'` check. "It must not be relaxed, and no new push path may
+// be added that skips it."
+//
+// Nothing enforced that but attention, and step 5 is the step that writes to
+// Google — so this is a tripwire in the same spirit as the write-choke-point
+// grep documented in src/lib/events.ts. It is deliberately structural: it does
+// not prove a new path would be unguarded, it refuses to let one be added
+// quietly without someone re-reading the guarantee.
+console.log('\nthe guarantee that this never modifies a Google event:')
+{
+  const src = await readFile(new URL('../src/lib/google-calendar.ts', import.meta.url), 'utf8')
+
+  assert.match(src, /if \(event\.source !== 'app'\) throw/,
+    'pushEventToGoogle lost its source guard — the plan makes this binding')
+  ok("pushEventToGoogle still refuses anything that is not source: 'app'")
+
+  assert.match(src, /\.eq\('source', 'app'\)/,
+    'the unpushed sweep lost its source filter')
+  ok('the sweep still queries only app-sourced rows, so it cannot feed the push a Google row')
+
+  // Every write to a Google endpoint. Three touch a calendar (PATCH an event,
+  // POST an event, DELETE an event) and one is the OAuth token exchange, which
+  // is not a calendar write at all.
+  const writes = src.match(/method: '(POST|PATCH|PUT|DELETE)'/g) ?? []
+  assert.equal(writes.length, 4,
+    `expected 4 write calls (3 calendar + 1 OAuth token), found ${writes.length}: ${writes.join(', ')}. ` +
+    'If you added a Google write, confirm it is behind the source guard and update this count.')
+  ok('there are still exactly three calendar-mutating paths, plus the OAuth token exchange')
+
+  // Step 5 adds a field to a body, not a request.
+  assert.ok(!/method: 'PUT'/.test(src), 'step 5 must not introduce a new HTTP verb')
+  ok('step 5 added a field to an existing body rather than a new request')
 }
 
 console.log(`\n${pass + p2} checks passed.\n`)

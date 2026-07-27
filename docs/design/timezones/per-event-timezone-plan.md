@@ -1,10 +1,10 @@
 # Per-event timezones — plan
 
-**Status: steps 1–4 shipped; step 5 is next.** Written 27 July 2026.
+**Status: complete. All five steps shipped.** Written 27 July 2026.
 
 Events read in their own zone, with a `GMT+2` marker when that differs from the
-device; the all-day day-early bug is gone; and the zone is now editable. What
-remains is step 5 — sending `timeZone` to Google on the push.
+device. The zone is editable, it round-trips through Google, and three all-day
+off-by-ones are gone — one this plan predicted and two it did not.
 
 **Migration 008 has been applied** (confirmed by Kevin, 27 July). Earlier notes
 here and in commit messages said it was hand-applied and unverified; that is no
@@ -16,7 +16,7 @@ longer true and the caveat is withdrawn.
 | 2. The render helper, `src/lib/zoned-time.ts` | shipped |
 | 3. Convert the render sites, view by view | shipped — the first visible change; fixed **two** all-day off-by-ones, see below |
 | 4. The zone picker in `EventDialog` | shipped — searchable, recents first; see the ruling on what a zone change does |
-| 5. Send `timeZone` on the push | **next** |
+| 5. Send `timeZone` on the push | shipped — and fixed a third all-day off-by-one on the way out |
 
 Ruled on by Kevin, 27 July — **do not re-litigate these:**
 
@@ -79,6 +79,8 @@ Every step in this plan is therefore safe by construction:
 - Step 5 adds a `timeZone` field to the body `pushEventToGoogle` already sends,
   on a path that already refuses anything not `source: 'app'`. It cannot reach a
   Google-sourced event, because that function returns before building a body.
+  **Shipped as described** — a field on an existing body, no new request and no
+  new HTTP verb, both asserted in `google.test.mjs`.
 
 **Constraint on step 5, binding:** the `source !== 'app'` guard is what makes
 this true. It must not be relaxed, and no new push path may be added that skips
@@ -466,6 +468,36 @@ where an event can move.
 5. **The push side** — send `timeZone` with `dateTime` so an app-created event
    reaches Google as a wall clock rather than inheriting the target calendar's
    default zone.
+
+   **Shipped.** `dateTime` already fixed the instant, so this adds information
+   rather than reinterpreting anything: the instant is byte-identical before and
+   after, and a row with no zone sends no `timeZone` key at all — Google then
+   applies the calendar's own, which is the previous behaviour. Sending the
+   *pusher's* device zone instead would assert something we do not know.
+
+   **A third all-day off-by-one, and the one closest to doing real damage.** The
+   push derived its all-day `date` from the **caller's** zone —
+   `localDate(starts_at, timeZone)`, where `timeZone` is the pushing browser's.
+   Since step 3 an all-day row sits at midnight in *its own* zone, so the two
+   disagree whenever the event is not local: a 1 August Monaco event pushed from
+   New York went **to Google** as 31 July, and as a two-day span.
+   
+   Worse than the other two, because the pull's mistakes were confined to our
+   own database and self-repaired on the next sync, whereas this one wrote a
+   wrong date into Google. It is also reachable without anyone touching the zone
+   picker: create the event in Monaco, lose the wifi, and `sweepUnpushedEvents`
+   retries it later from wherever you are by then. Now derived in the event's own
+   zone, and pinned by a test that pushes the same event from five zones and
+   requires one answer.
+
+   **The binding constraint is now enforced rather than merely stated.** This plan
+   makes it absolute that the work never modifies an event in Google, resting on
+   the `source !== 'app'` guard, and says no new push path may skip it. Nothing
+   checked that but attention. `google.test.mjs` now carries a structural
+   tripwire — the guard must be present, the sweep's `source` filter must be
+   present, and the count of calendar-mutating requests must stay at three. It
+   does not prove a new path would be guarded; it refuses to let one be added
+   without someone re-reading the guarantee.
 
 Steps 1 and 2 change nothing observable. The first step a user can see is 3.
 
