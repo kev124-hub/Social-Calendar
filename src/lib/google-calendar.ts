@@ -199,6 +199,8 @@ export interface AppEventRow {
   starts_at: string
   ends_at: string | null
   all_day: boolean
+  /** IANA zone the wall clock was meant in; null on rows that predate step 1. */
+  time_zone: string | null
   external_id: string | null
   source: string
 }
@@ -211,24 +213,50 @@ export interface AppEventRow {
  * the Saturday and nothing in the UI would say so.
  */
 export function toGoogleEvent(event: AppEventRow, timeZone: string) {
+  // The event's OWN zone wherever it has one, and the caller's only as a
+  // fallback for rows that predate step 1 — for which it reproduces exactly the
+  // previous behaviour.
+  //
+  // Not interchangeable, and the all-day case is why. Since step 3 an all-day row
+  // is stored at midnight in its own zone, so deriving its date in the caller's
+  // instead is off by one whenever the two differ: a 1 August Monaco event pushed
+  // from a New York browser went to Google as 31 July, and as a two-day span.
+  // That is reachable without anyone touching the zone picker — create the event
+  // in Monaco, lose the wifi, and `sweepUnpushedEvents` retries it later from
+  // wherever you are by then.
+  const zone = event.time_zone ?? timeZone
+
   const timing = event.all_day
     ? {
-        start: { date: localDate(event.starts_at, timeZone) },
+        start: { date: localDate(event.starts_at, zone) },
         // Google treats all-day `end.date` as EXCLUSIVE, so a single-day event
         // ends on the following day. Our `ends_at` is the last day at 23:59
         // local, hence +1 rather than a straight copy.
         end: {
-          date: addDays(localDate(event.ends_at ?? event.starts_at, timeZone), 1),
+          date: addDays(localDate(event.ends_at ?? event.starts_at, zone), 1),
         },
       }
     : {
-        start: { dateTime: new Date(event.starts_at).toISOString() },
+        // `dateTime` carries an absolute offset, so the instant is unambiguous
+        // with or without `timeZone`. Sending the zone as well is what makes the
+        // event a WALL CLOCK to Google rather than an instant it renders in the
+        // target calendar's default zone — which is what step 5 exists for, and
+        // is the same shape Google sends back on the pull.
+        //
+        // Omitted rather than defaulted when the row has no zone: Google would
+        // then apply the calendar's own, which is today's behaviour, whereas
+        // sending the pusher's device zone would assert something we do not know.
+        start: {
+          dateTime: new Date(event.starts_at).toISOString(),
+          ...(event.time_zone ? { timeZone: event.time_zone } : {}),
+        },
         // Google rejects an event with no end. Our schema allows one, so give
         // an open-ended event a nominal hour rather than failing the push.
         end: {
           dateTime: new Date(
             event.ends_at ?? new Date(new Date(event.starts_at).getTime() + 60 * 60 * 1000).toISOString()
           ).toISOString(),
+          ...(event.time_zone ? { timeZone: event.time_zone } : {}),
         },
       }
 
@@ -252,7 +280,7 @@ export async function pushEventToGoogle(eventId: string, timeZone: string): Prom
   const supabase = getServiceClient()
   const { data: event, error } = await supabase
     .from('calendar_events')
-    .select('id, title, description, location, starts_at, ends_at, all_day, external_id, source')
+    .select('id, title, description, location, starts_at, ends_at, all_day, time_zone, external_id, source')
     .eq('id', eventId)
     .single()
 
