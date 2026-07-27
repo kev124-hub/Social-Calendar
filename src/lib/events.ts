@@ -78,9 +78,19 @@ export async function deleteEvent(
 }
 
 /**
+ * Where an AI-parsed event lands: the first app calendar, else whatever is
+ * first, else nowhere. Exported because `/home`'s confirmation line has to name
+ * the destination, and computing it a second time there would let the two
+ * answers drift — the line would eventually name a calendar the event is not on.
+ */
+export function resolveDefaultCalendar(calendars: Calendar[]): Calendar | undefined {
+  return calendars.find((c) => c.source === 'app') ?? calendars[0]
+}
+
+/**
  * Create an event from an `AIEventInput` parse. Resolves the destination
- * calendar (first app calendar, else whatever is first) and normalises an
- * all-day parse — which arrives as a bare `YYYY-MM-DD` — to a full day span.
+ * calendar and normalises an all-day parse — which arrives as a bare
+ * `YYYY-MM-DD` — to a full day span.
  *
  * Called by both `CalendarView` and `HomeView`, which is the other reason this
  * lives here: two copies of this logic would drift.
@@ -90,7 +100,7 @@ export async function createEventFromParsed(
   parsed: ParsedEvent,
   calendars: Calendar[]
 ): Promise<void> {
-  const defaultCalendar = calendars.find((c) => c.source === 'app') ?? calendars[0]
+  const defaultCalendar = resolveDefaultCalendar(calendars)
 
   const toISO = (s: string, isEnd?: boolean) => {
     if (parsed.all_day)
