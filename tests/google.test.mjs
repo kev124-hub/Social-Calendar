@@ -112,4 +112,42 @@ for (const [name, e, expected] of [
   assert.equal(isAppPushedEvent(e), expected, name)
   ok2(`${name} -> ${expected ? 'skipped by the pull' : 'imported normally'}`)
 }
+
+// ── the pull's row mapping, incl. per-event timezone (step 1) ───────────
+// Extracted from syncGoogleCalendar so it can be tested at all. It decides what
+// day an event lands on, and had no coverage before.
+const { toAppEventRow } = await import('../src/lib/google-calendar.ts')
+console.log('\ntoAppEventRow — zone capture from Google:')
+{
+  const withZone = toAppEventRow(
+    { id: 'g1', summary: 'Dinner', start: { dateTime: '2026-08-01T20:00:00+02:00', timeZone: 'Europe/Monaco' }, end: { dateTime: '2026-08-01T22:00:00+02:00' } },
+    'cal-1', 'America/New_York')
+  assert.equal(withZone.time_zone, 'Europe/Monaco')
+  ok2("the event's own zone wins over the calendar's")
+
+  const noZone = toAppEventRow(
+    { id: 'g2', summary: 'Recce', start: { date: '2026-08-01' }, end: { date: '2026-08-02' } },
+    'cal-1', 'Europe/Monaco')
+  assert.equal(noZone.time_zone, 'Europe/Monaco')
+  ok2('an all-day event carries no zone, so the calendar\'s is used')
+
+  const neither = toAppEventRow({ id: 'g3', start: { date: '2026-08-01' } }, 'cal-1', undefined)
+  assert.equal(neither.time_zone, null)
+  ok2('neither present -> null, not a fabricated UTC')
+
+  // Everything else must be byte-identical to the pre-extraction mapping.
+  assert.equal(neither.source, 'google')
+  assert.equal(neither.title, '(No title)')
+  assert.equal(neither.all_day, true)
+  assert.equal(neither.starts_at, '2026-08-01T00:00:00Z')
+  assert.equal(withZone.all_day, false)
+  assert.equal(withZone.starts_at, '2026-08-01T20:00:00+02:00')
+  ok2('the rest of the mapping is unchanged by the extraction')
+
+  // The known live bug, pinned so the fix is deliberate rather than accidental:
+  // all-day still lands on UTC midnight. Fixed in step 3, with the renderer.
+  assert.equal(noZone.starts_at, '2026-08-01T00:00:00Z')
+  ok2('all-day is STILL UTC midnight — the day-early bug is step 3, not this one')
+}
+
 console.log(`\n${pass + p2} checks passed.\n`)

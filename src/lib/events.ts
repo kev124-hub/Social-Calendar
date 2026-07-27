@@ -146,6 +146,31 @@ export interface EventFields {
   ends_at: string | null
   all_day: boolean
   calendar_id: string | null
+  /**
+   * IANA zone the wall clock was meant in. Optional: a caller that does not
+   * supply one gets the device's, via `deviceTimeZone()` below.
+   *
+   * Step 1 of the per-event timezone work — see
+   * `docs/design/timezones/per-event-timezone-plan.md`. Written but not yet
+   * read by anything, deliberately: until the views honour a zone, storing one
+   * changes nothing on screen. That is what makes this step inert.
+   */
+  time_zone?: string | null
+}
+
+/**
+ * The zone this device is set to, or null if the browser will not say.
+ *
+ * Null rather than a guess. 'UTC' would be a lie that renders as a real
+ * wall clock and looks deliberate — worse than an honest unknown, which the
+ * readers already handle by falling back to the device zone at display time.
+ */
+export function deviceTimeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null
+  } catch {
+    return null
+  }
 }
 
 export async function createEvent(
@@ -156,6 +181,10 @@ export async function createEvent(
     .from('calendar_events')
     .insert({
       ...fields,
+      // Captured at creation, where the answer is known. `?? deviceTimeZone()`
+      // rather than an unconditional default so an explicit zone from the
+      // dialog wins — including, later, an explicit null.
+      time_zone: fields.time_zone ?? deviceTimeZone(),
       source: 'app' as const,
       // `external_id` stays null until the push below reports Google's id.
       // A null here is exactly what marks the row as still owed to Google, and
@@ -174,6 +203,13 @@ export async function updateEvent(
   id: string,
   fields: Partial<EventFields>
 ): Promise<WriteResult> {
+  // `fields` is spread as given and NOTHING is added to it. That is the point:
+  // an update must not stamp `time_zone` the way `createEvent` does. A dialog
+  // opened to look at an event and closed with Save would otherwise write the
+  // viewing device's zone onto a row created somewhere else — silently moving
+  // it, from an action that changed nothing. That is precisely the shape of the
+  // drift bug this whole workstream started with, and the existing assertion
+  // that an update never rewrites `source` exists for the same reason.
   const { error } = await supabase
     .from('calendar_events')
     .update(fields)
@@ -192,11 +228,42 @@ export async function deleteEvent(
   // whole choke point exists to prevent. A failed read is not fatal — losing
   // the local delete would be worse — but it does mean the ghost survives, so
   // it is reported.
+  //
+  // `source` comes with it because the guard below has to run before the row is
+  // gone, for the same reason.
   const { data: existing, error: readError } = await supabase
     .from('calendar_events')
-    .select('external_id')
+    .select('external_id, source')
     .eq('id', id)
     .single()
+
+  // An event that came FROM Google is not ours to delete, and this refuses
+  // before touching anything rather than after.
+  //
+  // Both of the alternatives are worse. Deleting it here AND in Google — which
+  // is what happened until now — means the app can destroy something in a
+  // calendar it does not own, from a Delete button two taps away. Deleting it
+  // only locally looks tidier and is not: the pull upserts on `external_id`, so
+  // the next sync re-imports the row and the event returns by itself, which
+  // reads as a bug in whichever direction you were not expecting.
+  //
+  // Refusing is the only outcome that stays true five minutes later. Google is
+  // the owner; the deletion belongs there.
+  //
+  // A failed read leaves `existing` null and falls through deliberately: the
+  // local delete is safe in that case because without an `external_id` there is
+  // nothing to push, so nothing in Google can be touched either way.
+  // `source` is NOT NULL with a four-value check — 'app', 'google', 'tripit',
+  // 'icloud' — so `!== 'app'` covers every foreign origin, present and future,
+  // rather than naming Google specifically. It also fails closed: an
+  // unrecognised value refuses rather than assuming ownership.
+  if (existing && existing.source !== 'app') {
+    const owner = existing.source === 'google' ? 'Google' : existing.source || 'another calendar'
+    throw new Error(
+      `This event is synced from ${owner} and has to be deleted there. Deleting it ` +
+        `here would either remove it from ${owner} too, or be undone by the next sync.`
+    )
+  }
 
   const { error } = await supabase.from('calendar_events').delete().eq('id', id)
   if (error) throw writeFailure('delete', error.message)

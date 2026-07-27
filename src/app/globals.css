@@ -162,6 +162,23 @@
   html {
     @apply font-sans;
   }
+
+  /* Tailwind v4 dropped `cursor: pointer` from buttons in preflight — v3 set
+     it, v4 defers to the browser default of `default`. The result is an app
+     where 59 of 68 buttons never show a hand, so a control with a real hover
+     state still reads as dead: `Manual +` on /home changes colour on hover
+     (#5d5660 -> #0b3a50) and was still reported as having no hover, because
+     the cursor is the cue you actually read. The sibling `+n more` felt alive
+     purely by being an <a>.
+
+     Restored here rather than as `cursor-pointer` on each button: 59 hand
+     applied classes is how a codebase drifts, and the next button added would
+     start wrong again. `:disabled` is excluded — a disabled control must not
+     invite the click it is going to ignore. */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
 }
 
 /* ────────────────────────────────────────────────────────────────

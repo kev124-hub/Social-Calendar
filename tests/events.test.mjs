@@ -99,9 +99,15 @@ for (const [name, parsed] of PARSES) {
   const a = fakeClient(), b = fakeClient()
   await createEventFromParsed(a, parsed, CALENDARS)
   await originalHandleAIEvent(b, parsed, CALENDARS)
-  assert.deepEqual(a.calls[0].payload, b.calls[0].payload, name)
+  // `time_zone` is the ONE deliberate divergence from the original payload,
+  // added by step 1 of the per-event timezone work. Split out rather than
+  // loosened away: every other field must still match byte for byte, and a
+  // second divergence appearing here should still fail.
+  const { time_zone, ...rest } = a.calls[0].payload
+  assert.deepEqual(rest, b.calls[0].payload, name)
+  assert.ok(time_zone, 'the only new field, and it must be populated')
   assert.equal(a.calls[0].table, 'calendar_events')
-  ok(`${name} — insert payload still identical`)
+  ok(`${name} — insert payload identical but for the captured zone`)
 }
 const p = PARSES[0][1]
 
@@ -159,7 +165,7 @@ console.log('\nStage 9 — push to Google:')
 console.log('\ndelete:')
 {
   pushCalls = []; stubFetch()
-  const c = fakeClient({ row: { external_id: 'g-xyz' } })
+  const c = fakeClient({ row: { external_id: 'g-xyz', source: 'app' } })
   const r = await deleteEvent(c, 'evt-9')
   assert.equal(c.calls[0].op, 'select', 'must read external_id BEFORE deleting')
   assert.equal(c.calls[1].op, 'delete')
@@ -173,10 +179,82 @@ console.log('\ndelete:')
 }
 {
   pushCalls = []; stubFetch()
-  const r = await deleteEvent(fakeClient({ row: { external_id: null } }), 'evt-1')
+  const r = await deleteEvent(fakeClient({ row: { external_id: null, source: 'app' } }), 'evt-1')
   assert.equal(pushCalls.length, 0, 'nothing to delete in Google')
   assert.equal(r.pushedToGoogle, true)
   ok('an event never pushed does not call Google at all')
+}
+
+// ── 4b. a synced event is not ours to delete ────────────────────────────
+// The one path by which this app could destroy something in a calendar it does
+// not own. Locked here rather than left to care: the guarantee is only worth
+// anything if a future edit that removes it fails loudly.
+console.log('\ndelete refuses a synced event:')
+for (const source of ['google', 'subscribed']) {
+  pushCalls = []; stubFetch()
+  const c = fakeClient({ row: { external_id: 'g-xyz', source } })
+  await assert.rejects(() => deleteEvent(c, 'evt-9'), /synced from/i, `${source} must be refused`)
+  // Refused BEFORE the local delete, not after — the row must survive intact.
+  assert.equal(c.calls.length, 1, 'only the read should have run')
+  assert.equal(c.calls[0].op, 'select')
+  ok(`a ${source}-sourced event is refused before anything is deleted locally`)
+  assert.equal(pushCalls.length, 0)
+  ok(`…and Google is never called, so nothing there can be removed`)
+}
+{
+  // The read failing must not become an accidental route past the guard, but
+  // it also must not block the local delete: with no external_id there is
+  // nothing to push, so Google cannot be touched either way.
+  pushCalls = []; stubFetch()
+  const c = fakeClient({ readFailWith: { message: 'network' } })
+  const r = await deleteEvent(c, 'evt-3')
+  assert.equal(c.calls[1].op, 'delete')
+  assert.equal(pushCalls.length, 0, 'an unreadable row is never pushed')
+  assert.equal(r.pushedToGoogle, false)
+  ok('an unreadable row deletes locally and calls Google not at all')
+}
+
+// ── 4c. per-event timezone, step 1: capture on write ────────────────────
+// Written but not yet read — the views still format in the device zone — so
+// these assert the DATA, which is the only observable thing this step changes.
+console.log('\ntimezone capture:')
+{
+  pushCalls = []; stubFetch()
+  const c = fakeClient()
+  await createEvent(c, FIELDS)
+  assert.equal(c.calls[0].payload.time_zone, process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone)
+  ok(`createEvent stamps the device zone (${c.calls[0].payload.time_zone})`)
+}
+{
+  pushCalls = []; stubFetch()
+  const c = fakeClient()
+  await createEvent(c, { ...FIELDS, time_zone: 'Europe/Monaco' })
+  assert.equal(c.calls[0].payload.time_zone, 'Europe/Monaco')
+  ok('an explicit zone beats the device — the picker has to be able to win')
+}
+{
+  // The rule that keeps "no backfill" honest: opening a dialog and saving must
+  // not stamp a zone on a row created somewhere else. Same reason `source` is
+  // never rewritten by an update.
+  pushCalls = []; stubFetch()
+  const c = fakeClient()
+  await updateEvent(c, 'evt-1', { title: 'Renamed' })
+  assert.ok(!('time_zone' in c.calls[0].payload), 'update must not stamp a zone')
+  ok('updateEvent does NOT stamp time_zone — a look-and-save cannot move an event')
+}
+{
+  pushCalls = []; stubFetch()
+  const c = fakeClient()
+  await updateEvent(c, 'evt-1', { time_zone: 'Asia/Singapore' })
+  assert.equal(c.calls[0].payload.time_zone, 'Asia/Singapore')
+  ok('…but an explicitly changed zone is still written')
+}
+{
+  pushCalls = []; stubFetch()
+  const c = fakeClient()
+  await createEventFromParsed(c, p, CALENDARS)
+  assert.ok(c.calls[0].payload.time_zone, 'an AI-parsed event gets the device zone')
+  ok('createEventFromParsed carries a zone through — the model is never asked for one')
 }
 
 // ── 5. update ───────────────────────────────────────────────────────────
@@ -202,7 +280,10 @@ for (const [name, run, expected] of [
   ['deleteEvent', (c) => deleteEvent(c, 'id'), `Could not delete the event: ${RLS.message}`],
   ['createEventFromParsed', (c) => createEventFromParsed(c, p, CALENDARS), `Could not save the event: ${RLS.message}`],
 ]) {
-  await assert.rejects(() => run(fakeClient({ failWith: RLS })), (e) => {
+  // `source: 'app'` on the read: without it the delete guard fires first and
+  // this would assert the wrong refusal. Real rows always carry a source —
+  // the column is NOT NULL — so the fixture matching that is the accurate one.
+  await assert.rejects(() => run(fakeClient({ failWith: RLS, row: { id: 'new-id', source: 'app' } })), (e) => {
     assert.equal(e.message, expected); return true
   }, name)
   ok(`${name} throws "${expected}"`)
@@ -220,7 +301,9 @@ for (const raw of ['TypeError: Load failed', 'Failed to fetch', 'NetworkError wh
   })
   ok(`"${raw}" -> ambiguous-write wording`)
 }
-await assert.rejects(() => deleteEvent(fakeClient({ failWith: { message: 'Load failed' } }), 'id'),
+await assert.rejects(
+  // source: 'app' so this exercises the network wording, not the synced-event guard.
+  () => deleteEvent(fakeClient({ failWith: { message: 'Load failed' }, row: { id: 'x', source: 'app' } }), 'id'),
   (e) => e.message.includes('may or may not have been deleted'))
 ok('delete uses "deleted", not "saved"')
 for (const raw of ['new row violates row-level security policy', 'duplicate key value violates unique constraint']) {

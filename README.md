@@ -535,9 +535,29 @@ src/
     email.ts, cron-auth.ts, google-calendar.ts, supabase/
   proxy.ts            auth boundary (Next.js 16's renamed middleware)
 extension/            Chrome MV3 clipper
+scripts/              one-off maintenance (see below)
 supabase/migrations/  hand-applied SQL
+tests/                no-framework Node checks (npm test)
 docs/                 schema, integrations, build phases, extension spec
 ```
+
+### Maintenance scripts
+
+```bash
+node --env-file=.env.local scripts/scan-drifted-times.mjs --tz=America/New_York
+```
+
+Lists events and scheduled posts whose stored time may have been moved by the
+edit-dialog bug fixed in #36 — which shifted a row by the device's UTC offset on
+every save, compounding, without needing anything to be edited.
+
+**Read only, deliberately.** The stored value is `original + N × offset` and
+neither term was recorded, so nothing can undo it without guessing — and
+guessing wrong on a `scheduled_at` publishes at the wrong time rather than
+merely displaying at one. The script narrows the rows worth opening; the
+dialogs, now fixed, are what correct them.
+
+Pass the zone the device was **set to**, which is not necessarily where it was.
 
 **Key docs:** `HANDOFF.md` (project state and decision history),
 `docs/database-schema.md`, `docs/integrations.md`, `docs/chrome-extension.md`,

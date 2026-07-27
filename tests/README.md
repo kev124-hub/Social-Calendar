@@ -21,6 +21,7 @@ coverage.
 | `events.test.mjs` | `src/lib/events.ts` — the single write choke point for `calendar_events`. Insert payloads stay byte-identical to the pre-extraction code; a failed Google push never rolls back or hides the local write; delete reads `external_id` before the row goes; database refusals stay fatal while network failures are reported as ambiguous; a wall-clock time survives whatever timezone designator the model appends. |
 | `google.test.mjs` | The Google Calendar payload conversion. All-day dates across six timezones, Google's exclusive all-day `end.date`, year-roll and leap-day boundaries, and the echo filter that stops the pull re-importing what the push just sent. |
 | `datetime.test.mjs` | `src/lib/datetime-local.ts`. Opening an edit dialog and saving without changing anything must not move the time — checked across five zones, every hour of the day, both US DST transitions and the year boundary. |
+| `drift-scan.test.mjs` | `scripts/lib/drift-scan.mjs`, the triage for rows the dialog bug moved before it was fixed. The all-day invariant (every correct path writes local midnight, so any other local time is proof of a move), edit history as a filter rather than a verdict, and the ranking that puts a mis-timed publish above a mis-shown event. Reads instants in a **named** zone, never the runner's. |
 
 ## Run them in a non-UTC timezone
 

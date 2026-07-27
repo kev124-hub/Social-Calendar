@@ -339,6 +339,53 @@ export async function sweepUnpushedEvents(timeZone: string, timeMin: string, tim
 // Sync logic
 // ─────────────────────────────────────────────
 
+/**
+ * One Google event, as a `calendar_events` row.
+ *
+ * Extracted and exported so the zone logic can be tested. It was inline in the
+ * pull, which meant the single most consequential mapping in the sync — the one
+ * that decides what day an event lands on — had no test at all.
+ *
+ * `time_zone` is step 1 of the per-event timezone work. Google has always sent
+ * a zone and this pull has always discarded it, which is also why "no backfill"
+ * costs nothing: the upsert is on `external_id`, so every Google row collects
+ * its zone from the next sync, from the system that owns the answer.
+ *
+ * The fallback order is event zone, then the calendar's, then null. Google
+ * omits `timeZone` on all-day events — they are dates and have no zone of their
+ * own — so without the calendar fallback the events most prone to landing on
+ * the wrong day would be the ones with no zone to fix them. Null is left as
+ * null rather than defaulted to UTC: readers fall back to the device zone,
+ * which is today's behaviour, whereas a stored 'UTC' would be a lie that
+ * renders as a real wall clock and looks deliberate.
+ *
+ * NOTE: `starts_at` for an all-day event is still `date + 'T00:00:00Z'`, which
+ * is UTC midnight and reads as the previous day anywhere west of Greenwich.
+ * That is a live bug and it is deliberately NOT fixed here — see step 3 of
+ * docs/design/timezones/per-event-timezone-plan.md. It cannot be corrected by
+ * storage alone: an all-day event stored at midnight in its own zone still
+ * renders a day early on a device in another, so the mapping and the rendering
+ * have to change together or the bug simply moves.
+ */
+export function toAppEventRow(
+  e: GoogleEvent,
+  dbCalendarId: string,
+  calendarZone?: string
+) {
+  return {
+    calendar_id: dbCalendarId,
+    external_id: e.id,
+    title: e.summary ?? '(No title)',
+    description: e.description ?? null,
+    location: e.location ?? null,
+    starts_at: e.start?.dateTime ?? (e.start?.date ? e.start.date + 'T00:00:00Z' : null),
+    ends_at: e.end?.dateTime ?? (e.end?.date ? e.end.date + 'T23:59:59Z' : null),
+    all_day: !!e.start?.date,
+    time_zone: e.start?.timeZone ?? calendarZone ?? null,
+    source: 'google' as const,
+  }
+}
+
 export async function syncGoogleCalendar(timeZone?: string) {
   const supabase = getServiceClient()
   const integration = await getGoogleTokens()
@@ -359,7 +406,19 @@ export async function syncGoogleCalendar(timeZone?: string) {
 
   let totalUpserted = 0
 
+  // Fetched once per sync rather than only when a calendar is missing, because
+  // the per-event zone needs it too: an event that carries no `start.timeZone`
+  // falls back to the zone of the calendar it lives on. One extra call on a
+  // manual sync is a fair price for not guessing.
+  const gcals = await listGoogleCalendars()
+
   for (const calendarId of selectedIds) {
+    const gcal = gcals.find((c) => c.id === calendarId)
+    // The calendar's own zone, used only as that fallback. Left undefined
+    // rather than defaulted to UTC — an honest null beats a plausible lie that
+    // renders as a real wall clock.
+    const calendarZone = gcal?.timeZone
+
     // Ensure calendar exists in our DB
     const { data: existingCal } = await supabase
       .from('calendars')
@@ -370,9 +429,6 @@ export async function syncGoogleCalendar(timeZone?: string) {
 
     let dbCalendarId = existingCal?.id
     if (!dbCalendarId) {
-      // Fetch calendar metadata from Google
-      const gcals = await listGoogleCalendars()
-      const gcal = gcals.find((c) => c.id === calendarId)
       const { data: newCal } = await supabase
         .from('calendars')
         .insert({
@@ -404,17 +460,7 @@ export async function syncGoogleCalendar(timeZone?: string) {
         // overwrite the row's `source` and `calendar_id`, migrating our own
         // event off its app calendar and blocking every later push.
         .filter((e) => !isAppPushedEvent(e))
-        .map((e) => ({
-          calendar_id: dbCalendarId,
-          external_id: e.id,
-          title: e.summary ?? '(No title)',
-          description: e.description ?? null,
-          location: e.location ?? null,
-          starts_at: e.start?.dateTime ?? (e.start?.date ? e.start.date + 'T00:00:00Z' : null),
-          ends_at: e.end?.dateTime ?? (e.end?.date ? e.end.date + 'T23:59:59Z' : null),
-          all_day: !!e.start?.date,
-          source: 'google' as const,
-        }))
+        .map((e) => toAppEventRow(e, dbCalendarId, calendarZone))
         .filter((r) => r.starts_at)
 
       if (rows.length) {
@@ -449,6 +495,8 @@ export interface GoogleCalendarListEntry {
   foregroundColor?: string
   primary?: boolean
   accessRole: string
+  /** The calendar's own zone — the fallback when an event carries none. */
+  timeZone?: string
 }
 
 interface GoogleEvent {
@@ -457,7 +505,10 @@ interface GoogleEvent {
   description?: string
   location?: string
   status?: string
-  start?: { dateTime?: string; date?: string }
-  end?: { dateTime?: string; date?: string }
+  // Google sends `timeZone` alongside the time. It was absent from this type,
+  // so the pull discarded the one piece of data the whole per-event timezone
+  // work needs — and which Google has had all along.
+  start?: { dateTime?: string; date?: string; timeZone?: string }
+  end?: { dateTime?: string; date?: string; timeZone?: string }
   extendedProperties?: { private?: Record<string, string> }
 }

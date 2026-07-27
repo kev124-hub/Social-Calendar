@@ -36,6 +36,15 @@ export interface CalendarEventRow {
   location: string | null
   starts_at: string
   ends_at: string | null
+  /**
+   * IANA zone the wall clock was meant in, e.g. 'Europe/Monaco'.
+   *
+   * Null means unknown, and readers fall back to the viewing device's zone —
+   * today's behaviour. Null is permanent, not a migration window: there is no
+   * backfill, so pre-existing rows and anything outside the Google sync window
+   * stay null indefinitely. Never a fixed offset; offsets move with DST.
+   */
+  time_zone: string | null
   all_day: boolean
   notification_at: string | null
   notification_method: NotificationMethod | null
