@@ -1,7 +1,14 @@
 # Per-event timezones — plan
 
-**Status: proposed, not started.** Written 27 July 2026. Ruled on by Kevin:
-per-event timezones (option 3), not a single home timezone (option 2).
+**Status: proposed, not started.** Written 27 July 2026.
+
+Ruled on by Kevin, 27 July — **do not re-litigate these:**
+
+- **Per-event timezones** (option 3), not a single home timezone (option 2).
+- **Existing rows are left alone.** No backfill; `time_zone` stays null and
+  those rows keep behaving exactly as they do today.
+- **`social_posts.scheduled_at` stays an absolute instant.** Only
+  `calendar_events` gains a zone.
 
 ---
 
@@ -135,16 +142,16 @@ currently being thrown away.
 back to the device zone — i.e. exactly today's behaviour. So the migration is
 inert on existing data and nothing shifts on deploy.
 
-Backfill is a judgement call, not a computation: there is no record of where any
-existing row was created. Two options, for Kevin:
+**Ruled: no backfill.** Existing rows keep a null zone and go on behaving
+exactly as they do today, gaining a zone only when one is next edited. There is
+no record of where any existing row was created, so a backfill would be a guess
+applied to every historical event at once — the same class of harm as the drift
+being cleaned up, and harder to notice because it would look deliberate.
 
-- leave them null and let them keep behaving as now, correcting rows as he
-  touches them; or
-- backfill everything to one zone he nominates, on the grounds that most were
-  created in it.
-
-**Do not guess.** Backfilling the wrong zone silently moves every historical
-event, which is the same class of harm as the drift being cleaned up.
+The practical consequence to keep in mind while converting views: **null is a
+permanent state, not a migration window.** Rows from before this work will still
+be null in a year, so the device-zone fallback is a supported path forever and
+must be treated as such — not as a stopgap that can quietly stop being tested.
 
 ---
 
@@ -182,13 +189,22 @@ run under a non-UTC `TZ`. Add to it —
 
 Every one of these is invisible at UTC. See `tests/README.md`.
 
-## Open question
+## Settled — a scheduled post is not an event
 
-**Does a scheduled post follow the same rule?** Assumed **no** unless Kevin says
-otherwise: for an event, "8pm wherever I am" is the intent; for a Reel, "publish
-at 9am Eastern for the US audience" is an instant, which is what `scheduled_at`
-already is. Changing it would also touch the publish worker and the notifier,
-which this plan deliberately does not.
+**Ruled: `social_posts.scheduled_at` stays an absolute instant.** The two cases
+genuinely differ. For an event the intent is a wall clock — "dinner at 8,
+wherever I am". For a Reel it is a moment — "publish at 9am Eastern, for the
+audience", which does not become 9am Singapore because that is where the phone
+happened to be when it was scheduled.
 
-So: `calendar_events` gets `time_zone`; `social_posts.scheduled_at` stays an
-absolute instant.
+So `calendar_events` gains `time_zone` and `social_posts` does not, and the
+publish worker and notifier stay out of scope entirely.
+
+Two consequences worth stating, because the asymmetry will look like an
+oversight to anyone reading later:
+
+- The two tables deliberately use **different time models**. A future change
+  that "makes them consistent" would be undoing this ruling, not tidying up.
+- `scan-drifted-times.mjs` still checks posts, and should. They were subject to
+  the same dialog drift — that bug moved the stored instant, which is wrong
+  under either model.
