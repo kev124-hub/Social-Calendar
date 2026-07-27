@@ -33,6 +33,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
+import { createEventFromParsed, deleteEvent } from '@/lib/events'
 import type { CalendarEvent, Calendar, SocialPost, Idea } from '@/types/database'
 import { EventDialog } from './EventDialog'
 import { CalendarManageDialog } from './CalendarManageDialog'
@@ -352,7 +353,10 @@ export function CalendarView() {
   }
 
   async function handleEventDelete(id: string) {
-    await supabase.from('calendar_events').delete().eq('id', id)
+    // Throws on failure; EventDialog awaits this and shows the message. The
+    // dialog stays open on error rather than closing over a delete that never
+    // happened.
+    await deleteEvent(supabase, id)
     setEventDialogOpen(false)
     await loadData()
   }
@@ -397,26 +401,12 @@ export function CalendarView() {
   }
 
   async function handleAIEvent(parsed: ParsedEvent) {
-    const defaultCalendar = calendars.find((c) => c.source === 'app') ?? calendars[0]
-    const toISO = (s: string, isEnd?: boolean) => {
-      if (parsed.all_day)
-        return new Date(s + (isEnd ? 'T23:59:59' : 'T00:00:00')).toISOString()
-      return new Date(s).toISOString()
-    }
-    // Surface a failed write. This used to discard the result, so a rejected
-    // insert was indistinguishable from success — the input reported "added"
-    // and nothing appeared. AIEventInput awaits this and shows what it throws.
-    const { error } = await supabase.from('calendar_events').insert({
-      title: parsed.title,
-      description: parsed.description,
-      location: parsed.location,
-      starts_at: toISO(parsed.starts_at),
-      ends_at: parsed.ends_at ? toISO(parsed.ends_at, true) : null,
-      all_day: parsed.all_day,
-      calendar_id: defaultCalendar?.id ?? null,
-      source: 'app' as const,
-    })
-    if (error) throw new Error(`Could not save the event: ${error.message}`)
+    // Body moved to `src/lib/events.ts` so `HomeView` shares it verbatim.
+    // It throws on a failed write — this used to discard the result, so a
+    // rejected insert was indistinguishable from success: the input reported
+    // "added" and nothing appeared. AIEventInput awaits this and shows what it
+    // throws, so the message from `events.ts` is the whole error UX.
+    await createEventFromParsed(supabase, parsed, calendars)
     await loadData()
   }
 
