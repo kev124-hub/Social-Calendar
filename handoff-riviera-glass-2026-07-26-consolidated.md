@@ -7,20 +7,28 @@ stale picture that let two sessions build Stage 4 twice. **That file was
 deleted on 26 July** once its banner had done its job; it is in git history if
 the provenance is ever needed.
 
+> **Update, 27 July:** `/home` Phase B and Stage 9 (two-way Google sync) have
+> since shipped. Current state and open work now live in
+> **`handoff-2026-07-27-stage9-shipped.md`** — read that first. This file
+> remains authoritative for the redesign system and its settled decisions.
+
 ## ⚠️ Read first — which handoff governs what
 
 | File | Governs |
 |---|---|
 | `HANDOFF.md` (repo root) | **Backend / publishing** (B0–B7, Instagram auto-publish, cron, notifications). Still authoritative. Do not touch `src/lib/publisher.ts`, `notifier.ts`, `ig-token.ts`, or the cron routes — the redesign is presentation work. |
 | `handoff-riviera-glass-2026-07-25.md` | The redesign's origin. **Only § "The Design Bundle" is still current** — see the banner at the top of that file. Everything else in it (current state, the seven-stage plan, the Stage 1 instructions) is history. |
-| `handoff-home-phase-b-2026-07-26.md` | The `/home` Phase B task brief. **Delete it when Phase B merges** — see the lifecycle note below. |
-| **This file** | Current state of the redesign and what to do next. |
+| `handoff-2026-07-27-stage9-shipped.md` | **Current state and open work.** Phase B and Stage 9 are merged; that file replaced the Phase B brief, which was deleted on 27 July under the lifecycle rule below. |
+| **This file** | The redesign system and its settled decisions. No longer the current-state file — see the row above. |
 
 **Handoff lifecycle — the convention that keeps this from rotting.** A
 task-scoped handoff dies when its work merges; the session that finishes the
 work deletes the file in the same PR. Two superseded handoffs were deleted on
 26 July under this rule (`handoff-b4-start-2026-07-24.md`,
-`handoff-riviera-glass-stage4-2026-07-26.md`) — git history is the archive, so
+`handoff-riviera-glass-stage4-2026-07-26.md`), and
+`handoff-home-phase-b-2026-07-26.md` on 27 July when Phase B merged — that one
+had also drifted into carrying two facts that were flatly wrong, which is the
+failure mode this rule exists to prevent. Git history is the archive, so
 deletion loses nothing. What must never be left behind is a plausible-looking
 file with stale state and no warning: that is precisely what cost this project
 a duplicated Stage 4.
