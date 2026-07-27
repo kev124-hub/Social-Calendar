@@ -146,6 +146,31 @@ export interface EventFields {
   ends_at: string | null
   all_day: boolean
   calendar_id: string | null
+  /**
+   * IANA zone the wall clock was meant in. Optional: a caller that does not
+   * supply one gets the device's, via `deviceTimeZone()` below.
+   *
+   * Step 1 of the per-event timezone work — see
+   * `docs/design/timezones/per-event-timezone-plan.md`. Written but not yet
+   * read by anything, deliberately: until the views honour a zone, storing one
+   * changes nothing on screen. That is what makes this step inert.
+   */
+  time_zone?: string | null
+}
+
+/**
+ * The zone this device is set to, or null if the browser will not say.
+ *
+ * Null rather than a guess. 'UTC' would be a lie that renders as a real
+ * wall clock and looks deliberate — worse than an honest unknown, which the
+ * readers already handle by falling back to the device zone at display time.
+ */
+export function deviceTimeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null
+  } catch {
+    return null
+  }
 }
 
 export async function createEvent(
@@ -156,6 +181,10 @@ export async function createEvent(
     .from('calendar_events')
     .insert({
       ...fields,
+      // Captured at creation, where the answer is known. `?? deviceTimeZone()`
+      // rather than an unconditional default so an explicit zone from the
+      // dialog wins — including, later, an explicit null.
+      time_zone: fields.time_zone ?? deviceTimeZone(),
       source: 'app' as const,
       // `external_id` stays null until the push below reports Google's id.
       // A null here is exactly what marks the row as still owed to Google, and
@@ -174,6 +203,13 @@ export async function updateEvent(
   id: string,
   fields: Partial<EventFields>
 ): Promise<WriteResult> {
+  // `fields` is spread as given and NOTHING is added to it. That is the point:
+  // an update must not stamp `time_zone` the way `createEvent` does. A dialog
+  // opened to look at an event and closed with Save would otherwise write the
+  // viewing device's zone onto a row created somewhere else — silently moving
+  // it, from an action that changed nothing. That is precisely the shape of the
+  // drift bug this whole workstream started with, and the existing assertion
+  // that an update never rewrites `source` exists for the same reason.
   const { error } = await supabase
     .from('calendar_events')
     .update(fields)

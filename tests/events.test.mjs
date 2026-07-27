@@ -99,9 +99,15 @@ for (const [name, parsed] of PARSES) {
   const a = fakeClient(), b = fakeClient()
   await createEventFromParsed(a, parsed, CALENDARS)
   await originalHandleAIEvent(b, parsed, CALENDARS)
-  assert.deepEqual(a.calls[0].payload, b.calls[0].payload, name)
+  // `time_zone` is the ONE deliberate divergence from the original payload,
+  // added by step 1 of the per-event timezone work. Split out rather than
+  // loosened away: every other field must still match byte for byte, and a
+  // second divergence appearing here should still fail.
+  const { time_zone, ...rest } = a.calls[0].payload
+  assert.deepEqual(rest, b.calls[0].payload, name)
+  assert.ok(time_zone, 'the only new field, and it must be populated')
   assert.equal(a.calls[0].table, 'calendar_events')
-  ok(`${name} — insert payload still identical`)
+  ok(`${name} — insert payload identical but for the captured zone`)
 }
 const p = PARSES[0][1]
 
@@ -206,6 +212,49 @@ for (const source of ['google', 'subscribed']) {
   assert.equal(pushCalls.length, 0, 'an unreadable row is never pushed')
   assert.equal(r.pushedToGoogle, false)
   ok('an unreadable row deletes locally and calls Google not at all')
+}
+
+// ── 4c. per-event timezone, step 1: capture on write ────────────────────
+// Written but not yet read — the views still format in the device zone — so
+// these assert the DATA, which is the only observable thing this step changes.
+console.log('\ntimezone capture:')
+{
+  pushCalls = []; stubFetch()
+  const c = fakeClient()
+  await createEvent(c, FIELDS)
+  assert.equal(c.calls[0].payload.time_zone, process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone)
+  ok(`createEvent stamps the device zone (${c.calls[0].payload.time_zone})`)
+}
+{
+  pushCalls = []; stubFetch()
+  const c = fakeClient()
+  await createEvent(c, { ...FIELDS, time_zone: 'Europe/Monaco' })
+  assert.equal(c.calls[0].payload.time_zone, 'Europe/Monaco')
+  ok('an explicit zone beats the device — the picker has to be able to win')
+}
+{
+  // The rule that keeps "no backfill" honest: opening a dialog and saving must
+  // not stamp a zone on a row created somewhere else. Same reason `source` is
+  // never rewritten by an update.
+  pushCalls = []; stubFetch()
+  const c = fakeClient()
+  await updateEvent(c, 'evt-1', { title: 'Renamed' })
+  assert.ok(!('time_zone' in c.calls[0].payload), 'update must not stamp a zone')
+  ok('updateEvent does NOT stamp time_zone — a look-and-save cannot move an event')
+}
+{
+  pushCalls = []; stubFetch()
+  const c = fakeClient()
+  await updateEvent(c, 'evt-1', { time_zone: 'Asia/Singapore' })
+  assert.equal(c.calls[0].payload.time_zone, 'Asia/Singapore')
+  ok('…but an explicitly changed zone is still written')
+}
+{
+  pushCalls = []; stubFetch()
+  const c = fakeClient()
+  await createEventFromParsed(c, p, CALENDARS)
+  assert.ok(c.calls[0].payload.time_zone, 'an AI-parsed event gets the device zone')
+  ok('createEventFromParsed carries a zone through — the model is never asked for one')
 }
 
 // ── 5. update ───────────────────────────────────────────────────────────
