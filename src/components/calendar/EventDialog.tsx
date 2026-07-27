@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { createEvent, updateEvent } from '@/lib/events'
 import { formatInZone, instantFromLocalInput, dayEndInZone, offsetLabel } from '@/lib/zoned-time'
+import { ZonePicker } from './ZonePicker'
 import type { CalendarEvent, Calendar } from '@/types/database'
 import { cn } from '@/lib/utils'
 
@@ -57,6 +58,16 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
   const [calendarId, setCalendarId] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The zone picked in this dialog, and whether it was picked at all.
+  //
+  // `zoneTouched` is the whole safety mechanism. An untouched dialog writes NO
+  // `time_zone` — so a null row stays null, per the no-backfill ruling, and
+  // looking at an event cannot pin it to wherever the reader happened to be.
+  // A dialog that writes a value nobody typed is the drift bug this workstream
+  // began with; this is that bug's shape in a new field.
+  const [zone, setZone] = useState<string | null>(null)
+  const [zoneTouched, setZoneTouched] = useState(false)
+
   // Calendars un-hidden from inside this dialog. The parent reloads on save,
   // but until then its `calendars` prop still says hidden.
   const [unhidden, setUnhidden] = useState<string[]>([])
@@ -67,6 +78,8 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
     if (!open) return
     setError(null)
     setUnhidden([])
+    setZoneTouched(false)
+    setZone(event?.time_zone ?? null)
     if (event) {
       setTitle(event.title)
       setDescription(event.description ?? '')
@@ -103,18 +116,59 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
     }
   }, [open, event, defaultDate, calendars])
 
-  // The zone the inputs above are showing, when it differs from the device's.
-  // Built from the stored instant rather than the input string so it stays
-  // correct across a DST boundary, and empty for a new event, which is always
-  // being entered in the device's own zone.
+  /**
+   * The zone the inputs are being read in — a pick if there was one, otherwise
+   * the event's own, otherwise the device's.
+   *
+   * Deliberately the same value in both directions, and the reason changing the
+   * zone does what you would want: the entered wall clock is KEPT and reinterpreted
+   * in the new zone. Sitting in New York in October typing 8pm for a Monaco
+   * dinner in May, then setting the zone to Monaco, gives 8pm Monaco — the whole
+   * motivating case for this feature. The instant moves; the 8 does not, because
+   * the 8 is what was meant.
+   *
+   * The alternative — holding the instant and letting the display change — would
+   * turn that same act into "you typed 8pm, we stored 2am", which is what option
+   * 2 in the plan was rejected for doing.
+   */
+  const effectiveZone = zoneTouched ? zone : (event?.time_zone ?? null)
+
+  /**
+   * The instant the picker computes its offsets and preview times at.
+   *
+   * The event's own start where there is a usable one, because an offset is a
+   * function of the date — picking `Europe/Monaco` for a May event should read
+   * GMT+2, not the GMT+1 it is in January. Falls back to now while the field is
+   * empty or half-typed, which is the only honest answer at that point.
+   */
+  const zoneAnchorISO = (() => {
+    if (startsAt) {
+      try {
+        return instantFromLocalInput(allDay ? startsAt.slice(0, 10) : startsAt, effectiveZone)
+      } catch {
+        // Half-typed date; fall through.
+      }
+    }
+    return new Date().toISOString()
+  })()
+
+  // What the times on screen mean, when that is not the reader's own clock.
+  // Computed from the instant Save WOULD write, not from the stored one, so it
+  // stays truthful as the date or the zone is changed — including across a DST
+  // boundary, where the offset for the same zone is not the same all year.
   const zoneNote = (() => {
-    if (!event?.time_zone || !startsAt) return null
-    const label = offsetLabel(event.starts_at, event.time_zone)
+    if (!effectiveZone || !startsAt) return null
+    let at: string
+    try {
+      at = instantFromLocalInput(allDay ? startsAt.slice(0, 10) : startsAt, effectiveZone)
+    } catch {
+      return null   // Mid-edit and unparseable; the note is not the place to complain.
+    }
+    const label = offsetLabel(at, effectiveZone)
     if (!label) return null
-    const local = formatInZone(event.starts_at, null, 'h:mm a')
-    return event.all_day
-      ? `Times in ${event.time_zone} (${label})`
-      : `Times in ${event.time_zone} (${label}) · ${local} your time`
+    return allDay
+      ? `Times in ${effectiveZone} (${label})`
+      : `Times in ${effectiveZone} (${label}) · ${formatInZone(at, null, 'h:mm a')} your time`
   })()
 
   async function handleSave() {
@@ -122,16 +176,11 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
     if (!title.trim()) return setError('Give the event a title.')
     if (!startsAt) return setError('Pick a start date.')
 
-    // The zone the inputs are being read in: the event's own when editing one,
-    // the device's for a new event. Null means the device, so a new event
-    // behaves exactly as before.
-    const zone = event?.time_zone ?? null
-
     let startsISO: string
     try {
       startsISO = allDay
-        ? instantFromLocalInput(asDate(startsAt), zone)
-        : instantFromLocalInput(startsAt, zone)
+        ? instantFromLocalInput(asDate(startsAt), effectiveZone)
+        : instantFromLocalInput(startsAt, effectiveZone)
     } catch {
       return setError('That start date is not valid.')
     }
@@ -140,8 +189,8 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
     if (endsAt) {
       try {
         endsISO = allDay
-          ? dayEndInZone(asDate(endsAt), zone)
-          : instantFromLocalInput(endsAt, zone)
+          ? dayEndInZone(asDate(endsAt), effectiveZone)
+          : instantFromLocalInput(endsAt, effectiveZone)
       } catch {
         return setError('That end date is not valid.')
       }
@@ -158,6 +207,10 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
         ends_at: endsISO,
         all_day: allDay,
         calendar_id: calendarId || null,
+        // Present ONLY when the picker was used. Omitted, `createEvent` stamps
+        // the device zone for a new event and `updateEvent` leaves an existing
+        // row's zone exactly as it was — including null.
+        ...(zoneTouched && zone ? { time_zone: zone } : {}),
       }
       // Both writes go through `src/lib/events.ts` — the choke point Stage 9
       // patches to push app-created events to Google. A private insert here is
@@ -252,15 +305,30 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
             </div>
           </div>
 
-          {/* Which zone these two inputs are in, shown only when it is not the
-              device's. Without it the fields are actively misleading: a Monaco
-              event on a New York phone reads 8:00 PM with nothing to say that
-              8:00 PM is not the reader's own. Read-only here — step 4 makes the
-              zone editable, and until then a control that set one would let you
-              pick a value with no visible effect. */}
-          {zoneNote && (
-            <p className="text-[12px] text-[#666] tracking-tight -mt-1">{zoneNote}</p>
-          )}
+          {/* Above `location`, which stays free text: deriving a zone from "the
+              Hotel de Paris" would need geocoding and would be wrong about as
+              often as it was right. */}
+          <div>
+            <label className={labelClass} htmlFor="event-zone">Time zone</label>
+            <ZonePicker
+              id="event-zone"
+              value={zone}
+              onChange={(z) => { setZone(z); setZoneTouched(true) }}
+              // Offsets are shown for the event's own date, so a May Monaco
+              // event reads GMT+2 and a January one GMT+1. Falls back to now
+              // only while the input is empty or mid-edit.
+              atISO={zoneAnchorISO}
+            />
+            {zoneNote && (
+              <p className="mt-1.5 text-[12px] text-[#666] tracking-tight">{zoneNote}</p>
+            )}
+            {!zone && (
+              <p className="mt-1.5 text-[12px] text-[#888] tracking-tight">
+                No zone set, so this event reads in whatever zone your device is on.
+                Choosing one pins it.
+              </p>
+            )}
+          </div>
 
           <div>
             <label className={labelClass}>Location</label>

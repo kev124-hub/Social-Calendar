@@ -314,6 +314,31 @@ for (const z of ['Europe/Monaco', 'America/New_York', 'Asia/Kolkata']) {
 assert.equal(moved, 0, `${moved} zoned events moved on open-and-save`)
 ok('72 zoned events survive prefill-then-save unchanged (the drift bug, in its zoned form)')
 
+// ── Changing an event's zone keeps the wall clock ───────────────────────
+// The rule the step 4 picker is built on, and the whole motivating case for the
+// feature: sitting in New York in October typing 8pm for a Monaco dinner in May,
+// then setting the zone to Monaco, must give 8pm MONACO. The instant moves; the
+// 8 does not, because the 8 is what was meant.
+//
+// The alternative — holding the instant and letting the display change — turns
+// that same act into "you typed 8pm, we stored 2am", which is precisely what
+// option 2 in the plan was rejected for.
+{
+  const stored = '2026-05-24T18:00:00.000Z'          // 2:00 PM New York
+  const shown = formatInZone(stored, 'America/New_York', "yyyy-MM-dd'T'HH:mm")
+  assert.equal(shown, '2026-05-24T14:00')
+
+  // Untouched: same instant back out.
+  assert.equal(instantFromLocalInput(shown, 'America/New_York'), stored)
+
+  // Zone changed to Monaco: the 14:00 on screen is kept, and now means Monaco.
+  const moved = instantFromLocalInput(shown, 'Europe/Monaco')
+  assert.equal(formatInZone(moved, 'Europe/Monaco', 'h:mm a'), '2:00 PM')
+  assert.notEqual(moved, stored)
+  assert.equal((new Date(moved) - new Date(stored)) / 3600e3, -6)
+  ok('changing the zone keeps the entered wall clock and moves the instant — 2:00 PM New York becomes 2:00 PM Monaco, six hours earlier')
+}
+
 // ── The two label presentations ─────────────────────────────────────────
 assert.equal(timeWithZone(DINNER, here), formatInZone(DINNER, here, 'h:mm a'))
 assert.equal(timeWithBothZones(DINNER, here), formatInZone(DINNER, here, 'h:mm a'))
