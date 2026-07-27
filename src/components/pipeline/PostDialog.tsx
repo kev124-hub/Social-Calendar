@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { toDatetimeLocalInput } from '@/lib/datetime-local'
 import {
   Dialog,
   DialogContent,
@@ -144,7 +145,16 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
       setCaption(post.caption ?? '')
       setHashtags(post.hashtags ?? '')
       setMediaUrl(post.media_url ?? '')
-      setScheduledAt(post.scheduled_at ? post.scheduled_at.slice(0, 16) : '')
+      // Not `.slice(0, 16)`: scheduled_at is a timestamptz and arrives as UTC,
+      // while <input type="datetime-local"> is local by definition. Slicing put
+      // a UTC wall clock into a local field, and saving read it back as local —
+      // moving the post by the user's UTC offset on every save, compounding,
+      // with no edit required beyond opening the dialog and pressing Save.
+      // Same bug as EventDialog's; a mis-scheduled post is a mis-timed publish.
+      // See src/lib/datetime-local.ts. Was `.slice(0, 16)`, which shifted the
+      // post by the user's UTC offset on every save. A mis-scheduled post is a
+      // mis-timed publish, so this one had teeth.
+      setScheduledAt(post.scheduled_at ? toDatetimeLocalInput(post.scheduled_at) : '')
       setNotes(post.notes ?? '')
       setMediaDropboxPath(post.media_dropbox_path ?? null)
       setPublishMode(post.publish_mode ?? 'notify')
