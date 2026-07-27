@@ -22,6 +22,8 @@ export interface EventsPanelProps {
   /** Creates the event AND refetches, so the list below reflects it. Throws. */
   onCreate: (parsed: ParsedEvent) => Promise<WriteResult>
   onOpenManual: () => void
+  /** Opens an existing row for editing — same dialog `Manual +` opens. */
+  onOpenEvent: (event: CalendarEvent) => void
   focusRef?: React.Ref<AIEventInputHandle>
 }
 
@@ -34,11 +36,28 @@ function timeLabel(event: CalendarEvent) {
   return format(parseISO(event.starts_at), 'h:mm a')
 }
 
-function EventRow({ event, calendars }: { event: CalendarEvent; calendars: Calendar[] }) {
+function EventRow({
+  event,
+  calendars,
+  onOpen,
+}: {
+  event: CalendarEvent
+  calendars: Calendar[]
+  onOpen: (event: CalendarEvent) => void
+}) {
   const calendar = calendarOf(event, calendars)
   const day = parseISO(event.starts_at)
   return (
-    <div className="flex items-start gap-2.5 rounded-[10px] px-2 py-1.5 transition-transform hover:translate-x-1">
+    // A button, not a div with an onClick. The row already advertised itself as
+    // interactive with a hover lift while doing nothing at all — and a div would
+    // have kept that promise for a mouse only, staying untabbable and invisible
+    // to a screen reader. `w-full text-left` because a button centres and shrinks
+    // to its content by default, which would have quietly undone the row layout.
+    <button
+      type="button"
+      onClick={() => onOpen(event)}
+      className="flex w-full items-start gap-2.5 rounded-[10px] px-2 py-1.5 text-left transition-transform hover:translate-x-1"
+    >
       <span
         className="w-[42px] shrink-0 pt-[1px] text-[11px] leading-tight"
         style={{ ...MONO, color: INK.tertiary }}
@@ -58,7 +77,7 @@ function EventRow({ event, calendars }: { event: CalendarEvent; calendars: Calen
           {calendar ? ` · ${calendar.name}` : ''}
         </span>
       </span>
-    </div>
+    </button>
   )
 }
 
@@ -70,6 +89,7 @@ export function EventsPanel({
   onRetry,
   onCreate,
   onOpenManual,
+  onOpenEvent,
   focusRef,
 }: EventsPanelProps) {
   const [confirmation, setConfirmation] = useState<string | null>(null)
@@ -199,7 +219,7 @@ export function EventsPanel({
           </p>
         ) : (
           upcoming.map((event) => (
-            <EventRow key={event.id} event={event} calendars={calendars} />
+            <EventRow key={event.id} event={event} calendars={calendars} onOpen={onOpenEvent} />
           ))
         )}
       </div>
