@@ -192,11 +192,42 @@ export async function deleteEvent(
   // whole choke point exists to prevent. A failed read is not fatal — losing
   // the local delete would be worse — but it does mean the ghost survives, so
   // it is reported.
+  //
+  // `source` comes with it because the guard below has to run before the row is
+  // gone, for the same reason.
   const { data: existing, error: readError } = await supabase
     .from('calendar_events')
-    .select('external_id')
+    .select('external_id, source')
     .eq('id', id)
     .single()
+
+  // An event that came FROM Google is not ours to delete, and this refuses
+  // before touching anything rather than after.
+  //
+  // Both of the alternatives are worse. Deleting it here AND in Google — which
+  // is what happened until now — means the app can destroy something in a
+  // calendar it does not own, from a Delete button two taps away. Deleting it
+  // only locally looks tidier and is not: the pull upserts on `external_id`, so
+  // the next sync re-imports the row and the event returns by itself, which
+  // reads as a bug in whichever direction you were not expecting.
+  //
+  // Refusing is the only outcome that stays true five minutes later. Google is
+  // the owner; the deletion belongs there.
+  //
+  // A failed read leaves `existing` null and falls through deliberately: the
+  // local delete is safe in that case because without an `external_id` there is
+  // nothing to push, so nothing in Google can be touched either way.
+  // `source` is NOT NULL with a four-value check — 'app', 'google', 'tripit',
+  // 'icloud' — so `!== 'app'` covers every foreign origin, present and future,
+  // rather than naming Google specifically. It also fails closed: an
+  // unrecognised value refuses rather than assuming ownership.
+  if (existing && existing.source !== 'app') {
+    const owner = existing.source === 'google' ? 'Google' : existing.source || 'another calendar'
+    throw new Error(
+      `This event is synced from ${owner} and has to be deleted there. Deleting it ` +
+        `here would either remove it from ${owner} too, or be undone by the next sync.`
+    )
+  }
 
   const { error } = await supabase.from('calendar_events').delete().eq('id', id)
   if (error) throw writeFailure('delete', error.message)

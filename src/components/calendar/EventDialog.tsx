@@ -288,7 +288,16 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
         )}
 
         <DialogFooter className="gap-2">
-          {event && (
+          {/* Delete is offered only for events this app owns. A synced event
+              has to be deleted in the calendar it came from — `deleteEvent`
+              refuses it, and offering a button whose only outcome is an error
+              message is a worse way to say so than not offering it. */}
+          {event && event.source !== 'app' && (
+            <p className="mr-auto self-center text-[11.5px] text-[#5d5660]">
+              Synced from Google — delete it there.
+            </p>
+          )}
+          {event && event.source === 'app' && (
             <Button
               variant="destructive"
               size="sm"
