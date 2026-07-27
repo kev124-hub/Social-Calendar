@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
+import { createEvent, updateEvent } from '@/lib/events'
 import type { CalendarEvent, Calendar } from '@/types/database'
 import { cn } from '@/lib/utils'
 
@@ -18,7 +19,9 @@ interface Props {
   open: boolean
   onClose: () => void
   onSave: () => void
-  onDelete: (id: string) => void
+  // Async so a failed delete can be caught and shown in this dialog's error
+  // panel rather than rejecting unhandled behind a dialog that already closed.
+  onDelete: (id: string) => void | Promise<void>
   event: CalendarEvent | null
   defaultDate: Date | null
   calendars: Calendar[]
@@ -98,33 +101,38 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
 
     setSaving(true)
     try {
-    const payload = {
-      title: title.trim(),
-      description: description || null,
-      location: location || null,
-      starts_at: starts.toISOString(),
-      ends_at: ends ? ends.toISOString() : null,
-      all_day: allDay,
-      calendar_id: calendarId || null,
-      source: 'app' as const,
-    }
-    // Both writes used to discard their result, so an RLS refusal, a bad
-    // foreign key or a stale schema cache looked exactly like success: the
-    // dialog closed and the event silently never appeared.
-    const { error: writeError } = event
-      ? await supabase.from('calendar_events').update(payload).eq('id', event.id)
-      : await supabase.from('calendar_events').insert(payload)
-      setSaving(false)
-      if (writeError) return setError(writeError.message)
+      const payload = {
+        title: title.trim(),
+        description: description || null,
+        location: location || null,
+        starts_at: starts.toISOString(),
+        ends_at: ends ? ends.toISOString() : null,
+        all_day: allDay,
+        calendar_id: calendarId || null,
+      }
+      // Both writes go through `src/lib/events.ts` — the choke point Stage 9
+      // patches to push app-created events to Google. A private insert here is
+      // the specific thing that would make Stage 9 miss a path.
+      //
+      // The helpers throw rather than returning an error, and the catch below
+      // surfaces it. Both writes used to discard their result, so an RLS
+      // refusal, a bad foreign key or a stale schema cache looked exactly like
+      // success: the dialog closed and the event silently never appeared.
+      if (event) {
+        // Note the payload carries no `source`. An edit must not rewrite a
+        // row's provenance — this update runs on pulled Google events too, and
+        // stamping those `source: 'app'` would misfile them for Stage 9.
+        await updateEvent(supabase, event.id, payload)
+      } else {
+        await createEvent(supabase, payload)
+      }
       onSave()
     } catch (err) {
-      // Belt and braces. supabase-js returns network failures in `error`
-      // rather than throwing, but anything that DOES throw here would
-      // otherwise reject unhandled and leave the dialog looking inert with
-      // nothing on screen — which is the exact failure mode this whole change
-      // exists to eliminate. Never fail silently.
-      setSaving(false)
+      // Load-bearing, not belt-and-braces: the helpers signal failure by
+      // throwing, so this catch IS the error surface. Never fail silently.
       setError(err instanceof Error ? err.message : 'Could not save the event.')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -279,7 +287,28 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
 
         <DialogFooter className="gap-2">
           {event && (
-            <Button variant="destructive" size="sm" className="rounded-[10px]" onClick={() => onDelete(event.id)}>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="rounded-[10px]"
+              disabled={saving}
+              onClick={async () => {
+                setError(null)
+                setSaving(true)
+                try {
+                  await onDelete(event.id)
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'Could not delete the event.')
+                } finally {
+                  // Must run on the success path too. The open-effect resets
+                  // `error` but not `saving`, so leaving it true here would
+                  // disable Save and Delete for good the next time the dialog
+                  // opened. No flicker: the parent has already closed the
+                  // dialog by the time a successful onDelete resolves.
+                  setSaving(false)
+                }
+              }}
+            >
               Delete
             </Button>
           )}

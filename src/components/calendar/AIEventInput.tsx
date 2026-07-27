@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useImperativeHandle } from 'react'
 import { Sparkles, Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
 import {
@@ -20,17 +20,56 @@ export interface ParsedEvent {
   description: string | null
 }
 
-interface Props {
-  onEventParsed: (event: ParsedEvent) => void | Promise<void>
+/** Imperative handle so a button elsewhere on the page can put the cursor here. */
+export interface AIEventInputHandle {
+  focus: () => void
 }
 
-export function AIEventInput({ onEventParsed }: Props) {
+interface Props {
+  onEventParsed: (event: ParsedEvent) => void | Promise<void>
+  ref?: React.Ref<AIEventInputHandle>
+  /** Extra classes on the desktop form wrapper. */
+  className?: string
+  /**
+   * Replaces the desktop input's width classes. The calendar top bar wants a
+   * compact input that grows on focus; the home events panel wants one that
+   * fills the panel. Passed as a replacement rather than appended because
+   * Tailwind resolves conflicting widths by source order, not by specificity,
+   * so appending `w-full` would not reliably win over `w-36`.
+   */
+  inputWidthClassName?: string
+}
+
+const DEFAULT_INPUT_WIDTH = 'w-36 focus:w-56'
+/** Matches the `sm:` breakpoint that swaps the inline input for the sheet. */
+const SM_QUERY = '(min-width: 640px)'
+
+export function AIEventInput({
+  onEventParsed,
+  ref,
+  className,
+  inputWidthClassName = DEFAULT_INPUT_WIDTH,
+}: Props) {
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Below `sm` the inline input is `hidden` and unfocusable — the input lives
+  // in the bottom sheet instead, which autofocuses when it opens. So "focus"
+  // means two different things depending on width.
+  useImperativeHandle(ref, () => ({
+    focus() {
+      if (window.matchMedia(SM_QUERY).matches) {
+        inputRef.current?.focus()
+      } else {
+        setError(null)
+        setSheetOpen(true)
+      }
+    },
+  }), [])
 
   async function submit() {
     if (!text.trim() || loading) return
@@ -71,8 +110,8 @@ export function AIEventInput({ onEventParsed }: Props) {
   return (
     <>
       {/* Desktop / tablet: inline input */}
-      <form onSubmit={handleSubmit} className="hidden sm:flex items-center gap-1.5 shrink-0">
-        <div className="relative">
+      <form onSubmit={handleSubmit} className={`hidden sm:flex items-center gap-1.5 shrink-0 ${className ?? ''}`}>
+        <div className="relative flex-1">
           {loading ? (
             <Loader2 size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground animate-spin pointer-events-none" />
           ) : (
@@ -87,7 +126,7 @@ export function AIEventInput({ onEventParsed }: Props) {
             placeholder="Add with AI…"
             disabled={loading}
             title={error ?? undefined}
-            className={`pl-8 pr-3 py-1.5 text-sm border rounded-md bg-background w-36 focus:w-56 transition-all duration-200 focus:outline-none focus:ring-1 disabled:opacity-50 ${
+            className={`pl-8 pr-3 py-1.5 text-sm border rounded-md bg-background ${inputWidthClassName} transition-all duration-200 focus:outline-none focus:ring-1 disabled:opacity-50 ${
               error
                 ? 'border-destructive focus:ring-destructive'
                 : success

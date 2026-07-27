@@ -11,8 +11,10 @@
 // Active nav item = solid white pill with an ink dot (no pale-on-pale).
 //
 // Two deliberate departures from the design bundle:
-//  · No `/home` nav entry. The bundle adds one, but the route does not exist
-//    and the dashboard home is out of scope — shipping it would 404.
+//  · The `/home` nav entry landed in Phase B, once the route existed. It was
+//    deliberately absent before that: the bundle adds one, but the route did
+//    not exist yet and shipping it would have 404'd. `/` still redirects to
+//    `/calendar` — /home is a nav entry, not the landing page.
 //  · `counts` and `health` are accepted but nothing passes them. The real
 //    Sidebar is rendered by a server layout with no props and no endpoint
 //    reports either value, so the platform counts and the health block are
@@ -22,7 +24,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  Calendar, Kanban, Briefcase, Lightbulb, ImagePlay,
+  Home, Calendar, Kanban, Briefcase, Lightbulb, ImagePlay,
   Settings, Menu, X, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -31,6 +33,7 @@ import { GLASS, INK, PLATFORM } from '@/lib/glass'
 import { PublishHealth, type PublishHealthData } from '@/components/ui/PublishHealth'
 
 const NAV_ITEMS = [
+  { href: '/home',        label: 'Home',             icon: Home },
   { href: '/calendar',    label: 'Calendar',         icon: Calendar },
   { href: '/pipeline',    label: 'Content Pipeline', icon: Kanban },
   { href: '/ugc',         label: 'UGC Tracker',      icon: Briefcase },
