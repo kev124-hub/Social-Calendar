@@ -21,6 +21,13 @@ Rules:
   not know where they are — "2:30pm" must be "T14:30:00" and nothing more. A "Z"
   here silently moves the event by the user's UTC offset.
 - For multi-day events without times (e.g. "May 22-25"), use all_day: true, date-only strings
+- The user message states today's date AND its weekday. Both are authoritative:
+  use the stated weekday as your anchor and do NOT work out for yourself which
+  day of the week any date falls on. When the text names a weekday ("Saturday",
+  "next Tuesday"), count forward from the stated weekday to reach it, and take
+  the nearest FUTURE occurrence — today's weekday itself means one week ahead,
+  never today. Getting this wrong moves the event a day while leaving the time
+  looking right, which is invisible to the person typing.
 - If no year given, use the next upcoming occurrence from today's date
 - If no end date/time, set ends_at to null
 - For all_day events, use date strings only (e.g. "2026-05-22"), not datetime strings
@@ -56,7 +63,12 @@ export async function POST(request: NextRequest) {
       messages: [
         {
           role: 'user',
-          content: `Today is ${today ?? new Date().toDateString()}. Parse this event: ${text}`,
+          // `||`, not `??`: an empty string is as useless an anchor as a missing
+          // one, and would send the model "Today is . Parse this event: …".
+          // The fallback is the SERVER's date, which is a different day from the
+          // user's either side of midnight — it carries its weekday, so the rule
+          // above still holds, but the client's value is the accurate one.
+          content: `Today is ${today || new Date().toDateString()}. Parse this event: ${text}`,
         },
       ],
     })

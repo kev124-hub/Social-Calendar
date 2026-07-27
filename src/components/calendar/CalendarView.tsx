@@ -33,7 +33,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
-import { createEventFromParsed, deleteEvent } from '@/lib/events'
+import { createEventFromParsed, deleteEvent, parsedLocalDate } from '@/lib/events'
 import type { CalendarEvent, Calendar, SocialPost, Idea } from '@/types/database'
 import { EventDialog } from './EventDialog'
 import { CalendarManageDialog } from './CalendarManageDialog'
@@ -407,7 +407,25 @@ export function CalendarView() {
     // "added" and nothing appeared. AIEventInput awaits this and shows what it
     // throws, so the message from `events.ts` is the whole error UX.
     await createEventFromParsed(supabase, parsed, calendars)
-    await loadData()
+
+    // Then GO TO the day it landed on, because otherwise a successful create is
+    // invisible. Below `sm` this page opens in day view on today, so an event
+    // for any other day was written, confirmed by a 2s green tick, and left off
+    // screen — "Nothing scheduled today" over an event that had just been
+    // created. /home never had this problem: its panel lists what is *upcoming*
+    // and prints a line naming what landed.
+    //
+    // Derived through `parsedLocalDate` rather than `new Date(parsed.starts_at)`
+    // so the view and the row agree on the day — an all-day parse is a bare
+    // date, which `new Date` reads as UTC midnight and lands on the day before
+    // anywhere west of Greenwich.
+    const landedOn = parsedLocalDate(parsed.starts_at, parsed.all_day)
+    // Setting the date is what reloads: `useEffect(..., [currentDate])` fires on
+    // the new object, exactly as `navigate()` relies on. Guarded because an
+    // unparseable date would make every downstream format() throw — and in that
+    // case the reload has to happen the direct way instead.
+    if (isValid(landedOn)) setCurrentDate(landedOn)
+    else await loadData()
   }
 
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 })
