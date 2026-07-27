@@ -1,0 +1,194 @@
+# Per-event timezones — plan
+
+**Status: proposed, not started.** Written 27 July 2026. Ruled on by Kevin:
+per-event timezones (option 3), not a single home timezone (option 2).
+
+---
+
+## The decision, and why option 2 was dropped
+
+`starts_at` is a `timestamptz` — an absolute instant, stored as UTC and
+rendered in whatever zone the device is set to. So an event created as "dinner
+8pm" in New York reads as 2:00 AM once the phone is set to Paris. Nothing is
+corrupted: 8pm in New York genuinely *is* 2am in Paris. But the intent was a
+**wall clock** — "dinner at 8, wherever I am" — and a wall clock is not what a
+`timestamptz` can hold.
+
+Three options were put up. Option 1 (do nothing) was rejected outright: Kevin
+is in a different timezone 200+ days a year, so this is the normal case, not an
+edge.
+
+**Option 2 — one "home timezone" setting — was rejected on inspection.** It
+renders everything in a chosen zone regardless of device, which stops times
+jumping. But it makes the app *pretend you are always at home*: standing in
+Monaco, typing "dinner 8pm" would record 8pm New York — 2am Monaco. The app
+stays self-consistent because it always displays 8pm, but what it pushes to
+Google, and what any invitee sees, is 2am. For 200 travel days that is not a
+curiosity, it is most of the year.
+
+It was also initially recommended as "a fraction of the risk", which was wrong.
+The expensive part of both options is identical: every site that renders a date
+must stop using the device zone. Option 2 points those at a setting, option 3
+at `event.time_zone`. The work unique to option 3 — a migration, capturing the
+zone on write, a fallback for existing rows — is small beside the render-path
+change they share. Option 2 buys very little and costs nearly the same.
+
+## The model
+
+Store both:
+
+| Column | Meaning |
+|---|---|
+| `starts_at` (`timestamptz`) | the instant, unchanged — keeps ordering, range queries and the publish path working |
+| `time_zone` (`text`, IANA) | the zone the wall clock was meant in |
+
+Render `starts_at` **in `time_zone`**, not in the device zone. The instant and
+the zone together reconstruct the wall clock exactly, and the instant on its own
+still answers "is this before that". Nothing about the existing queries changes.
+
+This is what Google does, which is why Google events do not wander and app
+events do.
+
+---
+
+## A live bug this fixes on the way
+
+The Google pull maps an all-day event as:
+
+```ts
+starts_at: e.start?.dateTime ?? (e.start?.date ? e.start.date + 'T00:00:00Z' : null)
+```
+
+`T00:00:00Z` is **UTC** midnight. The app's own all-day writes use **local**
+midnight (`createEventFromParsed`). So the same calendar day is stored two
+different ways depending on where the row came from, and:
+
+| Device zone | Google all-day event on 1 Aug renders as |
+|---|---|
+| Europe/Monaco | Sat 1 Aug ✓ |
+| America/New_York | **Fri 31 Jul** ✗ |
+| America/Los_Angeles | **Fri 31 Jul** ✗ |
+
+Every all-day event pulled from Google shows a day early anywhere west of
+Greenwich. It is invisible in Europe, which is likely why it has survived.
+
+`scripts/scan-drifted-times.mjs` already flags these as CERTAIN — an all-day row
+not sitting at local midnight — so the scan will light up with them before this
+work starts. **That is expected and is not the dialog drift.** Do not confuse
+the two when triaging.
+
+---
+
+## Blast radius
+
+Everything below currently derives a wall clock from `starts_at` using the
+device zone. Each must take the event's zone instead.
+
+### Rendering a time
+
+| File | What it does |
+|---|---|
+| `components/calendar/MonthGrid.tsx:96` | `h:mm a` per event chip |
+| `components/calendar/CalendarView.tsx:695-696` | day view start–end range |
+| `components/calendar/CalendarView.tsx:785` | list view time |
+| `components/home/EventsPanel.tsx:37,50` | `/home` upcoming row time and date |
+| `components/calendar/EventDialog.tsx:73-74` | prefilling the edit inputs |
+
+### Deciding which day a row belongs to — the dangerous ones
+
+Bucketing is where a wrong zone moves an event to another day rather than just
+mislabelling it.
+
+| File | What it does |
+|---|---|
+| `lib/calendar-utils.ts:12-13` | `eventCoversDay` — `startOfDay(parseISO(...))` |
+| `components/calendar/CalendarView.tsx:745` | list grouping key, `yyyy-MM-dd` |
+| `components/calendar/RightPanel.tsx:33` | `format(new Date(...), 'yyyy-MM-dd')` |
+| `components/calendar/TimeGrid.tsx:30,60-62` | `.getHours()` for vertical position |
+
+`TimeGrid` is the subtlest: it positions events by hour, so a zone error slides
+an event up or down the grid rather than off it, which looks like a layout bug
+rather than a data one.
+
+### Writing
+
+| File | What it does |
+|---|---|
+| `lib/events.ts` | `createEvent` / `updateEvent` / `createEventFromParsed` must capture the zone |
+| `components/calendar/EventDialog.tsx:110-111` | `starts.toISOString()` from a local-parsed input |
+
+### Google sync
+
+| File | What it does |
+|---|---|
+| `lib/google-calendar.ts:224-229` | push sends `dateTime` with **no** `timeZone` — Google falls back to the calendar's default |
+| `lib/google-calendar.ts:413-414` | pull **discards** `e.start.timeZone`, which Google sends |
+
+Sync gets *simpler*, not harder: the data already exists on both sides and is
+currently being thrown away.
+
+---
+
+## Existing rows
+
+`time_zone` is nullable. A null means "we do not know", and the renderer falls
+back to the device zone — i.e. exactly today's behaviour. So the migration is
+inert on existing data and nothing shifts on deploy.
+
+Backfill is a judgement call, not a computation: there is no record of where any
+existing row was created. Two options, for Kevin:
+
+- leave them null and let them keep behaving as now, correcting rows as he
+  touches them; or
+- backfill everything to one zone he nominates, on the grounds that most were
+  created in it.
+
+**Do not guess.** Backfilling the wrong zone silently moves every historical
+event, which is the same class of harm as the drift being cleaned up.
+
+---
+
+## Staging
+
+Each step ships and is verifiable on its own. No step leaves the app in a state
+where an event can move.
+
+1. **Migration + capture, no behaviour change.** Add `time_zone`, populate it on
+   every write, keep rendering exactly as now. Completely inert — the column is
+   written and ignored. Verifiable by inspecting rows.
+2. **A single render helper**, used nowhere yet: `formatInZone(iso, zone, fmt)`
+   falling back to the device zone when `zone` is null. Unit-tested hard, under
+   several `TZ` values, before anything depends on it.
+3. **Convert the render sites, one view at a time** — day, then list, then
+   month, then week, then `/home`, then the dialog. Bucketing sites (above) get
+   converted with their view, never separately, or an event renders one day and
+   files under another.
+4. **Google sync both directions** — send `timeZone` on push, keep it on pull,
+   and fix the all-day `T00:00:00Z` mapping.
+
+## Testing
+
+The existing `tests/` harness applies: no framework, `node --experimental-strip-types`,
+run under a non-UTC `TZ`. Add to it —
+
+- `formatInZone` across zones either side of Greenwich, both DST transitions,
+  and the year boundary
+- the all-day invariant: a row written all-day must render as its own date in
+  its own zone, and **must not** move when the device zone changes
+- the property that matters most: **the same row rendered under three different
+  device zones must produce the same wall clock**, which is the whole point and
+  is exactly what no current test asserts
+- Google round-trip: push → pull → the wall clock is unchanged
+
+Every one of these is invisible at UTC. See `tests/README.md`.
+
+## Open question
+
+**Does a scheduled post follow the same rule?** Assumed **no** unless Kevin says
+otherwise: for an event, "8pm wherever I am" is the intent; for a Reel, "publish
+at 9am Eastern for the US audience" is an instant, which is what `scheduled_at`
+already is. Changing it would also touch the publish worker and the notifier,
+which this plan deliberately does not.
+
+So: `calendar_events` gets `time_zone`; `social_posts.scheduled_at` stays an
+absolute instant.
