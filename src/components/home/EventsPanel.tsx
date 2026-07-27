@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { AIEventInput, type AIEventInputHandle, type ParsedEvent } from '@/components/calendar/AIEventInput'
 import type { CalendarEvent, Calendar } from '@/types/database'
-import { resolveDefaultCalendar } from '@/lib/events'
+import { resolveDefaultCalendar, type WriteResult } from '@/lib/events'
 import { INK, RADIUS } from '@/lib/glass'
 import { MONO, PANEL } from './glass-home'
 
@@ -20,7 +20,7 @@ export interface EventsPanelProps {
   failed: boolean
   onRetry: () => void
   /** Creates the event AND refetches, so the list below reflects it. Throws. */
-  onCreate: (parsed: ParsedEvent) => Promise<void>
+  onCreate: (parsed: ParsedEvent) => Promise<WriteResult>
   onOpenManual: () => void
   focusRef?: React.Ref<AIEventInputHandle>
 }
@@ -82,9 +82,10 @@ export function EventsPanel({
   // say so.
   async function handleParsed(parsed: ParsedEvent) {
     setFailure(null)
+    let result: WriteResult
     try {
       // Nothing below runs unless the write actually succeeded.
-      await onCreate(parsed)
+      result = await onCreate(parsed)
     } catch (err) {
       // Caught to put the message on screen, then re-thrown so AIEventInput
       // still marks its own input as failed. On desktop that component reports
@@ -102,8 +103,11 @@ export function EventsPanel({
     const when = parsed.all_day
       ? format(parseISO(parsed.starts_at), 'EEE')
       : format(parseISO(parsed.starts_at), 'EEE h:mm a')
+    // The event is saved either way. When Google did not get it, say so rather
+    // than implying a sync that has not happened — the next Sync sweeps it up.
+    const google = result.pushedToGoogle ? '' : ' · not in Google yet'
     setConfirmation(
-      `Added · ${parsed.title} · ${when}${calendar ? ` · ${calendar.name}` : ''}`
+      `Added · ${parsed.title} · ${when}${calendar ? ` · ${calendar.name}` : ''}${google}`
     )
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => setConfirmation(null), CONFIRM_MS)

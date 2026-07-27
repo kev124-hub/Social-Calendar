@@ -41,10 +41,22 @@ export function GoogleCalendarSettings({
   async function handleSync() {
     setSyncing(true)
     setSyncMsg('')
-    const res = await fetch('/api/google-calendar/sync', { method: 'POST' })
+    const res = await fetch('/api/google-calendar/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // Only the browser knows this, and all-day events are dated a day out
+      // without it for anyone east of UTC.
+      body: JSON.stringify({ timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+    })
     const data = await res.json()
     if (res.ok) {
-      setSyncMsg(`✓ Synced ${data.synced} events`)
+      // Report both directions. `pushed` is events created here that Google had
+      // not got yet — usually zero, because the push happens at write time; a
+      // non-zero count means it is catching up after a connection failure.
+      const parts = [`✓ Imported ${data.synced} events`]
+      if (data.pushed) parts.push(`sent ${data.pushed} to Google`)
+      if (data.pushFailures?.length) parts.push(`${data.pushFailures.length} could not be sent`)
+      setSyncMsg(parts.join(' · '))
       setLastSynced(new Date().toISOString())
     } else {
       setSyncMsg(`Error: ${data.error}`)
@@ -81,14 +93,16 @@ export function GoogleCalendarSettings({
             Google Calendar
           </h2>
           <p className="text-xs text-muted-foreground mt-1">
-            {/* One-way by design: syncGoogleCalendar reads Google and upserts
-                into calendar_events. Nothing pushes app events back to Google,
-                so the old "events sync automatically" was misleading. */}
+            {/* Two-way as of Stage 9: the pull imports Google events, and
+                events created here are pushed to your primary Google calendar
+                at write time, with the sync sweeping up any the connection
+                dropped. Events created here that you then edit IN Google are
+                not re-imported — the app owns what it created. */}
             {!connected
               ? 'Import your Google calendars into this app'
               : needsReconnect
                 ? 'Reconnect needed — the stored Google authorisation is no longer valid'
-                : 'Importing from Google. Events created here stay here — they are not sent to Google.'}
+                : 'Syncing both ways. Events created here are added to your primary Google calendar.'}
           </p>
         </div>
         {connected && !needsReconnect && (
