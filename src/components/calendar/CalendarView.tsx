@@ -34,6 +34,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { createEventFromParsed, deleteEvent, parsedLocalDate } from '@/lib/events'
+import { formatInZone, timeWithZone, offsetLabel } from '@/lib/zoned-time'
 import type { CalendarEvent, Calendar, SocialPost, Idea } from '@/types/database'
 import { EventDialog } from './EventDialog'
 import { CalendarManageDialog } from './CalendarManageDialog'
@@ -658,6 +659,17 @@ export function CalendarView() {
 // ─────────────────────────────────────────────
 // Day View
 // ─────────────────────────────────────────────
+/**
+ * The "· 2:00 PM your time" tail for a detail surface, empty when the event's
+ * zone reads the same as the device's. Kept next to the day view because it is
+ * the only surface here with room for it; compact rows use `timeWithZone`.
+ */
+function zoneSuffix(event: CalendarEvent): string {
+  const label = offsetLabel(event.starts_at, event.time_zone)
+  if (!label) return ''
+  return ` ${label} · ${formatInZone(event.starts_at, null, 'h:mm a')} your time`
+}
+
 function DayView({
   currentDate, events, posts, ideas, onEventClick, onAddClick,
 }: {
@@ -692,8 +704,13 @@ function DayView({
                   <p className="font-medium text-sm">{event.title}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {event.all_day ? 'All day'
-                      : format(parseISO(event.starts_at), 'h:mm a') +
-                        (event.ends_at ? ' – ' + format(parseISO(event.ends_at), 'h:mm a') : '')}
+                      // Read in the event's own zone, not the device's. A detail
+                      // surface shows both readings when they differ: at 8 in
+                      // Monaco, the question you actually have is what that is
+                      // where you are standing.
+                      : formatInZone(event.starts_at, event.time_zone, 'h:mm a') +
+                        (event.ends_at ? ' – ' + formatInZone(event.ends_at, event.time_zone, 'h:mm a') : '') +
+                        zoneSuffix(event)}
                   </p>
                   {event.location && <p className="text-xs text-muted-foreground">{event.location}</p>}
                 </div>
@@ -742,7 +759,10 @@ function ListView({ currentDate, events, posts, ideas, onEventClick }: {
   const grouped: Record<string, DayItem[]> = {}
   const add = (key: string, item: DayItem) => { if (!grouped[key]) grouped[key] = []; grouped[key].push(item) }
 
-  events.forEach((e) => add(format(parseISO(e.starts_at), 'yyyy-MM-dd'), { kind: 'event', data: e, time: e.starts_at }))
+  // Grouped by the day the event falls on in ITS zone, so a row never appears
+  // under one date while reading as another. Posts and ideas stay device-local:
+  // `scheduled_at` is an absolute instant by ruling, not a wall clock.
+  events.forEach((e) => add(formatInZone(e.starts_at, e.time_zone, 'yyyy-MM-dd'), { kind: 'event', data: e, time: e.starts_at }))
   posts.forEach((p) => { if (p.scheduled_at) add(format(parseISO(p.scheduled_at), 'yyyy-MM-dd'), { kind: 'post', data: p, time: p.scheduled_at }) })
   ideas.forEach((i) => { if (i.date_start) add(i.date_start, { kind: 'idea', data: i, time: i.date_start }) })
 
@@ -782,7 +802,7 @@ function ListView({ currentDate, events, posts, ideas, onEventClick }: {
                       {event.location && <p className="text-xs text-muted-foreground truncate">{event.location}</p>}
                     </div>
                     <span className="text-xs text-muted-foreground shrink-0">
-                      {event.all_day ? 'All day' : format(parseISO(event.starts_at), 'h:mm a')}
+                      {event.all_day ? 'All day' : timeWithZone(event.starts_at, event.time_zone)}
                     </span>
                   </button>
                 )

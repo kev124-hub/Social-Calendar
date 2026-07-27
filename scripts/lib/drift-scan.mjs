@@ -78,12 +78,23 @@ export function classifyRow(row, { kind, timeZone, fixedAt }) {
   const at = kind === 'post' ? row.scheduled_at : row.starts_at
   if (!at) return null
 
-  const local = localParts(at, timeZone)
+  // An event's own zone wins over `--tz` where it has one; `--tz` remains the
+  // answer for posts (absolute instants by ruling, so they have no zone) and for
+  // rows that never got one.
+  //
+  // Not cosmetic. Since step 3 an all-day event is stored at midnight in ITS
+  // zone, so reading a Monaco row in --tz=America/New_York puts it at 18:00 and
+  // the invariant below would report a five-hour "drift" on a row that is
+  // perfectly correct. Every synced all-day event would have been flagged
+  // CERTAIN — the one signal here that is supposed to be beyond doubt.
+  const readZone = (kind === 'event' ? row.time_zone : null) ?? timeZone
+
+  const local = localParts(at, readZone)
   const reasons = []
 
-  // The one exact signal available. An all-day row is written at LOCAL midnight
-  // by every correct path in the app, so a local hour that is not 00:00 is not
-  // a judgement call — something moved it, and by exactly that many hours.
+  // The one exact signal available. An all-day row is written at midnight in its
+  // own zone by every correct path in the app, so a local hour that is not 00:00
+  // is not a judgement call — something moved it, and by exactly that many hours.
   if (row.all_day && !(local.hour === 0 && local.minute === 0)) {
     reasons.push(`all-day row sits at ${String(local.hour).padStart(2, '0')}:${String(local.minute).padStart(2, '0')} local, not midnight`)
   }

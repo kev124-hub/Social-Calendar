@@ -11,8 +11,11 @@ import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { format, parseISO } from 'date-fns'
 
-const { formatInZone, offsetLabel, partsInZone, deviceTimeZone } =
-  await import('../src/lib/zoned-time.ts')
+const {
+  formatInZone, offsetLabel, partsInZone, deviceTimeZone,
+  instantFromParts, dayStartInZone, dayEndInZone, instantFromLocalInput,
+  timeWithZone, timeWithBothZones,
+} = await import('../src/lib/zoned-time.ts')
 
 // ── Child mode ──────────────────────────────────────────────────────────
 // The headline property — the same row reads the same everywhere — is about
@@ -246,6 +249,82 @@ for (const fmt of QUOTED) {
 assert.equal(formatInZone(DINNER, 'Europe/Monaco', "h 'o''clock'"), "8 o'clock")
 ok(`${QUOTED.length} quoted-literal patterns match date-fns, including a doubled quote inside a run`)
 
+// ── The inverse: a wall clock back to an instant ────────────────────────
+// Needed by the all-day fix and by saving from the dialog. Both would be
+// impossible to get right without it, and both are in step 3.
+assert.equal(dayStartInZone('2026-08-01', 'Europe/Monaco'), '2026-07-31T22:00:00.000Z')
+assert.equal(dayStartInZone('2026-08-01', 'America/New_York'), '2026-08-01T04:00:00.000Z')
+assert.equal(dayStartInZone('2026-08-01', 'UTC'), '2026-08-01T00:00:00.000Z')
+ok('a calendar date resolves to the instant its day begins in its own zone')
+
+// The convention the push already assumes: local midnight to local 23:59:59.
+assert.equal(dayEndInZone('2026-05-24', 'Europe/Monaco'), '2026-05-24T21:59:59.000Z')
+ok("an all-day end is the day's last second in its own zone, matching what toGoogleEvent reads back")
+
+// A date must survive the trip in both directions, in its own zone.
+for (const z of ['UTC', 'Europe/Monaco', 'America/New_York', 'Pacific/Auckland', 'Asia/Kolkata']) {
+  for (const d of ['2026-01-01', '2026-03-08', '2026-03-29', '2026-08-01', '2026-10-25', '2026-12-31']) {
+    assert.equal(formatInZone(dayStartInZone(d, z), z, 'yyyy-MM-dd'), d, `${d} in ${z}`)
+    assert.equal(formatInZone(dayEndInZone(d, z), z, 'yyyy-MM-dd'), d, `${d} end in ${z}`)
+  }
+}
+ok('30 date/zone pairs survive date -> instant -> date, including both DST weekends')
+
+// instant -> parts -> instant, hour by hour. The exceptions are the repeated
+// hour on a fall-back night, which has two valid answers and is documented as
+// unspecified — so they are counted rather than asserted away.
+let exact = 0
+let ambiguous = 0
+for (const z of ['UTC', 'Europe/Monaco', 'America/New_York', 'Asia/Kolkata', 'Pacific/Auckland']) {
+  for (const base of [Date.UTC(2026, 0, 15), Date.UTC(2026, 2, 8), Date.UTC(2026, 2, 29), Date.UTC(2026, 6, 15), Date.UTC(2026, 9, 25), Date.UTC(2026, 10, 1)]) {
+    for (let h = 0; h < 24; h++) {
+      const iso = new Date(base + h * 3600e3 + 1800e3).toISOString()
+      const back = instantFromParts(partsInZone(iso, z), z)
+      if (back === iso) exact++
+      else {
+        // Must still read as the same wall clock — that is what "valid" means
+        // for the other side of an ambiguous hour.
+        assert.equal(formatInZone(back, z, "yyyy-MM-dd'T'HH:mm"), formatInZone(iso, z, "yyyy-MM-dd'T'HH:mm"))
+        ambiguous++
+      }
+    }
+  }
+}
+assert.equal(exact + ambiguous, 720)
+assert.ok(ambiguous <= 2, `${ambiguous} ambiguous readings, expected at most the two fall-back hours`)
+ok(`${exact}/720 instants round-trip exactly; the ${ambiguous} that do not are repeated fall-back hours and still read as the same wall clock`)
+
+assert.equal(instantFromLocalInput('2026-07-29T20:00', 'Europe/Monaco'), DINNER)
+assert.equal(instantFromLocalInput('2026-07-29T14:00', 'America/New_York'), DINNER)
+assert.equal(instantFromLocalInput('2026-08-01', 'Europe/Monaco'), '2026-07-31T22:00:00.000Z')
+assert.throws(() => instantFromLocalInput('not a date', 'UTC'), RangeError)
+ok('a datetime-local value is read as a wall clock in the zone it was shown in — two zones, one instant')
+
+// The guarantee the dialog depends on: prefill in the event's zone, save it
+// back, same instant. Interpreting the input as device-local while showing it
+// in Monaco is exactly how open-and-save moves an event.
+let moved = 0
+for (const z of ['Europe/Monaco', 'America/New_York', 'Asia/Kolkata']) {
+  for (let h = 0; h < 24; h++) {
+    const iso = new Date(Date.UTC(2026, 6, 29, h, 30)).toISOString()
+    const prefilled = formatInZone(iso, z, "yyyy-MM-dd'T'HH:mm")
+    if (instantFromLocalInput(prefilled, z) !== iso) moved++
+  }
+}
+assert.equal(moved, 0, `${moved} zoned events moved on open-and-save`)
+ok('72 zoned events survive prefill-then-save unchanged (the drift bug, in its zoned form)')
+
+// ── The two label presentations ─────────────────────────────────────────
+assert.equal(timeWithZone(DINNER, here), formatInZone(DINNER, here, 'h:mm a'))
+assert.equal(timeWithBothZones(DINNER, here), formatInZone(DINNER, here, 'h:mm a'))
+assert.equal(timeWithZone(DINNER, null), formatInZone(DINNER, null, 'h:mm a'))
+ok('a local event carries no marker in either presentation — it reads exactly as it does today')
+
+const abroadLabels = probes.get('Asia/Singapore')
+assert.equal(abroadLabels.compact, '8:00 PM GMT+2')
+assert.equal(abroadLabels.dual, '8:00 PM GMT+2 · 2:00 AM your time')
+ok('away from the zone: compact rows read "8:00 PM GMT+2", detail surfaces add "· 2:00 AM your time"')
+
 console.log(`\n${pass} checks passed.\n`)
 
 // ── The probe run in each device zone ───────────────────────────────────
@@ -268,5 +347,7 @@ function probe() {
     deviceZone: formatInZone(dinner, deviceTimeZone(), 'EEE d MMM h:mm a'),
     allDayInOwnZone: formatInZone(allDay, 'Europe/Monaco', 'yyyy-MM-dd'),
     utcMarker: offsetLabel(dinner, 'UTC'),
+    compact: timeWithZone(dinner, 'Europe/Monaco'),
+    dual: timeWithBothZones(dinner, 'Europe/Monaco'),
   }
 }

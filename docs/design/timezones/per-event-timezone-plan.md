@@ -1,19 +1,17 @@
 # Per-event timezones — plan
 
-**Status: steps 1 and 2 shipped; step 3 is next.** Written 27 July 2026.
+**Status: steps 1–3 shipped; step 4 is next.** Written 27 July 2026.
 
-Neither shipped step changes anything on screen, which is by design — the column
-is written and read by nothing, and `formatInZone` / `offsetLabel` /
-`partsInZone` have no call site in `src/`. (`events.ts` does import the module,
-for the `deviceTimeZone` that moved into it; nothing renders through it yet.)
-The first step a user can see is step 3.
+Step 3 is the first one a user can see: events now read in their own zone, with
+a `GMT+2` marker when that differs from the device, and the all-day day-early bug
+is gone.
 
 | Step | State |
 |---|---|
 | 1. Migration + capture on every write path | shipped (#39) — migration 008 is **hand-applied, not run against production** |
-| 2. The render helper, `src/lib/zoned-time.ts` | shipped, no render call site |
-| 3. Convert the render sites, view by view | **next** — the first visible change, and where the all-day `T00:00:00Z` bug is fixed |
-| 4. The zone picker in `EventDialog` | not started |
+| 2. The render helper, `src/lib/zoned-time.ts` | shipped |
+| 3. Convert the render sites, view by view | shipped — the first visible change; fixed **two** all-day off-by-ones, see below |
+| 4. The zone picker in `EventDialog` | **next** — the dialog already shows which zone it is editing in, read-only |
 | 5. Send `timeZone` on the push | not started |
 
 Ruled on by Kevin, 27 July — **do not re-litigate these:**
@@ -379,6 +377,39 @@ where an event can move.
    converted with their view, never separately, or an event renders one day and
    files under another. The zone marker goes in with each view, since it is the
    same call site and splitting it would mean touching every row twice.
+
+   **Shipped.** Converted: `eventCoversDay`, the day view, the list view and its
+   grouping key, the month chip, `TimeGrid`'s vertical position, `RightPanel`'s
+   day filter, `/home`'s upcoming rows, and the dialog. The week board needed no
+   change — it renders posts and ideas only, never events.
+
+   Presentation follows the ruling above: compact rows get `8:00 PM GMT+2`,
+   detail surfaces get `8:00 PM GMT+2 · 2:00 PM your time`, and a local event
+   reads exactly as it did before.
+
+   **The dialog's write path had to move with its read path.** Prefilling the
+   inputs in the event's zone while still reading them back as device-local
+   would have turned every open-and-save of a foreign-zone event into a silent
+   move — the exact bug this workstream began with, reintroduced from the other
+   direction. Both now use the event's zone, and a test walks 72 zoned events
+   through prefill-then-save to prove the instant is unchanged. The dialog also
+   names the zone it is editing in, because otherwise the fields are actively
+   misleading; making it *editable* is step 4.
+
+   **A second all-day off-by-one turned up here, which this plan had not
+   found.** Google's all-day `end.date` is exclusive — the push has always known
+   this and adds a day — but the pull copied it across and appended `23:59:59`.
+   A one-day event came back spanning **three**: 24 May began at 02:00 Monaco on
+   the 24th and ended at 01:59 on the 26th. Unlike the UTC-midnight bug this one
+   was visible in Europe too, so it is not the same bug wearing a different hat.
+   Both are fixed, and `push → pull` is now byte-identical, span included.
+
+   **The drift scan had to be re-aimed, not left alone.** It flags an all-day row
+   that is not at local midnight as CERTAIN. Now that such a row sits at midnight
+   in *its own* zone, reading every row in a single `--tz` would have reported a
+   five-hour drift on every correctly-synced Monaco event — as CERTAIN, the one
+   verdict there that is meant to be beyond doubt. It now prefers the row's own
+   zone, falling back to `--tz` for posts and unzoned rows.
 
    **The all-day `T00:00:00Z` fix lands here, not in step 1.** It is tempting to
    treat it as an independent bug fix, but it cannot be corrected by storage

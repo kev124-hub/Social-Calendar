@@ -1,6 +1,7 @@
 'use client'
 
 import { format, parseISO, differenceInMinutes } from 'date-fns'
+import { partsInZone, timeWithZone } from '@/lib/zoned-time'
 import type { CalendarEvent, Calendar } from '@/types/database'
 
 const HOUR_PX = 56
@@ -10,6 +11,19 @@ const TOTAL_HOURS = END_HOUR - START_HOUR
 
 function toPixels(date: Date): number {
   return ((date.getHours() - START_HOUR) + date.getMinutes() / 60) * HOUR_PX
+}
+
+/**
+ * Where an event sits on the grid, by its wall clock in its OWN zone.
+ *
+ * The subtlest site in the blast radius: a zone error here does not remove an
+ * event or relabel it, it slides it up or down the column — which reads as a
+ * layout bug rather than a data one, and so gets investigated as the wrong kind
+ * of problem. `.getHours()` was the device's hour.
+ */
+function eventPixels(iso: string, zone: string | null): number {
+  const { hour, minute } = partsInZone(iso, zone)
+  return ((hour - START_HOUR) + minute / 60) * HOUR_PX
 }
 
 interface Props {
@@ -25,9 +39,11 @@ export function TimeGrid({ date, events, onEventClick }: Props) {
 
   const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => START_HOUR + i)
 
+  // Filtered on the same hour that positions it below, or an event could pass
+  // the window check in one zone and be drawn off the grid by the other.
   const timedEvents = events.filter((e) => {
     if (e.all_day) return false
-    const h = parseISO(e.starts_at).getHours()
+    const h = partsInZone(e.starts_at, e.time_zone).hour
     return h >= START_HOUR && h < END_HOUR
   })
 
@@ -61,7 +77,9 @@ export function TimeGrid({ date, events, onEventClick }: Props) {
           const end = event.ends_at
             ? parseISO(event.ends_at)
             : new Date(start.getTime() + 60 * 60 * 1000)
-          const topPx = toPixels(start)
+          const topPx = eventPixels(event.starts_at, event.time_zone)
+          // Height is a duration — the gap between two instants — so it needs no
+          // zone at all. Only the position does.
           const heightPx = Math.max((differenceInMinutes(end, start) / 60) * HOUR_PX, 18)
           const color = (event.calendar as Calendar | undefined)?.color ?? '#6366f1'
 
@@ -74,7 +92,7 @@ export function TimeGrid({ date, events, onEventClick }: Props) {
             >
               <p className="text-[10px] font-medium truncate leading-tight">{event.title}</p>
               {heightPx > 28 && (
-                <p className="text-[9px] opacity-80 truncate">{format(start, 'h:mm a')}</p>
+                <p className="text-[9px] opacity-80 truncate">{timeWithZone(event.starts_at, event.time_zone)}</p>
               )}
             </button>
           )

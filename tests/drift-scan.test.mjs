@@ -31,6 +31,39 @@ console.log('\nlocalParts reads the zone it is given:')
 // Every correct path writes an all-day row at LOCAL midnight, so a non-midnight
 // local time is proof of a move rather than a judgement call.
 console.log('\nall-day rows must sit at local midnight:')
+// ── Step 3: the row's own zone wins ─────────────────────────────────────
+// An all-day event is now stored at midnight in ITS zone, so the invariant has
+// to be read there. Otherwise every correctly-synced Monaco event scanned from
+// New York reports a five-hour drift — as CERTAIN, the one verdict here that is
+// meant to be beyond doubt.
+{
+  const clean2 = { source: 'google', created_at: '2026-07-01T00:00:00Z', updated_at: '2026-07-01T00:00:00Z' }
+  const opts = { kind: 'event', timeZone: 'America/New_York', fixedAt: '2026-07-27T00:00:00Z' }
+
+  // Midnight in Monaco, scanned from New York. Correct, and must stay silent.
+  const monaco = { id: 'z1', title: 'Recce', all_day: true, starts_at: '2026-07-31T22:00:00.000Z', time_zone: 'Europe/Monaco', ...clean2 }
+  assert.equal(classifyRow(monaco, opts), null)
+  ok('an all-day Monaco row at its own midnight is silent when scanned from New York')
+
+  // Genuinely moved, in its own zone: 03:00 Monaco. Still caught.
+  const movedInZone = { id: 'z2', title: 'Recce', all_day: true, starts_at: '2026-08-01T01:00:00.000Z', time_zone: 'Europe/Monaco', ...clean2 }
+  const f2 = classifyRow(movedInZone, opts)
+  assert.ok(f2, 'a row moved within its own zone must still be flagged')
+  assert.equal(f2.severity, 'CERTAIN')
+  assert.match(f2.reasons[0], /03:00 local, not midnight/)
+  ok('a row moved to 03:00 in its own zone is still CERTAIN — the signal is not weakened, only re-aimed')
+
+  // A null zone still falls back to --tz, which is the pre-existing behaviour.
+  const unzoned = { id: 'z3', title: 'Recce', all_day: true, starts_at: '2026-08-01T04:00:00Z', time_zone: null, ...clean2 }
+  assert.equal(classifyRow(unzoned, opts), null)
+  ok('a null zone still reads in --tz, so unzoned rows behave exactly as before')
+
+  // Posts have no zone by ruling, so --tz governs them regardless.
+  const post = { id: 'z4', title: 'Reel', all_day: true, scheduled_at: '2026-08-01T04:00:00Z', time_zone: 'Europe/Monaco', ...clean2 }
+  assert.equal(classifyRow(post, { ...opts, kind: 'post' }), null)
+  ok('a post ignores any zone on the row — scheduled_at is an absolute instant by ruling')
+}
+
 {
   const atLocalMidnightNY = { id: 'a', title: 'Monaco', all_day: true, starts_at: '2026-08-01T04:00:00Z', ...clean }
   assert.equal(classifyRow(atLocalMidnightNY, { kind: 'event', timeZone: 'America/New_York', fixedAt: FIXED_AT }), null)

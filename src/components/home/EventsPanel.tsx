@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { format, parseISO } from 'date-fns'
+import { formatInZone, timeWithZone } from '@/lib/zoned-time'
 import { AIEventInput, type AIEventInputHandle, type ParsedEvent } from '@/components/calendar/AIEventInput'
 import type { CalendarEvent, Calendar } from '@/types/database'
 import { resolveDefaultCalendar, type WriteResult } from '@/lib/events'
@@ -34,7 +35,8 @@ function calendarOf(event: CalendarEvent, calendars: Calendar[]) {
 
 function timeLabel(event: CalendarEvent) {
   if (event.all_day) return 'All day'
-  return format(parseISO(event.starts_at), 'h:mm a')
+  // A compact row, so the short offset rather than both readings.
+  return timeWithZone(event.starts_at, event.time_zone)
 }
 
 function EventRow({
@@ -47,7 +49,10 @@ function EventRow({
   onOpen: (event: CalendarEvent) => void
 }) {
   const calendar = calendarOf(event, calendars)
-  const day = parseISO(event.starts_at)
+  // Parsed in the event's zone so the date beside the time cannot disagree with
+  // it: a Monaco 00:30 event read on a New York phone is still the day before
+  // there, which would have headed the row with yesterday's date.
+  const day = parseISO(formatInZone(event.starts_at, event.time_zone, "yyyy-MM-dd'T'HH:mm"))
   return (
     // A button, not a div with an onClick. The row already advertised itself as
     // interactive with a hover lift while doing nothing at all — and a div would

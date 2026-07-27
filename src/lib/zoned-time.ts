@@ -194,7 +194,172 @@ export function offsetLabel(iso: string, zone: string | null): string | null {
   return forZone
 }
 
+/**
+ * The instant at which the clocks in `zone` read this wall clock — the inverse
+ * of `partsInZone`.
+ *
+ * Needed in both directions, and step 3 needs this one for two things that would
+ * otherwise be impossible to get right:
+ *
+ * - **All-day rows.** "1 August, all day" is a *date*. Turning it into the
+ *   instant the day begins in the event's own zone is what stops it landing on
+ *   31 July for anyone west of Greenwich.
+ * - **Saving from the dialog.** The prefilled inputs show the event's zone, so
+ *   the value read back has to be interpreted in that zone too. Interpreting it
+ *   as device-local while displaying it as Monaco is exactly how an
+ *   open-and-save-unchanged silently moves an event, which is the bug this
+ *   workstream began with.
+ *
+ * Two passes, because the offset has to be sampled near the answer rather than
+ * at the guess: a single pass using the offset at the *UTC* reading of the wall
+ * clock is wrong by an hour whenever that guess and the answer sit on opposite
+ * sides of a DST change.
+ *
+ * Two kinds of wall clock have no single answer, and this cannot fix that:
+ *
+ * - **A skipped hour** — 2:30 AM on a spring-forward date does not exist. The
+ *   result lands just after the gap, which is what every calendar does.
+ * - **A repeated hour** — 1:30 AM happens twice on a fall-back date. One of the
+ *   two is returned, and *which* depends on the zone's offset at the initial
+ *   guess, so it is deliberately not specified: Monaco yields the second
+ *   occurrence and New York the first, purely because of where each transition
+ *   falls relative to the guess. Pinning a rule would mean sampling the offset
+ *   on both sides and choosing, which buys nothing the callers here need.
+ *
+ * Both are inherent to a wall clock rather than defects, and neither can move a
+ * date: the error is at most an hour, and an all-day event's midnight is only
+ * exposed to it in the few zones that transition at midnight. It is also not a
+ * regression for the dialog — reading an input back with `new Date()` resolves
+ * an ambiguous hour just as arbitrarily today.
+ */
+export function instantFromParts(
+  parts: {
+    year: number
+    month: number
+    day: number
+    hour?: number
+    minute?: number
+    second?: number
+  },
+  zone: string | null
+): string {
+  const wallAsUTC = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour ?? 0,
+    parts.minute ?? 0,
+    parts.second ?? 0
+  )
+  const resolved = resolveZone(zone)
+  let instant = wallAsUTC - offsetMillis(wallAsUTC, resolved)
+  instant = wallAsUTC - offsetMillis(instant, resolved)
+  return new Date(instant).toISOString()
+}
+
+/**
+ * The instant a calendar date begins in `zone` — `2026-08-01` in
+ * `Europe/Monaco` is `2026-07-31T22:00:00Z`.
+ *
+ * The convention the app already uses for an all-day event, and the one the
+ * Google *push* has always assumed (`toGoogleEvent` reads the local date back
+ * out of it). The pull is what disagreed.
+ */
+export function dayStartInZone(date: string, zone: string | null): string {
+  return instantFromParts(splitDate(date), zone)
+}
+
+/** The last second of a calendar date in `zone`, matching the app's `ends_at`. */
+export function dayEndInZone(date: string, zone: string | null): string {
+  return instantFromParts({ ...splitDate(date), hour: 23, minute: 59, second: 59 }, zone)
+}
+
+/**
+ * Read a `<input type="datetime-local">` or `<input type="date">` value as a
+ * wall clock in `zone`, and return the instant.
+ *
+ * The input types are local *by definition* and carry no zone, so the value is
+ * meaningless until one is chosen. Passing null chooses the device's, which is
+ * what the browser would have done and what every existing caller wants.
+ */
+export function instantFromLocalInput(value: string, zone: string | null): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(value.trim())
+  if (!m) throw new RangeError(`Not a datetime-local value: ${value}`)
+  return instantFromParts(
+    {
+      year: Number(m[1]),
+      month: Number(m[2]),
+      day: Number(m[3]),
+      hour: m[4] ? Number(m[4]) : 0,
+      minute: m[5] ? Number(m[5]) : 0,
+      second: m[6] ? Number(m[6]) : 0,
+    },
+    zone
+  )
+}
+
+/**
+ * A time with its offset appended when the device is somewhere else —
+ * `8:00 PM GMT+2`, or just `8:00 PM` when there is nothing to distinguish.
+ *
+ * For compact rows: a month chip, a `/home` upcoming row, a list entry. Short
+ * because there is no room, and unambiguous without knowing that CEST is a
+ * thing.
+ */
+export function timeWithZone(iso: string, zone: string | null, fmt = 'h:mm a'): string {
+  const label = offsetLabel(iso, zone)
+  const time = formatInZone(iso, zone, fmt)
+  return label ? `${time} ${label}` : time
+}
+
+/**
+ * Both readings, for a detail surface — `8:00 PM GMT+2 · 2:00 PM your time`.
+ *
+ * When the two differ, the second one is the question you actually have: the
+ * event is at 8 in Monaco, and you want to know what that is where you are
+ * standing. Collapses to a single reading when they agree, so a local event
+ * reads exactly as it does today.
+ *
+ * The copy lives here rather than in the components so that every detail
+ * surface says it the same way.
+ */
+export function timeWithBothZones(iso: string, zone: string | null, fmt = 'h:mm a'): string {
+  const label = offsetLabel(iso, zone)
+  const time = formatInZone(iso, zone, fmt)
+  if (!label) return time
+  return `${time} ${label} · ${formatInZone(iso, null, fmt)} your time`
+}
+
 // ── Internals ───────────────────────────────────────────────────────────
+
+/** `2026-08-01` → its numeric fields, rejecting anything else. */
+function splitDate(date: string): { year: number; month: number; day: number } {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date.trim())
+  if (!m) throw new RangeError(`Not a calendar date: ${date}`)
+  return { year: Number(m[1]), month: Number(m[2]), day: Number(m[3]) }
+}
+
+/**
+ * How far `zone` is from UTC at this instant, in milliseconds.
+ *
+ * Derived by reading the wall clock there and treating it as though it were UTC:
+ * the difference between that and the real instant *is* the offset.
+ */
+function offsetMillis(utcMillis: number, zone: string | undefined): number {
+  const parts = numericFormatter(zone).formatToParts(new Date(utcMillis))
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((p) => p.type === type)?.value)
+  return (
+    Date.UTC(
+      get('year'),
+      get('month') - 1,
+      get('day'),
+      get('hour'),
+      get('minute'),
+      get('second')
+    ) - utcMillis
+  )
+}
 
 const TOKENS: Record<
   string,
