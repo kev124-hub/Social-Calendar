@@ -33,6 +33,40 @@ import type { ParsedEvent } from '@/components/calendar/AIEventInput'
  * one can, which is how that bug happened in the first place.
  */
 
+/**
+ * A rejected fetch, as opposed to a refusal from the database. WebKit says
+ * "Load failed", Chrome and Firefox say "Failed to fetch" / "NetworkError";
+ * postgrest-js passes the underlying message straight through.
+ */
+const NETWORK_FAILURE = /load failed|failed to fetch|networkerror|network request failed|fetch failed/i
+
+/**
+ * Turn a write failure into something worth reading.
+ *
+ * The two cases are genuinely different and must not be reported the same way.
+ * A database refusal (RLS, a bad foreign key) is final: the row is definitely
+ * not there, and retrying unchanged will fail again. A rejected fetch is
+ * *ambiguous*: the request may well have reached the server and committed
+ * before the response was lost, so the event may or may not exist. postgrest-js
+ * retries GETs on a network error and deliberately never retries writes for
+ * this exact reason (RETRYABLE_METHODS is GET/HEAD/OPTIONS only) — so telling
+ * someone to "try again" without qualification invites a duplicate row.
+ *
+ * This asymmetry is also why a flaky connection shows up as a page that loads
+ * perfectly well and then refuses to save: the reads retried, the write didn't.
+ */
+function writeFailure(verb: 'save' | 'delete', message: string | undefined): Error {
+  const raw = message || 'Unknown error'
+  if (NETWORK_FAILURE.test(raw)) {
+    const past = verb === 'save' ? 'saved' : 'deleted'
+    return new Error(
+      `Couldn’t reach the database, so the event may or may not have been ${past}. ` +
+        `Check your calendar before trying again. (${raw})`
+    )
+  }
+  return new Error(`Could not ${verb} the event: ${raw}`)
+}
+
 /** Columns an app-side caller sets. `source` and `external_id` are ours. */
 export interface EventFields {
   title: string
@@ -54,7 +88,7 @@ export async function createEvent(
     // `external_id` stays null on app-created events. Stage 9 backfills it
     // from Google's insert response — don't invent a value for it.
   })
-  if (error) throw new Error(`Could not save the event: ${error.message}`)
+  if (error) throw writeFailure('save', error.message)
 }
 
 export async function updateEvent(
@@ -66,7 +100,7 @@ export async function updateEvent(
     .from('calendar_events')
     .update(fields)
     .eq('id', id)
-  if (error) throw new Error(`Could not save the event: ${error.message}`)
+  if (error) throw writeFailure('save', error.message)
 }
 
 export async function deleteEvent(
@@ -74,7 +108,7 @@ export async function deleteEvent(
   id: string
 ): Promise<void> {
   const { error } = await supabase.from('calendar_events').delete().eq('id', id)
-  if (error) throw new Error(`Could not delete the event: ${error.message}`)
+  if (error) throw writeFailure('delete', error.message)
 }
 
 /**
