@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 
 const {
   createEvent, updateEvent, deleteEvent, createEventFromParsed, stripTimeZone,
+  parsedLocalDate,
 } = await import('../src/lib/events.ts')
 
 // ── Fake supabase client ────────────────────────────────────────────────
@@ -283,6 +284,55 @@ for (const [msg, expected] of [
   assert.equal(r.pushedToGoogle, false)
   assert.equal(Boolean(r.needsGoogleReconnect), expected, msg)
   ok(`"${msg}" -> ${expected ? 'tells you to reconnect' : 'transient, sweep retries'}`)
+}
+
+
+// ── 10. the day the view jumps to is the day the event is on ────────────
+// CalendarView navigates to `parsedLocalDate(...)` after an AI create, because
+// a create it cannot show is one you assume never happened. The view and the
+// stored row must therefore agree on the DAY — and both of the conversions
+// below are ones the naive version gets wrong.
+console.log('\nparsedLocalDate — view and row agree on the day:')
+{
+  // A timed parse is a local wall clock: same calendar day, same clock time,
+  // in every zone. `new Date('...Z')` would move both.
+  const timed = parsedLocalDate('2026-08-01T20:00:00', false)
+  assert.equal(timed.getFullYear(), 2026)
+  assert.equal(timed.getMonth(), 7)
+  assert.equal(timed.getDate(), 1, 'a timed parse must not drift off 1 August')
+  assert.equal(timed.getHours(), 20, 'and must stay at 8pm')
+  ok(`timed parse -> Sat 1 Aug 20:00 local (TZ=${process.env.TZ ?? 'unset'})`)
+
+  // The one that actually bites: a bare date. `new Date('2026-08-01')` is UTC
+  // midnight, which is 31 July anywhere west of Greenwich — the view would sit
+  // on the day before the event it just made.
+  const allDay = parsedLocalDate('2026-08-01', true)
+  assert.equal(allDay.getDate(), 1, 'an all-day parse must not land on 31 July')
+  assert.equal(allDay.getHours(), 0)
+  ok('all-day parse -> local midnight on 1 Aug, not UTC midnight')
+
+  // A stray designator from the model must not move the day either.
+  for (const suffix of ['', 'Z', '+05:30', '-08:00']) {
+    const d = parsedLocalDate('2026-08-01T20:00:00' + suffix, false)
+    assert.equal(d.getDate(), 1, `suffix "${suffix}" moved the day`)
+    assert.equal(d.getHours(), 20, `suffix "${suffix}" moved the time`)
+  }
+  ok('a trailing Z or offset moves neither the day nor the clock')
+
+  // The end of an all-day span stays on its own day rather than rolling over.
+  const end = parsedLocalDate('2026-08-03', true, true)
+  assert.equal(end.getDate(), 3)
+  assert.equal(end.getHours(), 23)
+  ok('all-day end -> 23:59:59 on the same day, no rollover')
+
+  // What the view jumps to and what the row stores must be the SAME day, which
+  // is the whole point of sharing this function rather than re-deriving it.
+  for (const [raw, all_day] of [['2026-08-01T20:00:00', false], ['2026-08-01', true]]) {
+    const viewDay = parsedLocalDate(raw, all_day)
+    const storedDay = new Date(parsedLocalDate(raw, all_day).toISOString())
+    assert.equal(viewDay.getDate(), storedDay.getDate(), `${raw} — view and row disagree`)
+  }
+  ok('view target and stored row land on the same local day')
 }
 
 console.log(`\n${pass} checks passed.\n`)

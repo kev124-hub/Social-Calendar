@@ -246,6 +246,31 @@ export function stripTimeZone(datetime: string): string {
 }
 
 /**
+ * The local wall-clock instant a parsed datetime refers to.
+ *
+ * Exported because `CalendarView` has to jump to the day it just created an
+ * event on, and deriving that date a second time there would let the two
+ * answers drift — which matters more than it sounds, because both of the
+ * conversions below are ones the naive version gets wrong:
+ *
+ *   - a stray `Z` from the model would shift the day by the UTC offset
+ *     (see stripTimeZone), and
+ *   - an all-day parse is a bare `YYYY-MM-DD`, which `new Date()` reads as UTC
+ *     midnight — landing on the PREVIOUS day anywhere west of Greenwich. The
+ *     `T00:00:00` is what forces it to local midnight.
+ *
+ * Getting either wrong puts the event on one day and the view on another.
+ */
+export function parsedLocalDate(raw: string, allDay: boolean, isEnd = false): Date {
+  // Strip unconditionally: an all-day parse is unaffected, but doing it anyway
+  // stops a stray `Z` making `2026-05-24Z` + `T00:00:00` and throwing
+  // "Invalid time value".
+  const s = stripTimeZone(raw)
+  if (allDay) return new Date(s + (isEnd ? 'T23:59:59' : 'T00:00:00'))
+  return new Date(s)
+}
+
+/**
  * Create an event from an `AIEventInput` parse. Resolves the destination
  * calendar and normalises an all-day parse — which arrives as a bare
  * `YYYY-MM-DD` — to a full day span.
@@ -260,15 +285,8 @@ export async function createEventFromParsed(
 ): Promise<WriteResult> {
   const defaultCalendar = resolveDefaultCalendar(calendars)
 
-  const toISO = (raw: string, isEnd?: boolean) => {
-    // Always local wall clock — see stripTimeZone. An all-day parse is a bare
-    // date and unaffected, but strip it too so a stray `Z` cannot make
-    // `2026-05-24Z T00:00:00` and throw "Invalid time value".
-    const s = stripTimeZone(raw)
-    if (parsed.all_day)
-      return new Date(s + (isEnd ? 'T23:59:59' : 'T00:00:00')).toISOString()
-    return new Date(s).toISOString()
-  }
+  const toISO = (raw: string, isEnd?: boolean) =>
+    parsedLocalDate(raw, parsed.all_day, isEnd).toISOString()
 
   return createEvent(supabase, {
     title: parsed.title,

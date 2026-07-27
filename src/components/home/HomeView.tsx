@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { addDays, parseISO, startOfDay, startOfWeek } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
-import { createEventFromParsed } from '@/lib/events'
+import { createEventFromParsed, deleteEvent } from '@/lib/events'
 import type { CalendarEvent, Calendar, SocialPost } from '@/types/database'
 import type { AIEventInputHandle, ParsedEvent } from '@/components/calendar/AIEventInput'
 import { EventDialog } from '@/components/calendar/EventDialog'
@@ -63,6 +63,11 @@ export function HomeView() {
   const [postDialogOpen, setPostDialogOpen] = useState(false)
   const [ideaDialogOpen, setIdeaDialogOpen] = useState(false)
   const [eventDialogOpen, setEventDialogOpen] = useState(false)
+  // Which row the event dialog is editing, or null for `Manual +`'s new event.
+  // Deliberately NOT cleared on close: clearing it there would swap the dialog's
+  // title and fields back to the empty state mid close-animation. Each opener
+  // sets it explicitly instead, which is what CalendarView does.
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
   const aiInputRef = useRef<AIEventInputHandle>(null)
 
   // `now` is null until after mount, and every clock-dependent string on this
@@ -311,7 +316,14 @@ export function HomeView() {
           failed={eventsFailed}
           onRetry={refetchEvents}
           onCreate={handleCreateFromParsed}
-          onOpenManual={() => setEventDialogOpen(true)}
+          onOpenManual={() => {
+            setEditingEvent(null)
+            setEventDialogOpen(true)
+          }}
+          onOpenEvent={(event) => {
+            setEditingEvent(event)
+            setEventDialogOpen(true)
+          }}
           focusRef={aiInputRef}
         />
       </div>
@@ -348,11 +360,20 @@ export function HomeView() {
           setEventDialogOpen(false)
           refetchEvents()
         }}
-        // No delete path here: this dialog only ever opens on a new event, so
-        // `event` is null and the Delete button never renders.
-        onDelete={() => setEventDialogOpen(false)}
-        event={null}
-        defaultDate={now}
+        // Reachable now that rows open for editing — before this the dialog only
+        // ever opened on a new event, so `event` was null and Delete never
+        // rendered. Not caught on purpose: EventDialog awaits this and shows the
+        // message, so a failed delete leaves the dialog open rather than closing
+        // over something that did not happen. Same contract as CalendarView.
+        onDelete={async (id) => {
+          await deleteEvent(createClient(), id)
+          setEventDialogOpen(false)
+          refetchEvents()
+        }}
+        event={editingEvent}
+        // A date only seeds a NEW event; passing one while editing would fight
+        // the row's own start time.
+        defaultDate={editingEvent ? null : now}
         calendars={calendars}
       />
     </div>

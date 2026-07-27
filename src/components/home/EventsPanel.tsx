@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import Link from 'next/link'
 import { format, parseISO } from 'date-fns'
 import { AIEventInput, type AIEventInputHandle, type ParsedEvent } from '@/components/calendar/AIEventInput'
 import type { CalendarEvent, Calendar } from '@/types/database'
@@ -22,6 +23,8 @@ export interface EventsPanelProps {
   /** Creates the event AND refetches, so the list below reflects it. Throws. */
   onCreate: (parsed: ParsedEvent) => Promise<WriteResult>
   onOpenManual: () => void
+  /** Opens an existing row for editing — same dialog `Manual +` opens. */
+  onOpenEvent: (event: CalendarEvent) => void
   focusRef?: React.Ref<AIEventInputHandle>
 }
 
@@ -34,11 +37,28 @@ function timeLabel(event: CalendarEvent) {
   return format(parseISO(event.starts_at), 'h:mm a')
 }
 
-function EventRow({ event, calendars }: { event: CalendarEvent; calendars: Calendar[] }) {
+function EventRow({
+  event,
+  calendars,
+  onOpen,
+}: {
+  event: CalendarEvent
+  calendars: Calendar[]
+  onOpen: (event: CalendarEvent) => void
+}) {
   const calendar = calendarOf(event, calendars)
   const day = parseISO(event.starts_at)
   return (
-    <div className="flex items-start gap-2.5 rounded-[10px] px-2 py-1.5 transition-transform hover:translate-x-1">
+    // A button, not a div with an onClick. The row already advertised itself as
+    // interactive with a hover lift while doing nothing at all — and a div would
+    // have kept that promise for a mouse only, staying untabbable and invisible
+    // to a screen reader. `w-full text-left` because a button centres and shrinks
+    // to its content by default, which would have quietly undone the row layout.
+    <button
+      type="button"
+      onClick={() => onOpen(event)}
+      className="flex w-full items-start gap-2.5 rounded-[10px] px-2 py-1.5 text-left transition-transform hover:translate-x-1"
+    >
       <span
         className="w-[42px] shrink-0 pt-[1px] text-[11px] leading-tight"
         style={{ ...MONO, color: INK.tertiary }}
@@ -58,7 +78,7 @@ function EventRow({ event, calendars }: { event: CalendarEvent; calendars: Calen
           {calendar ? ` · ${calendar.name}` : ''}
         </span>
       </span>
-    </div>
+    </button>
   )
 }
 
@@ -70,6 +90,7 @@ export function EventsPanel({
   onRetry,
   onCreate,
   onOpenManual,
+  onOpenEvent,
   focusRef,
 }: EventsPanelProps) {
   const [confirmation, setConfirmation] = useState<string | null>(null)
@@ -124,12 +145,22 @@ export function EventsPanel({
   // Same visibility rule CalendarView applies: an event on a hidden calendar is
   // filtered out, but one with no calendar at all still shows.
   const visibleIds = new Set(calendars.filter((c) => c.is_visible).map((c) => c.id))
-  const upcoming = events
+  const allUpcoming = events
     .filter((e) => !e.calendar_id || visibleIds.has(e.calendar_id))
     // The query fetches from the start of today so that today's all-day events
     // survive; drop the timed ones that have already been and gone.
     .filter((e) => e.all_day || parseISO(e.starts_at) >= now)
-    .slice(0, MAX_ROWS)
+  const upcoming = allUpcoming.slice(0, MAX_ROWS)
+  // Counted, not just truncated. The panel used to stop dead at five with
+  // nothing to say more existed, so five events and fifty looked identical and
+  // the sixth was unreachable from here. `NeedsAttention` has said "+n more"
+  // all along; this is the same affordance.
+  //
+  // An undercount is possible and deliberate: HomeView fetches 40 rows, so a
+  // 41st upcoming event is not counted. Saying "+35 more" when it is really 60
+  // is a small lie in the safe direction — the link goes to the full list
+  // either way — and the alternative is a second count query for a caption.
+  const extra = allUpcoming.length - upcoming.length
 
   return (
     <section style={PANEL} className="flex flex-col p-4">
@@ -198,9 +229,27 @@ export function EventsPanel({
             Nothing coming up.
           </p>
         ) : (
-          upcoming.map((event) => (
-            <EventRow key={event.id} event={event} calendars={calendars} />
-          ))
+          <>
+            {upcoming.map((event) => (
+              <EventRow key={event.id} event={event} calendars={calendars} onOpen={onOpenEvent} />
+            ))}
+            {extra > 0 && (
+              // `?view=list` rather than bare /calendar: the list view is the
+              // one that answers "what else is coming up", and it now opens on
+              // today and scrolls. An explicit ?view= also beats the phone
+              // default of day view — CalendarView's deep-link effect is
+              // declared after that one precisely so it wins.
+              //
+              // Colour as a class — an inline `color` would beat the hover.
+              <Link
+                href="/calendar?view=list"
+                className="mt-1 px-2 text-[9.5px] uppercase text-[#5d5660] transition-colors hover:text-[#0b3a50]"
+                style={{ ...MONO, letterSpacing: '.12em', borderRadius: RADIUS.control }}
+              >
+                +{extra} more →
+              </Link>
+            )}
+          </>
         )}
       </div>
     </section>

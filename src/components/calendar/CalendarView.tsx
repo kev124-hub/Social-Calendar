@@ -33,7 +33,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
-import { createEventFromParsed, deleteEvent } from '@/lib/events'
+import { createEventFromParsed, deleteEvent, parsedLocalDate } from '@/lib/events'
 import type { CalendarEvent, Calendar, SocialPost, Idea } from '@/types/database'
 import { EventDialog } from './EventDialog'
 import { CalendarManageDialog } from './CalendarManageDialog'
@@ -313,6 +313,11 @@ export function CalendarView() {
       }
       return `${format(s, 'MMM d')} – ${format(e, 'MMM d, yyyy')}`
     }
+    // The list runs FORWARDS from this day rather than showing it alone, so a
+    // bare date read as "these are Monday's events" when it was everything from
+    // Monday to the end of next month.
+    if (view === 'list')
+      return `From ${format(currentDate, short ? 'EEE, MMM d' : 'EEEE, MMMM d')}`
     return format(currentDate, short ? 'EEE, MMM d' : 'EEEE, MMMM d, yyyy')
   }
 
@@ -407,7 +412,25 @@ export function CalendarView() {
     // "added" and nothing appeared. AIEventInput awaits this and shows what it
     // throws, so the message from `events.ts` is the whole error UX.
     await createEventFromParsed(supabase, parsed, calendars)
-    await loadData()
+
+    // Then GO TO the day it landed on, because otherwise a successful create is
+    // invisible. Below `sm` this page opens in day view on today, so an event
+    // for any other day was written, confirmed by a 2s green tick, and left off
+    // screen — "Nothing scheduled today" over an event that had just been
+    // created. /home never had this problem: its panel lists what is *upcoming*
+    // and prints a line naming what landed.
+    //
+    // Derived through `parsedLocalDate` rather than `new Date(parsed.starts_at)`
+    // so the view and the row agree on the day — an all-day parse is a bare
+    // date, which `new Date` reads as UTC midnight and lands on the day before
+    // anywhere west of Greenwich.
+    const landedOn = parsedLocalDate(parsed.starts_at, parsed.all_day)
+    // Setting the date is what reloads: `useEffect(..., [currentDate])` fires on
+    // the new object, exactly as `navigate()` relies on. Guarded because an
+    // unparseable date would make every downstream format() throw — and in that
+    // case the reload has to happen the direct way instead.
+    if (isValid(landedOn)) setCurrentDate(landedOn)
+    else await loadData()
   }
 
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 })
@@ -564,6 +587,7 @@ export function CalendarView() {
           )}
           {view === 'list' && (
             <ListView
+              currentDate={currentDate}
               events={visibleEvents}
               posts={posts}
               ideas={ideas}
@@ -646,7 +670,9 @@ function DayView({
 }) {
   const isEmpty = events.length === 0 && posts.length === 0 && ideas.length === 0
   return (
-    <div className="p-6 space-y-3">
+    // Scrolls for the same reason ListView does — a full day clipped at the
+    // fold with no way to reach the rest of it.
+    <div className="h-full overflow-y-auto p-6 space-y-3">
       {isEmpty ? (
         <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
           <p className="text-sm mb-3">Nothing scheduled today</p>
@@ -701,7 +727,8 @@ function DayView({
 // ─────────────────────────────────────────────
 // List View
 // ─────────────────────────────────────────────
-function ListView({ events, posts, ideas, onEventClick }: {
+function ListView({ currentDate, events, posts, ideas, onEventClick }: {
+  currentDate: Date
   events: CalendarEvent[]
   posts: SocialPost[]
   ideas: Idea[]
@@ -719,12 +746,23 @@ function ListView({ events, posts, ideas, onEventClick }: {
   posts.forEach((p) => { if (p.scheduled_at) add(format(parseISO(p.scheduled_at), 'yyyy-MM-dd'), { kind: 'post', data: p, time: p.scheduled_at }) })
   ideas.forEach((i) => { if (i.date_start) add(i.date_start, { kind: 'idea', data: i, time: i.date_start }) })
 
-  const sortedDays = Object.keys(grouped).sort()
+  // Start at the day being viewed, not at whatever happens to have loaded.
+  // `loadData` fetches a ±1 month window, so this list opened on the 1st of
+  // LAST month and ran forwards: a list headed "upcoming" whose first entry was
+  // a fortnight in the past, and where pressing Today reloaded the same window
+  // and left you staring at last month again. Comparing the `yyyy-MM-dd` keys
+  // as strings is exact — they are fixed-width and zero-padded, so lexical
+  // order is chronological order, and no Date is constructed to get it wrong.
+  const from = format(currentDate, 'yyyy-MM-dd')
+  const sortedDays = Object.keys(grouped).filter((day) => day >= from).sort()
   if (sortedDays.length === 0)
     return <div className="p-8 text-center text-muted-foreground text-sm">Nothing upcoming</div>
 
   return (
-    <div className="p-6 space-y-6">
+    // Scrolls on its own: the calendar body is `flex-1 overflow-hidden`, so a
+    // view that does not scroll is simply clipped at the fold — which is what
+    // hid every entry past the first screenful here.
+    <div className="h-full overflow-y-auto p-6 space-y-6">
       {sortedDays.map((dateKey) => (
         <div key={dateKey}>
           <h3 className="text-sm font-semibold text-muted-foreground mb-2">

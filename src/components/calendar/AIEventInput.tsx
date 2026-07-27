@@ -79,7 +79,13 @@ export function AIEventInput({
     setSuccess(false)
 
     try {
-      const today = format(new Date(), 'MMMM d, yyyy')
+      // The WEEKDAY is not decoration — it is the anchor the model counts from.
+      // Sent as "July 27, 2026" it had to work out for itself that the 27th was
+      // a Monday before it could resolve "Saturday", and when it got that wrong
+      // every relative weekday landed a day out with the time untouched:
+      // "Saturday 8pm" stored as Friday 8pm. Naming the weekday removes the
+      // arithmetic instead of hoping it comes out right.
+      const today = format(new Date(), 'EEEE, MMMM d, yyyy')
       const res = await fetch('/api/claude/parse-event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
