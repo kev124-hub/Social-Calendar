@@ -83,7 +83,20 @@ export interface WriteResult {
   pushedToGoogle: boolean
   /** Why the push failed, when it did. Not user-facing on its own. */
   pushError?: string
+  /**
+   * The push failed because Google will not accept the stored authorisation.
+   *
+   * Worth separating from every other push failure because it is the only one
+   * that never fixes itself: a dropped connection resolves on the next sync,
+   * but a dead token means every event from now on silently fails to reach
+   * Google while the app cheerfully reports "not in Google yet". Nothing
+   * changes until someone reconnects, so the message has to say so.
+   */
+  needsGoogleReconnect?: boolean
 }
+
+/** Google refusing the stored credentials, as opposed to any other failure. */
+const NEEDS_RECONNECT = /not authenticated with google|invalid_grant|invalid_token|Google API error (401|403)/i
 
 /**
  * Ask the server to mirror this event into Google. Never throws: every failure
@@ -107,7 +120,12 @@ async function pushToGoogle(
     })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
-      return { pushedToGoogle: false, pushError: data.error ?? `Google push failed (${res.status})` }
+      const pushError = data.error ?? `Google push failed (${res.status})`
+      return {
+        pushedToGoogle: false,
+        pushError,
+        needsGoogleReconnect: NEEDS_RECONNECT.test(pushError),
+      }
     }
     return { pushedToGoogle: true }
   } catch (err) {
@@ -206,6 +224,28 @@ export function resolveDefaultCalendar(calendars: Calendar[]): Calendar | undefi
 }
 
 /**
+ * Strip any timezone designator from a parsed datetime.
+ *
+ * "Wednesday 2:30pm" means 2:30pm where the person typing it is standing. The
+ * parse is a WALL CLOCK reading and the model has no business attaching a zone
+ * to it — it does not know where anyone is.
+ *
+ * But the prompt asks for "ISO 8601", which permits a trailing `Z` or `±HH:MM`,
+ * and only *illustrates* the naive form. When the model obliged with a `Z`,
+ * `new Date(s)` read it as an absolute instant instead of local wall clock and
+ * the event shifted by exactly the user's UTC offset — 2:30pm stored, 10:30pm
+ * displayed, on a device at UTC+8. Nothing in the UI could hint at it, because
+ * every later step was doing its job correctly on a value that was already wrong.
+ *
+ * Fixed here rather than only in the prompt because the prompt is a request and
+ * this is a guarantee: no output the model can produce should be able to move an
+ * event through time.
+ */
+export function stripTimeZone(datetime: string): string {
+  return datetime.replace(/(?:Z|[+-]\d{2}:?\d{2})$/i, '')
+}
+
+/**
  * Create an event from an `AIEventInput` parse. Resolves the destination
  * calendar and normalises an all-day parse — which arrives as a bare
  * `YYYY-MM-DD` — to a full day span.
@@ -220,7 +260,11 @@ export async function createEventFromParsed(
 ): Promise<WriteResult> {
   const defaultCalendar = resolveDefaultCalendar(calendars)
 
-  const toISO = (s: string, isEnd?: boolean) => {
+  const toISO = (raw: string, isEnd?: boolean) => {
+    // Always local wall clock — see stripTimeZone. An all-day parse is a bare
+    // date and unaffected, but strip it too so a stray `Z` cannot make
+    // `2026-05-24Z T00:00:00` and throw "Invalid time value".
+    const s = stripTimeZone(raw)
     if (parsed.all_day)
       return new Date(s + (isEnd ? 'T23:59:59' : 'T00:00:00')).toISOString()
     return new Date(s).toISOString()

@@ -104,8 +104,16 @@ export function EventsPanel({
       ? format(parseISO(parsed.starts_at), 'EEE')
       : format(parseISO(parsed.starts_at), 'EEE h:mm a')
     // The event is saved either way. When Google did not get it, say so rather
-    // than implying a sync that has not happened — the next Sync sweeps it up.
-    const google = result.pushedToGoogle ? '' : ' · not in Google yet'
+    // than implying a sync that has not happened.
+    //
+    // A dead token gets its own wording because it is the only push failure
+    // that never resolves on its own: "not in Google yet" is true but useless
+    // when the answer is "and it never will be until you reconnect".
+    const google = result.pushedToGoogle
+      ? ''
+      : result.needsGoogleReconnect
+        ? ' · reconnect Google in Settings to sync it'
+        : ' · not in Google yet'
     setConfirmation(
       `Added · ${parsed.title} · ${when}${calendar ? ` · ${calendar.name}` : ''}${google}`
     )

@@ -10,12 +10,19 @@ interface Props {
   connected: boolean
   /** A row exists but the stored grant no longer yields a token. */
   needsReconnect?: boolean
+  /**
+   * The deployment has no Google OAuth credentials. Distinct from
+   * needsReconnect: reconnecting cannot fix it, and offering the button sends
+   * you to Google for a bare "401: invalid_client" on Google's own domain.
+   */
+  notConfigured?: boolean
   lastSynced?: string | null
 }
 
 export function GoogleCalendarSettings({
   connected: initialConnected,
   needsReconnect = false,
+  notConfigured = false,
   lastSynced: initialLastSynced,
 }: Props) {
   const [connected, setConnected] = useState(initialConnected)
@@ -106,26 +113,42 @@ export function GoogleCalendarSettings({
                 at write time, with the sync sweeping up any the connection
                 dropped. Events created here that you then edit IN Google are
                 not re-imported — the app owns what it created. */}
-            {!connected
-              ? 'Import your Google calendars into this app'
-              : needsReconnect
-                ? 'Reconnect needed — the stored Google authorisation is no longer valid'
-                : 'Syncing both ways. Events created here are added to your primary Google calendar.'}
+            {notConfigured
+              ? 'Not configured on this deployment — Google credentials are missing, so connecting and syncing cannot work here'
+              : !connected
+                ? 'Import your Google calendars into this app'
+                : needsReconnect
+                  ? 'Reconnect needed — the stored Google authorisation is no longer valid'
+                  : 'Syncing both ways. Events created here are added to your primary Google calendar.'}
           </p>
         </div>
-        {connected && !needsReconnect && (
+        {notConfigured && (
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-[#8a4b06] bg-[#fdf6e7] px-3 py-1 rounded-[10px] border border-[#f5dda1]">
+            <X size={10} /> Not configured
+          </span>
+        )}
+        {!notConfigured && connected && !needsReconnect && (
           <span className="flex items-center gap-1.5 text-xs font-semibold text-[#166534] bg-[#f0fdf0] px-3 py-1 rounded-[10px] border border-[#bbf7d0]">
             <Check size={10} /> Connected
           </span>
         )}
-        {connected && needsReconnect && (
+        {!notConfigured && connected && needsReconnect && (
           <span className="flex items-center gap-1.5 text-xs font-semibold text-[#8a4b06] bg-[#fdf6e7] px-3 py-1 rounded-[10px] border border-[#f5dda1]">
             <X size={10} /> Reconnect
           </span>
         )}
       </div>
 
-      {!connected ? (
+      {notConfigured && !connected ? (
+        // Same reasoning as the reconnect banner: a Connect button that can only
+        // end in "invalid_client" on Google's domain is worse than no button.
+        <p className="rounded-[10px] border border-[#f5dda1] bg-[#fdf6e7] px-3 py-2.5 text-xs text-[#8a4b06]">
+          Set <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> for this
+          environment and redeploy before connecting. Vercel scopes environment variables
+          per environment, so values set for Production are not visible to preview
+          deployments unless added for Preview too.
+        </p>
+      ) : !connected ? (
         <a href="/api/auth/google-calendar">
           <Button variant="outline" size="sm">
             <GoogleIcon />
@@ -163,7 +186,20 @@ export function GoogleCalendarSettings({
             </div>
           )}
 
-          {needsReconnect && (
+          {notConfigured && (
+            <div className="rounded-[10px] border border-[#f5dda1] bg-[#fdf6e7] px-3 py-2.5">
+              <p className="text-xs text-[#8a4b06]">
+                This deployment has no Google OAuth credentials, so connecting, reconnecting
+                and syncing all fail here. Vercel scopes environment variables per
+                environment, so values set for Production are not visible to preview
+                deployments unless they are added for Preview too. No Reconnect button is
+                offered because it cannot succeed — it would just bounce you to Google for
+                an &ldquo;invalid_client&rdquo; error.
+              </p>
+            </div>
+          )}
+
+          {!notConfigured && needsReconnect && (
             <div className="space-y-2 rounded-[10px] border border-[#f5dda1] bg-[#fdf6e7] px-3 py-2.5">
               <p className="text-xs text-[#8a4b06]">
                 Google is no longer accepting the saved authorisation, so syncing will fail

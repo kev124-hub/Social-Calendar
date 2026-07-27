@@ -9,13 +9,17 @@ const SYSTEM_PROMPT = `You extract calendar event details from natural language 
 
 Output a single JSON object with these fields:
 - title: string (concise, required)
-- starts_at: string (ISO 8601, e.g. "2026-05-22T09:00:00" or "2026-05-22")
-- ends_at: string or null (ISO 8601, null if not specified)
+- starts_at: string (local wall-clock, e.g. "2026-05-22T09:00:00" or "2026-05-22")
+- ends_at: string or null (same format, null if not specified)
 - all_day: boolean (true for date-only events with no times)
 - location: string or null
 - description: string or null
 
 Rules:
+- NEVER append a timezone designator. No trailing "Z", no "+05:00", no offset of
+  any kind. Times are local wall-clock readings for whoever is typing, and you do
+  not know where they are — "2:30pm" must be "T14:30:00" and nothing more. A "Z"
+  here silently moves the event by the user's UTC offset.
 - For multi-day events without times (e.g. "May 22-25"), use all_day: true, date-only strings
 - If no year given, use the next upcoming occurrence from today's date
 - If no end date/time, set ends_at to null

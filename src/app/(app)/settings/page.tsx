@@ -33,6 +33,10 @@ export default async function SettingsPage({
   const googleToken = googleIntegration ? await getValidAccessToken().catch(() => null) : null
   const isGoogleConnected = !!googleIntegration
   const googleNeedsReconnect = !!googleIntegration && !googleToken
+  // Checked server-side so the UI can tell "your login expired" apart from
+  // "this deployment was never given credentials". They look identical from the
+  // client — both just fail — but only one of them is fixable by reconnecting.
+  const googleNotConfigured = !process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET
   const lastSynced = (googleIntegration?.metadata as any)?.last_synced ?? null
 
   return (
@@ -55,6 +59,7 @@ export default async function SettingsPage({
         <GoogleCalendarSettings
           connected={isGoogleConnected}
           needsReconnect={googleNeedsReconnect}
+          notConfigured={googleNotConfigured}
           lastSynced={lastSynced}
         />
 
