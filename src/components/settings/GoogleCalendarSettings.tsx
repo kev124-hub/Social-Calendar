@@ -10,12 +10,19 @@ interface Props {
   connected: boolean
   /** A row exists but the stored grant no longer yields a token. */
   needsReconnect?: boolean
+  /**
+   * The deployment has no Google OAuth credentials. Distinct from
+   * needsReconnect: reconnecting cannot fix it, and offering the button sends
+   * you to Google for a bare "401: invalid_client" on Google's own domain.
+   */
+  notConfigured?: boolean
   lastSynced?: string | null
 }
 
 export function GoogleCalendarSettings({
   connected: initialConnected,
   needsReconnect = false,
+  notConfigured = false,
   lastSynced: initialLastSynced,
 }: Props) {
   const [connected, setConnected] = useState(initialConnected)
@@ -41,10 +48,30 @@ export function GoogleCalendarSettings({
   async function handleSync() {
     setSyncing(true)
     setSyncMsg('')
-    const res = await fetch('/api/google-calendar/sync', { method: 'POST' })
+    const res = await fetch('/api/google-calendar/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // Only the browser knows this, and all-day events are dated a day out
+      // without it for anyone east of UTC.
+      body: JSON.stringify({ timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+    })
     const data = await res.json()
     if (res.ok) {
-      setSyncMsg(`✓ Synced ${data.synced} events`)
+      // Report both directions. `pushed` is events created here that Google had
+      // not got yet — usually zero, because the push happens at write time; a
+      // non-zero count means it is catching up after a connection failure.
+      const parts = [`✓ Imported ${data.synced} events`]
+      if (data.pushed) parts.push(`sent ${data.pushed} to Google`)
+      if (data.pushFailures?.length) {
+        // Show WHY, not just how many. A bare count ("2 could not be sent")
+        // is unactionable — it cannot tell an expired token from a bad payload,
+        // and the events it refers to stay invisible until someone guesses.
+        parts.push(
+          `${data.pushFailures.length} could not be sent — ${data.pushFailures[0]}` +
+            (data.pushFailures.length > 1 ? ` (+${data.pushFailures.length - 1} more)` : '')
+        )
+      }
+      setSyncMsg(parts.join(' · '))
       setLastSynced(new Date().toISOString())
     } else {
       setSyncMsg(`Error: ${data.error}`)
@@ -81,29 +108,47 @@ export function GoogleCalendarSettings({
             Google Calendar
           </h2>
           <p className="text-xs text-muted-foreground mt-1">
-            {/* One-way by design: syncGoogleCalendar reads Google and upserts
-                into calendar_events. Nothing pushes app events back to Google,
-                so the old "events sync automatically" was misleading. */}
-            {!connected
-              ? 'Import your Google calendars into this app'
-              : needsReconnect
-                ? 'Reconnect needed — the stored Google authorisation is no longer valid'
-                : 'Importing from Google. Events created here stay here — they are not sent to Google.'}
+            {/* Two-way as of Stage 9: the pull imports Google events, and
+                events created here are pushed to your primary Google calendar
+                at write time, with the sync sweeping up any the connection
+                dropped. Events created here that you then edit IN Google are
+                not re-imported — the app owns what it created. */}
+            {notConfigured
+              ? 'Not configured on this deployment — Google credentials are missing, so connecting and syncing cannot work here'
+              : !connected
+                ? 'Import your Google calendars into this app'
+                : needsReconnect
+                  ? 'Reconnect needed — the stored Google authorisation is no longer valid'
+                  : 'Syncing both ways. Events created here are added to your primary Google calendar.'}
           </p>
         </div>
-        {connected && !needsReconnect && (
+        {notConfigured && (
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-[#8a4b06] bg-[#fdf6e7] px-3 py-1 rounded-[10px] border border-[#f5dda1]">
+            <X size={10} /> Not configured
+          </span>
+        )}
+        {!notConfigured && connected && !needsReconnect && (
           <span className="flex items-center gap-1.5 text-xs font-semibold text-[#166534] bg-[#f0fdf0] px-3 py-1 rounded-[10px] border border-[#bbf7d0]">
             <Check size={10} /> Connected
           </span>
         )}
-        {connected && needsReconnect && (
+        {!notConfigured && connected && needsReconnect && (
           <span className="flex items-center gap-1.5 text-xs font-semibold text-[#8a4b06] bg-[#fdf6e7] px-3 py-1 rounded-[10px] border border-[#f5dda1]">
             <X size={10} /> Reconnect
           </span>
         )}
       </div>
 
-      {!connected ? (
+      {notConfigured && !connected ? (
+        // Same reasoning as the reconnect banner: a Connect button that can only
+        // end in "invalid_client" on Google's domain is worse than no button.
+        <p className="rounded-[10px] border border-[#f5dda1] bg-[#fdf6e7] px-3 py-2.5 text-xs text-[#8a4b06]">
+          Set <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> for this
+          environment and redeploy before connecting. Vercel scopes environment variables
+          per environment, so values set for Production are not visible to preview
+          deployments unless added for Preview too.
+        </p>
+      ) : !connected ? (
         <a href="/api/auth/google-calendar">
           <Button variant="outline" size="sm">
             <GoogleIcon />
@@ -141,7 +186,20 @@ export function GoogleCalendarSettings({
             </div>
           )}
 
-          {needsReconnect && (
+          {notConfigured && (
+            <div className="rounded-[10px] border border-[#f5dda1] bg-[#fdf6e7] px-3 py-2.5">
+              <p className="text-xs text-[#8a4b06]">
+                This deployment has no Google OAuth credentials, so connecting, reconnecting
+                and syncing all fail here. Vercel scopes environment variables per
+                environment, so values set for Production are not visible to preview
+                deployments unless they are added for Preview too. No Reconnect button is
+                offered because it cannot succeed — it would just bounce you to Google for
+                an &ldquo;invalid_client&rdquo; error.
+              </p>
+            </div>
+          )}
+
+          {!notConfigured && needsReconnect && (
             <div className="space-y-2 rounded-[10px] border border-[#f5dda1] bg-[#fdf6e7] px-3 py-2.5">
               <p className="text-xs text-[#8a4b06]">
                 Google is no longer accepting the saved authorisation, so syncing will fail
@@ -157,12 +215,17 @@ export function GoogleCalendarSettings({
           )}
 
           {/* Sync controls */}
-          <div className="flex items-center gap-3">
+          <div className="space-y-2">
             <Button size="sm" className="rounded-[10px]" onClick={handleSync} disabled={syncing}>
               <RefreshCw size={13} className={cn('mr-1.5', syncing && 'animate-spin')} />
               {syncing ? 'Syncing…' : 'Sync now'}
             </Button>
-            {syncMsg && <span className="text-xs text-muted-foreground">{syncMsg}</span>}
+            {/* On its own line and wrapping: this now carries the reason a push
+                failed, which is a raw Google API message and can be long. Beside
+                the button on a phone it was squeezed to a couple of words. */}
+            {syncMsg && (
+              <p className="text-xs text-muted-foreground break-words whitespace-pre-wrap">{syncMsg}</p>
+            )}
           </div>
 
           {lastSynced && (

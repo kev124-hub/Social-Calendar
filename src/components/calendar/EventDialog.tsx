@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { createEvent, updateEvent } from '@/lib/events'
+import { toDatetimeLocalInput, toDateInput } from '@/lib/datetime-local'
 import type { CalendarEvent, Calendar } from '@/types/database'
 import { cn } from '@/lib/utils'
 
@@ -32,8 +33,9 @@ const inputClass =
 
 const labelClass = 'text-[13px] font-medium text-[#333] block mb-1.5 tracking-tight'
 
-function toDatetimeLocal(iso: string) { return iso.slice(0, 16) }
-function toDateLocal(iso: string) { return iso.slice(0, 10) }
+// See src/lib/datetime-local.ts — these must never be `iso.slice(...)`.
+const toDatetimeLocal = toDatetimeLocalInput
+const toDateLocal = toDateInput
 
 // The start/end inputs switch between type="date" and type="datetime-local"
 // with the all-day toggle, but the value in state does not follow. A browser

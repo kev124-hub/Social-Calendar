@@ -135,18 +135,227 @@ export async function listGoogleEvents(
 }
 
 // ─────────────────────────────────────────────
+// Push: app → Google (Stage 9)
+// ─────────────────────────────────────────────
+
+/**
+ * Marks a Google event as one this app created and already knows about.
+ *
+ * Without it the pull would fight the push. `syncGoogleCalendar` upserts on
+ * `external_id`, so a pushed event coming back would not duplicate — but the
+ * upsert also sets `source: 'google'` and the Google calendar's `calendar_id`,
+ * which would silently migrate the event off its app calendar and, because
+ * pushes are gated on `source === 'app'`, stop every later edit reaching
+ * Google. Tagging on the way out and skipping the tag on the way back in keeps
+ * app-created events owned by the app.
+ *
+ * Consequence worth knowing: an app-created event edited in Google Calendar
+ * will not come back. The app is the source of truth for what it created.
+ */
+const APP_TAG = 'socialCalendarEventId'
+
+/**
+ * Did this app push this Google event? Exported for tests — getting it wrong is
+ * silent and destructive, migrating our own events onto a Google calendar with
+ * nothing on screen to say it happened.
+ */
+export function isAppPushedEvent(e: { extendedProperties?: { private?: Record<string, string> } }): boolean {
+  return Boolean(e.extendedProperties?.private?.[APP_TAG])
+}
+
+/** App-created events go to the primary calendar. */
+const PUSH_TARGET = 'primary'
+
+/**
+ * `YYYY-MM-DD` for an instant, in a named zone.
+ *
+ * All-day events are stored as *local* midnight converted to UTC, so slicing
+ * the ISO string would shift the date a day backwards for anyone east of UTC —
+ * a race weekend landing on the Saturday. The zone comes from the browser
+ * (`Intl...timeZone`) because the server has no way to know it.
+ */
+function localDate(iso: string, timeZone: string): string {
+  // 'en-CA' formats as YYYY-MM-DD, which is exactly Google's `date` shape.
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(iso))
+}
+
+function addDays(date: string, days: number): string {
+  const d = new Date(date + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+export interface AppEventRow {
+  id: string
+  title: string
+  description: string | null
+  location: string | null
+  starts_at: string
+  ends_at: string | null
+  all_day: boolean
+  external_id: string | null
+  source: string
+}
+
+/**
+ * The Google request body for one of our events.
+ *
+ * Exported for tests. The all-day date arithmetic here is the part most able to
+ * be wrong without looking wrong — a date off by one moves a race weekend to
+ * the Saturday and nothing in the UI would say so.
+ */
+export function toGoogleEvent(event: AppEventRow, timeZone: string) {
+  const timing = event.all_day
+    ? {
+        start: { date: localDate(event.starts_at, timeZone) },
+        // Google treats all-day `end.date` as EXCLUSIVE, so a single-day event
+        // ends on the following day. Our `ends_at` is the last day at 23:59
+        // local, hence +1 rather than a straight copy.
+        end: {
+          date: addDays(localDate(event.ends_at ?? event.starts_at, timeZone), 1),
+        },
+      }
+    : {
+        start: { dateTime: new Date(event.starts_at).toISOString() },
+        // Google rejects an event with no end. Our schema allows one, so give
+        // an open-ended event a nominal hour rather than failing the push.
+        end: {
+          dateTime: new Date(
+            event.ends_at ?? new Date(new Date(event.starts_at).getTime() + 60 * 60 * 1000).toISOString()
+          ).toISOString(),
+        },
+      }
+
+  return {
+    summary: event.title,
+    description: event.description ?? undefined,
+    location: event.location ?? undefined,
+    ...timing,
+    extendedProperties: { private: { [APP_TAG]: event.id } },
+  }
+}
+
+/**
+ * Create or update this event in Google and record the id it comes back with.
+ *
+ * Returns the Google event id. Throws on any Google or database failure — the
+ * caller decides whether that is fatal. It is not, for a create: the row is
+ * already saved locally and `sweepUnpushedEvents` will retry on the next sync.
+ */
+export async function pushEventToGoogle(eventId: string, timeZone: string): Promise<string> {
+  const supabase = getServiceClient()
+  const { data: event, error } = await supabase
+    .from('calendar_events')
+    .select('id, title, description, location, starts_at, ends_at, all_day, external_id, source')
+    .eq('id', eventId)
+    .single()
+
+  if (error || !event) throw new Error(`Event ${eventId} not found: ${error?.message ?? 'no row'}`)
+  // Never push a row that came FROM Google — that is the pull's territory and
+  // would be a write-back loop.
+  if (event.source !== 'app') throw new Error(`Refusing to push a ${event.source}-sourced event`)
+
+  const body = toGoogleEvent(event as AppEventRow, timeZone)
+
+  const created = event.external_id
+    ? await gFetch(
+        `/calendars/${encodeURIComponent(PUSH_TARGET)}/events/${encodeURIComponent(event.external_id)}`,
+        { method: 'PATCH', body: JSON.stringify(body) }
+      )
+    : await gFetch(`/calendars/${encodeURIComponent(PUSH_TARGET)}/events`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      })
+
+  if (!event.external_id && created?.id) {
+    // Backfill so later edits patch instead of creating a second copy, and so
+    // the sweep stops picking this row up.
+    const { error: backfillError } = await supabase
+      .from('calendar_events')
+      .update({ external_id: created.id })
+      .eq('id', eventId)
+    if (backfillError) {
+      // The event now exists in Google but we failed to record its id, so the
+      // sweep would push it again and duplicate it. Say so loudly.
+      throw new Error(
+        `Pushed to Google but could not record its id (${backfillError.message}) — ` +
+          `event ${created.id} may be pushed twice`
+      )
+    }
+  }
+
+  return created?.id ?? event.external_id!
+}
+
+/** Remove an app-created event from Google. Safe to call for an unpushed one. */
+export async function deleteEventFromGoogle(externalId: string): Promise<void> {
+  try {
+    await gFetch(
+      `/calendars/${encodeURIComponent(PUSH_TARGET)}/events/${encodeURIComponent(externalId)}`,
+      { method: 'DELETE' }
+    )
+  } catch (err) {
+    // Already gone in Google is the outcome we wanted, not a failure.
+    if (err instanceof Error && /Google API error (404|410)/.test(err.message)) return
+    throw err
+  }
+}
+
+/**
+ * Push every app-created event Google has not seen. This is what makes a failed
+ * push at write time self-healing rather than permanent: a dropped connection
+ * leaves `external_id` null, and the next sync picks it up.
+ */
+export async function sweepUnpushedEvents(timeZone: string, timeMin: string, timeMax: string) {
+  const supabase = getServiceClient()
+  const { data: pending } = await supabase
+    .from('calendar_events')
+    .select('id')
+    .eq('source', 'app')
+    .is('external_id', null)
+    .gte('starts_at', timeMin)
+    .lte('starts_at', timeMax)
+
+  let pushed = 0
+  const failures: string[] = []
+  for (const row of pending ?? []) {
+    try {
+      await pushEventToGoogle(row.id, timeZone)
+      pushed++
+    } catch (err) {
+      // One bad event must not abandon the rest of the batch.
+      failures.push(err instanceof Error ? err.message : String(err))
+    }
+  }
+  return { pushed, failures }
+}
+
+// ─────────────────────────────────────────────
 // Sync logic
 // ─────────────────────────────────────────────
 
-export async function syncGoogleCalendar() {
+export async function syncGoogleCalendar(timeZone?: string) {
   const supabase = getServiceClient()
   const integration = await getGoogleTokens()
   if (!integration) throw new Error('Google Calendar not connected')
 
-  const selectedIds: string[] = (integration.metadata as any)?.calendar_ids ?? ['primary']
+  const metadata = (integration.metadata ?? {}) as Record<string, unknown>
+  const selectedIds: string[] = (metadata.calendar_ids as string[]) ?? ['primary']
+  // The caller's zone when a browser triggered this, else the last one we saw.
+  // Only all-day dates depend on it; UTC is the honest fallback.
+  const zone = timeZone ?? (metadata.time_zone as string) ?? 'UTC'
 
   const timeMin = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
   const timeMax = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString()
+
+  // Push before pulling. Anything swept up now comes back tagged and is
+  // filtered out below, rather than being pulled in the same run as a stranger.
+  const swept = await sweepUnpushedEvents(zone, timeMin, timeMax)
 
   let totalUpserted = 0
 
@@ -191,6 +400,10 @@ export async function syncGoogleCalendar() {
 
       const rows = items
         .filter((e) => e.status !== 'cancelled')
+        // Skip anything this app pushed. Without this the upsert below would
+        // overwrite the row's `source` and `calendar_id`, migrating our own
+        // event off its app calendar and blocking every later push.
+        .filter((e) => !isAppPushedEvent(e))
         .map((e) => ({
           calendar_id: dbCalendarId,
           external_id: e.id,
@@ -217,12 +430,13 @@ export async function syncGoogleCalendar() {
     } while (pageToken)
   }
 
-  // Update last synced time
+  // Update last synced time. `time_zone` is recorded so a sweep triggered
+  // without a browser still dates all-day events correctly.
   await supabase.from('user_integrations')
-    .update({ metadata: { ...(integration.metadata as object), last_synced: new Date().toISOString(), calendar_ids: selectedIds } })
+    .update({ metadata: { ...metadata, last_synced: new Date().toISOString(), calendar_ids: selectedIds, time_zone: zone } })
     .eq('provider', 'google_calendar')
 
-  return { synced: totalUpserted }
+  return { synced: totalUpserted, pushed: swept.pushed, pushFailures: swept.failures }
 }
 
 // ─────────────────────────────────────────────
@@ -245,4 +459,5 @@ interface GoogleEvent {
   status?: string
   start?: { dateTime?: string; date?: string }
   end?: { dateTime?: string; date?: string }
+  extendedProperties?: { private?: Record<string, string> }
 }

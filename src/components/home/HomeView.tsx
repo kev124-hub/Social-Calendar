@@ -184,8 +184,9 @@ export function HomeView() {
   // only runs on success, so the list never implies an event that isn't there.
   const handleCreateFromParsed = useCallback(
     async (parsed: ParsedEvent) => {
-      await createEventFromParsed(createClient(), parsed, calendars)
+      const result = await createEventFromParsed(createClient(), parsed, calendars)
       refetchEvents()
+      return result
     },
     [calendars, refetchEvents]
   )

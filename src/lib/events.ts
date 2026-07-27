@@ -8,11 +8,12 @@ import type { ParsedEvent } from '@/components/calendar/AIEventInput'
 /**
  * The single choke point for every APP-SIDE write to `calendar_events`.
  *
- * Stage 9 (two-way Google Calendar sync) patches this file, and only this
- * file, to push app-created events up to Google. That only works if every
- * app-side write goes through here — a create, update or delete that bypasses
- * these helpers is one Stage 9 will silently miss, leaving events that never
- * reach Google and deletions that leave ghosts behind.
+ * Stage 9 (two-way Google Calendar sync) landed here, in this file and only
+ * this file: every helper below mirrors its write into Google. That works only
+ * because every app-side write goes through here — a create, update or delete
+ * that bypassed these helpers would be one Google never hears about, leaving
+ * events that never reach it and deletions that leave ghosts behind. Keep it
+ * that way; the done-check below is what guards it.
  *
  * Deliberately NOT in scope: the pull-side `upsert` of `source: 'google'` rows
  * in `src/lib/google-calendar.ts`. That direction is Google→app.
@@ -67,6 +68,75 @@ function writeFailure(verb: 'save' | 'delete', message: string | undefined): Err
   return new Error(`Could not ${verb} the event: ${raw}`)
 }
 
+/**
+ * What a write did, beyond succeeding.
+ *
+ * The Supabase write and the Google push are deliberately not all-or-nothing.
+ * The row is saved first and never rolled back; if Google is unreachable the
+ * event still exists, `external_id` stays null, and `sweepUnpushedEvents` picks
+ * it up on the next sync. So a failed push is a *warning*, not an error — the
+ * alternative is losing the event someone just typed because a plane's wifi
+ * dropped, which is the worse bug by a distance.
+ */
+export interface WriteResult {
+  /** False when the row saved but Google has not got it yet. */
+  pushedToGoogle: boolean
+  /** Why the push failed, when it did. Not user-facing on its own. */
+  pushError?: string
+  /**
+   * The push failed because Google will not accept the stored authorisation.
+   *
+   * Worth separating from every other push failure because it is the only one
+   * that never fixes itself: a dropped connection resolves on the next sync,
+   * but a dead token means every event from now on silently fails to reach
+   * Google while the app cheerfully reports "not in Google yet". Nothing
+   * changes until someone reconnects, so the message has to say so.
+   */
+  needsGoogleReconnect?: boolean
+}
+
+/** Google refusing the stored credentials, as opposed to any other failure. */
+const NEEDS_RECONNECT = /not authenticated with google|invalid_grant|invalid_token|Google API error (401|403)/i
+
+/**
+ * Ask the server to mirror this event into Google. Never throws: every failure
+ * path returns a WriteResult the caller can report without losing the write.
+ *
+ * The browser cannot talk to Google directly — the tokens are service-role
+ * only — so this hops through `/api/google-calendar/push`.
+ */
+async function pushToGoogle(
+  payload: { eventId?: string; externalId?: string | null; op: 'upsert' | 'delete' }
+): Promise<WriteResult> {
+  try {
+    const res = await fetch('/api/google-calendar/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...payload,
+        // Only the browser knows this, and all-day dates are wrong without it.
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      const pushError = data.error ?? `Google push failed (${res.status})`
+      return {
+        pushedToGoogle: false,
+        pushError,
+        needsGoogleReconnect: NEEDS_RECONNECT.test(pushError),
+      }
+    }
+    return { pushedToGoogle: true }
+  } catch (err) {
+    // A dropped connection here is the expected case, not an exception.
+    return {
+      pushedToGoogle: false,
+      pushError: err instanceof Error ? err.message : 'Could not reach the app server',
+    }
+  }
+}
+
 /** Columns an app-side caller sets. `source` and `external_id` are ours. */
 export interface EventFields {
   title: string
@@ -81,34 +151,66 @@ export interface EventFields {
 export async function createEvent(
   supabase: SupabaseClient,
   fields: EventFields
-): Promise<void> {
-  const { error } = await supabase.from('calendar_events').insert({
-    ...fields,
-    source: 'app' as const,
-    // `external_id` stays null on app-created events. Stage 9 backfills it
-    // from Google's insert response — don't invent a value for it.
-  })
+): Promise<WriteResult> {
+  const { data, error } = await supabase
+    .from('calendar_events')
+    .insert({
+      ...fields,
+      source: 'app' as const,
+      // `external_id` stays null until the push below reports Google's id.
+      // A null here is exactly what marks the row as still owed to Google, and
+      // what the sync sweep looks for.
+    })
+    .select('id')
+    .single()
   if (error) throw writeFailure('save', error.message)
+
+  // Saved. Everything past this point is best-effort — see WriteResult.
+  return pushToGoogle({ eventId: data.id, op: 'upsert' })
 }
 
 export async function updateEvent(
   supabase: SupabaseClient,
   id: string,
   fields: Partial<EventFields>
-): Promise<void> {
+): Promise<WriteResult> {
   const { error } = await supabase
     .from('calendar_events')
     .update(fields)
     .eq('id', id)
   if (error) throw writeFailure('save', error.message)
+
+  return pushToGoogle({ eventId: id, op: 'upsert' })
 }
 
 export async function deleteEvent(
   supabase: SupabaseClient,
   id: string
-): Promise<void> {
+): Promise<WriteResult> {
+  // Read the Google id BEFORE the row goes: afterwards there is nothing left to
+  // read it from, and an event deleted here but left in Google is the ghost the
+  // whole choke point exists to prevent. A failed read is not fatal — losing
+  // the local delete would be worse — but it does mean the ghost survives, so
+  // it is reported.
+  const { data: existing, error: readError } = await supabase
+    .from('calendar_events')
+    .select('external_id')
+    .eq('id', id)
+    .single()
+
   const { error } = await supabase.from('calendar_events').delete().eq('id', id)
   if (error) throw writeFailure('delete', error.message)
+
+  if (readError) {
+    return {
+      pushedToGoogle: false,
+      pushError: `Deleted here, but could not tell whether it was in Google (${readError.message})`,
+    }
+  }
+  // Never pushed, so there is nothing in Google to remove.
+  if (!existing?.external_id) return { pushedToGoogle: true }
+
+  return pushToGoogle({ externalId: existing.external_id, op: 'delete' })
 }
 
 /**
@@ -119,6 +221,28 @@ export async function deleteEvent(
  */
 export function resolveDefaultCalendar(calendars: Calendar[]): Calendar | undefined {
   return calendars.find((c) => c.source === 'app') ?? calendars[0]
+}
+
+/**
+ * Strip any timezone designator from a parsed datetime.
+ *
+ * "Wednesday 2:30pm" means 2:30pm where the person typing it is standing. The
+ * parse is a WALL CLOCK reading and the model has no business attaching a zone
+ * to it — it does not know where anyone is.
+ *
+ * But the prompt asks for "ISO 8601", which permits a trailing `Z` or `±HH:MM`,
+ * and only *illustrates* the naive form. When the model obliged with a `Z`,
+ * `new Date(s)` read it as an absolute instant instead of local wall clock and
+ * the event shifted by exactly the user's UTC offset — 2:30pm stored, 10:30pm
+ * displayed, on a device at UTC+8. Nothing in the UI could hint at it, because
+ * every later step was doing its job correctly on a value that was already wrong.
+ *
+ * Fixed here rather than only in the prompt because the prompt is a request and
+ * this is a guarantee: no output the model can produce should be able to move an
+ * event through time.
+ */
+export function stripTimeZone(datetime: string): string {
+  return datetime.replace(/(?:Z|[+-]\d{2}:?\d{2})$/i, '')
 }
 
 /**
@@ -133,16 +257,20 @@ export async function createEventFromParsed(
   supabase: SupabaseClient,
   parsed: ParsedEvent,
   calendars: Calendar[]
-): Promise<void> {
+): Promise<WriteResult> {
   const defaultCalendar = resolveDefaultCalendar(calendars)
 
-  const toISO = (s: string, isEnd?: boolean) => {
+  const toISO = (raw: string, isEnd?: boolean) => {
+    // Always local wall clock — see stripTimeZone. An all-day parse is a bare
+    // date and unaffected, but strip it too so a stray `Z` cannot make
+    // `2026-05-24Z T00:00:00` and throw "Invalid time value".
+    const s = stripTimeZone(raw)
     if (parsed.all_day)
       return new Date(s + (isEnd ? 'T23:59:59' : 'T00:00:00')).toISOString()
     return new Date(s).toISOString()
   }
 
-  await createEvent(supabase, {
+  return createEvent(supabase, {
     title: parsed.title,
     description: parsed.description,
     location: parsed.location,
