@@ -5,8 +5,10 @@
 Ruled on by Kevin, 27 July — **do not re-litigate these:**
 
 - **Per-event timezones** (option 3), not a single home timezone (option 2).
-- **Existing rows are left alone.** No backfill; `time_zone` stays null and
-  those rows keep behaving exactly as they do today.
+- **No backfill.** Existing rows keep a null zone and behave exactly as they do
+  today. In practice this is close to a non-issue: Kevin's events are all
+  Google-sourced, and the pull re-reads them, so recording `start.timeZone`
+  populates them on the next sync without anyone guessing anything.
 - **`social_posts.scheduled_at` stays an absolute instant.** Only
   `calendar_events` gains a zone.
 
@@ -214,16 +216,42 @@ currently being thrown away.
 back to the device zone — i.e. exactly today's behaviour. So the migration is
 inert on existing data and nothing shifts on deploy.
 
-**Ruled: no backfill.** Existing rows keep a null zone and go on behaving
-exactly as they do today, gaining a zone only when one is next edited. There is
-no record of where any existing row was created, so a backfill would be a guess
-applied to every historical event at once — the same class of harm as the drift
-being cleaned up, and harder to notice because it would look deliberate.
+**Ruled: no backfill — and Kevin's follow-up makes it close to a non-issue.**
 
-The practical consequence to keep in mind while converting views: **null is a
-permanent state, not a migration window.** Rows from before this work will still
-be null in a year, so the device-zone fallback is a supported path forever and
-must be treated as such — not as a stopgap that can quietly stop being tested.
+He has created no real events in the app; his calendar lives in Google, so
+essentially every row is `source: 'google'`. That changes the character of the
+problem completely. The earlier framing — "there is no record of where any
+existing row was created, so a backfill would be a guess" — is true only of
+app-created rows. **For a Google row the record exists, in Google**, and the
+pull re-reads it:
+
+- the pull `upsert`s on `external_id`, so a re-sync overwrites the mapped fields
+  of rows that already exist;
+- therefore, once the pull records `start.timeZone`, **a sync populates the zone
+  for every Google event by itself.** No backfill script, no guessing, and the
+  authoritative answer comes from the system that has always known it.
+
+Two caveats, neither fatal:
+
+1. **The sync window is `now − 30d` to `now + 90d`.** Events outside it are not
+   re-read, so a race weekend booked eight months out keeps a null zone until it
+   drifts into the window — and then fixes itself. Until then it falls back to
+   the device zone, which is exactly today's behaviour, so nothing regresses. A
+   one-off widened sync would close the gap sooner if it ever matters.
+2. **Google does not guarantee `start.timeZone` on every event.** When it is
+   absent, fall back to the calendar's own `timeZone`, which
+   `listGoogleCalendars` already returns in the calendarList entry and which we
+   currently discard. Only if both are missing does the row stay null.
+
+So the only rows genuinely needing a human answer are app-created ones, and
+there are none worth keeping. **The ruling stands, but the reason is now "the
+data repairs itself from Google" rather than "we accept permanently null rows".**
+
+Still true, and still the constraint on step 3: **null is a permanent state, not
+a migration window.** Rows outside the sync window, rows on calendars later
+disconnected, and any future app-created event before its zone is set will all
+be null. The device-zone fallback is a supported path forever and must stay
+tested — not treated as a stopgap that can quietly stop being exercised.
 
 ---
 
@@ -232,9 +260,18 @@ must be treated as such — not as a stopgap that can quietly stop being tested.
 Each step ships and is verifiable on its own. No step leaves the app in a state
 where an event can move.
 
-1. **Migration + capture, no behaviour change.** Add `time_zone`, populate it on
-   every write from the device zone, keep rendering exactly as now. Completely
-   inert — the column is written and ignored. Verifiable by inspecting rows.
+1. **Migration + capture on every write path, no behaviour change.** Add
+   `time_zone`; populate it from the device zone on app-side writes **and from
+   `start.timeZone` on the Google pull** (falling back to the calendar's zone).
+   Keep rendering exactly as now. Completely inert — the column is written and
+   ignored — and verifiable by inspecting rows.
+
+   **The pull belongs here rather than at the end.** Kevin's real events are
+   all Google-sourced, so the pull is what puts a zone on essentially every row
+   he has. Left until last, steps 2–4 would be built and shipped against data
+   that is uniformly null, and the feature would appear to do nothing until the
+   final step. Populating first means each later step is visible on real data
+   the moment it lands.
 2. **A single render helper**, used nowhere yet: `formatInZone(iso, zone, fmt)`
    falling back to the device zone when `zone` is null, plus `offsetLabel(iso,
    zone)` for the `GMT+2` marker. Unit-tested hard, under several `TZ` values,
@@ -244,15 +281,22 @@ where an event can move.
    converted with their view, never separately, or an event renders one day and
    files under another. The zone marker goes in with each view, since it is the
    same call site and splitting it would mean touching every row twice.
+
+   **The all-day `T00:00:00Z` fix lands here, not in step 1.** It is tempting to
+   treat it as an independent bug fix, but it cannot be corrected by storage
+   alone: an all-day Monaco event stored at midnight *in its own zone* still
+   renders a day early when a New York device formats it. Only rendering it in
+   its own zone fixes it, so the mapping change and the view change have to
+   arrive together or the bug simply moves.
 4. **The zone picker in `EventDialog`.** Deliberately after step 3: until the
    views honour a zone, a control that sets one would let you pick a value with
    no visible effect — and an event whose stored zone and displayed time
    disagree is precisely the bug class this whole exercise exists to remove.
-5. **Google sync both directions** — send `timeZone` on push, keep it on pull,
-   and fix the all-day `T00:00:00Z` mapping.
+5. **The push side** — send `timeZone` with `dateTime` so an app-created event
+   reaches Google as a wall clock rather than inheriting the target calendar's
+   default zone.
 
-Steps 1 and 2 are safe in any order and change nothing observable. The first
-step a user can see is 3.
+Steps 1 and 2 change nothing observable. The first step a user can see is 3.
 
 ## Testing
 
