@@ -55,7 +55,15 @@ export function GoogleCalendarSettings({
       // non-zero count means it is catching up after a connection failure.
       const parts = [`✓ Imported ${data.synced} events`]
       if (data.pushed) parts.push(`sent ${data.pushed} to Google`)
-      if (data.pushFailures?.length) parts.push(`${data.pushFailures.length} could not be sent`)
+      if (data.pushFailures?.length) {
+        // Show WHY, not just how many. A bare count ("2 could not be sent")
+        // is unactionable — it cannot tell an expired token from a bad payload,
+        // and the events it refers to stay invisible until someone guesses.
+        parts.push(
+          `${data.pushFailures.length} could not be sent — ${data.pushFailures[0]}` +
+            (data.pushFailures.length > 1 ? ` (+${data.pushFailures.length - 1} more)` : '')
+        )
+      }
       setSyncMsg(parts.join(' · '))
       setLastSynced(new Date().toISOString())
     } else {
@@ -171,12 +179,17 @@ export function GoogleCalendarSettings({
           )}
 
           {/* Sync controls */}
-          <div className="flex items-center gap-3">
+          <div className="space-y-2">
             <Button size="sm" className="rounded-[10px]" onClick={handleSync} disabled={syncing}>
               <RefreshCw size={13} className={cn('mr-1.5', syncing && 'animate-spin')} />
               {syncing ? 'Syncing…' : 'Sync now'}
             </Button>
-            {syncMsg && <span className="text-xs text-muted-foreground">{syncMsg}</span>}
+            {/* On its own line and wrapping: this now carries the reason a push
+                failed, which is a raw Google API message and can be long. Beside
+                the button on a phone it was squeezed to a couple of words. */}
+            {syncMsg && (
+              <p className="text-xs text-muted-foreground break-words whitespace-pre-wrap">{syncMsg}</p>
+            )}
           </div>
 
           {lastSynced && (
