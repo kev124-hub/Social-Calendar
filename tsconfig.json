@@ -6,6 +6,11 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // Lets a source file import a sibling as "./x.ts", the specifier Node needs
+    // to resolve it too. The test harness runs these modules directly under
+    // --experimental-strip-types with no bundler, so an extensionless relative
+    // import would typecheck and then fail to load. Safe with noEmit.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

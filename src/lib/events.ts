@@ -164,14 +164,14 @@ export interface EventFields {
  * Null rather than a guess. 'UTC' would be a lie that renders as a real
  * wall clock and looks deliberate — worse than an honest unknown, which the
  * readers already handle by falling back to the device zone at display time.
+ *
+ * Defined in `zoned-time.ts` and re-exported here, where the write paths and
+ * their tests already expect it. One definition on purpose: the write side
+ * capturing a zone and the read side falling back to one must agree about what
+ * "the device zone" is, and two copies of it would be free to drift apart.
  */
-export function deviceTimeZone(): string | null {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || null
-  } catch {
-    return null
-  }
-}
+import { deviceTimeZone } from './zoned-time.ts'
+export { deviceTimeZone }
 
 export async function createEvent(
   supabase: SupabaseClient,

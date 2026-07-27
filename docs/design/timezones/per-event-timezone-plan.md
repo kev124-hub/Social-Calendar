@@ -1,6 +1,20 @@
 # Per-event timezones — plan
 
-**Status: proposed, not started.** Written 27 July 2026.
+**Status: steps 1 and 2 shipped; step 3 is next.** Written 27 July 2026.
+
+Neither shipped step changes anything on screen, which is by design — the column
+is written and read by nothing, and `formatInZone` / `offsetLabel` /
+`partsInZone` have no call site in `src/`. (`events.ts` does import the module,
+for the `deviceTimeZone` that moved into it; nothing renders through it yet.)
+The first step a user can see is step 3.
+
+| Step | State |
+|---|---|
+| 1. Migration + capture on every write path | shipped (#39) — migration 008 is **hand-applied, not run against production** |
+| 2. The render helper, `src/lib/zoned-time.ts` | shipped, no render call site |
+| 3. Convert the render sites, view by view | **next** — the first visible change, and where the all-day `T00:00:00Z` bug is fixed |
+| 4. The zone picker in `EventDialog` | not started |
+| 5. Send `timeZone` on the push | not started |
 
 Ruled on by Kevin, 27 July — **do not re-litigate these:**
 
@@ -334,6 +348,32 @@ where an event can move.
    falling back to the device zone when `zone` is null, plus `offsetLabel(iso,
    zone)` for the `GMT+2` marker. Unit-tested hard, under several `TZ` values,
    before anything depends on it.
+
+   **Shipped as `src/lib/zoned-time.ts`.** It also exports `partsInZone`, which
+   is what the bucketing sites in the blast radius actually need — deciding
+   which day a row falls on, or where it sits on an hour grid, is a question
+   about numbers rather than a formatted string — and `deviceTimeZone`, moved
+   here from `events.ts` so the write side capturing a zone and the read side
+   falling back to one cannot drift apart.
+
+   Two things were settled while building it, both worth knowing before step 3:
+
+   - **It is built on `Intl`, not on a shifted `Date`.** The usual trick for
+     formatting in another zone is to read the target zone's wall-clock fields
+     and rebuild a `Date` from them. That loses an hour, silently, whenever the
+     reconstructed wall clock does not exist in the *device's* zone — a Monaco
+     2:30 AM event on a New York phone on a US spring-forward morning. The test
+     for this reports what the discarded approach would have printed, so the
+     reason the code looks indirect stays legible.
+   - **An unsupported pattern token throws.** The token table covers what this
+     app formats instants with; anything else fails at the first render rather
+     than emitting a plausible wrong string. Adding a token is two lines.
+
+   The helper is byte-identical to date-fns whenever the event's zone is the
+   device's, which is what makes step 3 safe to land one view at a time: for a
+   row whose zone matches the device, converting a call site is a visible no-op,
+   so anything that *does* move on screen is a row that was genuinely being
+   mis-stated before.
 3. **Convert the render sites, one view at a time** — day, then list, then
    month, then week, then `/home`, then the dialog. Bucketing sites (above) get
    converted with their view, never separately, or an event renders one day and
