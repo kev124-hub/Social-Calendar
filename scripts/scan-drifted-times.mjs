@@ -60,7 +60,7 @@ const supabase = createClient(url, key)
 const [events, posts] = await Promise.all([
   supabase
     .from('calendar_events')
-    .select('id, title, starts_at, all_day, source, created_at, updated_at')
+    .select('id, title, starts_at, all_day, source, time_zone, created_at, updated_at')
     .order('starts_at'),
   supabase
     .from('social_posts')

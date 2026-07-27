@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { addDays, subDays, format, isToday } from 'date-fns'
 import { ChevronLeft, ChevronRight, ChevronDown, CalendarDays, Settings2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatInZone } from '@/lib/zoned-time'
 import { TimeGrid } from './TimeGrid'
 import type { CalendarEvent, Calendar } from '@/types/database'
 
@@ -30,7 +31,11 @@ export function RightPanel({
   const [calendarsOpen, setCalendarsOpen] = useState(false)
 
   const dateKey = format(date, 'yyyy-MM-dd')
-  const dayEvents = events.filter((e) => format(new Date(e.starts_at), 'yyyy-MM-dd') === dateKey)
+  // In the event's own zone, so the panel agrees with the grid beside it about
+  // which day a row belongs to.
+  const dayEvents = events.filter(
+    (e) => formatInZone(e.starts_at, e.time_zone, 'yyyy-MM-dd') === dateKey
+  )
 
   return (
     <div className="flex h-full border-l border-border bg-background">

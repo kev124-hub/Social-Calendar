@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { dayStartInZone, dayEndInZone } from './zoned-time.ts'
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GOOGLE_CALENDAR_BASE = 'https://www.googleapis.com/calendar/v3'
@@ -359,29 +360,65 @@ export async function sweepUnpushedEvents(timeZone: string, timeMin: string, tim
  * which is today's behaviour, whereas a stored 'UTC' would be a lie that
  * renders as a real wall clock and looks deliberate.
  *
- * NOTE: `starts_at` for an all-day event is still `date + 'T00:00:00Z'`, which
- * is UTC midnight and reads as the previous day anywhere west of Greenwich.
- * That is a live bug and it is deliberately NOT fixed here — see step 3 of
- * docs/design/timezones/per-event-timezone-plan.md. It cannot be corrected by
- * storage alone: an all-day event stored at midnight in its own zone still
+ * ## All-day rows: two off-by-one bugs, both fixed here in step 3
+ *
+ * Fixed with the render change rather than before it, because storage alone
+ * could not do it: an all-day event stored at midnight in its own zone still
  * renders a day early on a device in another, so the mapping and the rendering
- * have to change together or the bug simply moves.
+ * had to arrive together or the bug would simply have moved.
+ *
+ * **1. The start was UTC midnight.** `date + 'T00:00:00Z'` read as the previous
+ * day anywhere west of Greenwich — every all-day Google event showed a day early
+ * in the US, and was invisible in Europe, which is likely why it survived. Now
+ * the instant the day *begins in the event's own zone*, which is the convention
+ * the app's own writes and the Google push have always used (`toGoogleEvent`
+ * reads the local date straight back out of it).
+ *
+ * **2. The end was Google's exclusive date, stored as inclusive.** Google's
+ * all-day `end.date` is the day AFTER the last day — the push already knows
+ * this and adds a day — but the pull copied it across and appended 23:59:59.
+ * So a *one-day* event came back spanning three: 24 May began at 02:00 Monaco
+ * (24th) and ended at 01:59 on the 26th. Unlike the first bug this one was
+ * visible in Europe too. Now decremented back to the last inclusive day.
+ *
+ * Both rewrite rows in OUR database only, never in Google, and both values are
+ * re-derived from `start.date` on every sync — so Google stays authoritative and
+ * a wrong result here is recoverable by syncing again.
+ *
+ * When no zone is known at all — no `start.timeZone`, no calendar zone — the
+ * arithmetic falls back to UTC, which reproduces exactly the old `T00:00:00Z`
+ * behaviour. Those rows keep a null `time_zone` and render in the device zone,
+ * so nothing about them changes in either direction.
  */
 export function toAppEventRow(
   e: GoogleEvent,
   dbCalendarId: string,
   calendarZone?: string
 ) {
+  const zone = e.start?.timeZone ?? calendarZone ?? null
+  const allDay = !!e.start?.date
+  // UTC when nothing is known, which reproduces the previous mapping exactly.
+  const dayZone = zone ?? 'UTC'
+
+  // Google's exclusive end back to the last day the event actually covers.
+  // `end.date` is absent on some malformed rows; the start is then the only
+  // honest answer for a single-day event.
+  const lastDay = e.end?.date ? addDays(e.end.date, -1) : (e.start?.date ?? null)
+
   return {
     calendar_id: dbCalendarId,
     external_id: e.id,
     title: e.summary ?? '(No title)',
     description: e.description ?? null,
     location: e.location ?? null,
-    starts_at: e.start?.dateTime ?? (e.start?.date ? e.start.date + 'T00:00:00Z' : null),
-    ends_at: e.end?.dateTime ?? (e.end?.date ? e.end.date + 'T23:59:59Z' : null),
-    all_day: !!e.start?.date,
-    time_zone: e.start?.timeZone ?? calendarZone ?? null,
+    starts_at: allDay
+      ? dayStartInZone(e.start!.date!, dayZone)
+      : (e.start?.dateTime ?? null),
+    ends_at: allDay
+      ? (lastDay ? dayEndInZone(lastDay, dayZone) : null)
+      : (e.end?.dateTime ?? null),
+    all_day: allDay,
+    time_zone: zone,
     source: 'google' as const,
   }
 }

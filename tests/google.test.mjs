@@ -1,6 +1,7 @@
 // Stage 9: proves the Google payload conversion, especially all-day dates.
 import assert from 'node:assert/strict'
 const { toGoogleEvent } = await import('../src/lib/google-calendar.ts')
+const { formatInZone } = await import('../src/lib/zoned-time.ts')
 
 let pass = 0
 const ok = (n) => { pass++; console.log(`  ✓ ${n}`) }
@@ -139,15 +140,62 @@ console.log('\ntoAppEventRow — zone capture from Google:')
   assert.equal(neither.source, 'google')
   assert.equal(neither.title, '(No title)')
   assert.equal(neither.all_day, true)
-  assert.equal(neither.starts_at, '2026-08-01T00:00:00Z')
   assert.equal(withZone.all_day, false)
   assert.equal(withZone.starts_at, '2026-08-01T20:00:00+02:00')
   ok2('the rest of the mapping is unchanged by the extraction')
 
-  // The known live bug, pinned so the fix is deliberate rather than accidental:
-  // all-day still lands on UTC midnight. Fixed in step 3, with the renderer.
-  assert.equal(noZone.starts_at, '2026-08-01T00:00:00Z')
-  ok2('all-day is STILL UTC midnight — the day-early bug is step 3, not this one')
+  // ── Step 3: the two all-day off-by-ones, now fixed ───────────────────
+  // Was '2026-08-01T00:00:00Z' — UTC midnight, which reads as 31 July anywhere
+  // west of Greenwich. Now the instant the day begins in the event's own zone.
+  assert.equal(noZone.starts_at, '2026-07-31T22:00:00.000Z')
+  assert.equal(formatInZone(noZone.starts_at, noZone.time_zone, 'yyyy-MM-dd'), '2026-08-01')
+  for (const device of ['UTC', 'America/Los_Angeles', 'Pacific/Auckland']) {
+    // The point of the fix: the day no longer depends on who is looking.
+    assert.equal(
+      new Intl.DateTimeFormat('en-CA', { timeZone: noZone.time_zone, dateStyle: 'short' })
+        .format(new Date(noZone.starts_at)),
+      '2026-08-01',
+      `all-day start read from ${device}`
+    )
+  }
+  ok2('all-day starts at midnight in its OWN zone -> 1 Aug everywhere, not 31 July in the US')
+
+  // Google's all-day end.date is EXCLUSIVE — 2 Aug for an event on the 1st.
+  // Copied across verbatim it made a one-day event span three.
+  assert.equal(noZone.ends_at, '2026-08-01T21:59:59.000Z')
+  assert.equal(formatInZone(noZone.ends_at, noZone.time_zone, 'yyyy-MM-dd'), '2026-08-01')
+  ok2("Google's exclusive end.date is decremented — a one-day event covers one day")
+
+  // A genuine multi-day span must keep its length.
+  const span = toAppEventRow(
+    { id: 'g4', summary: 'Race weekend', start: { date: '2026-05-22' }, end: { date: '2026-05-25' } },
+    'cal-1', 'Europe/Monaco')
+  assert.equal(formatInZone(span.starts_at, span.time_zone, 'yyyy-MM-dd'), '2026-05-22')
+  assert.equal(formatInZone(span.ends_at, span.time_zone, 'yyyy-MM-dd'), '2026-05-24')
+  ok2('a 22-24 May span still covers exactly those three days')
+
+  // With no zone at all the arithmetic falls back to UTC, which is byte-for-byte
+  // the old mapping — so those rows are untouched in either direction.
+  assert.equal(neither.starts_at, '2026-08-01T00:00:00.000Z')
+  assert.equal(neither.time_zone, null)
+  ok2('no zone anywhere -> UTC midnight exactly as before, and still a null zone')
+
+  // ── The round trip the plan asks for: push -> pull -> unchanged ──────
+  // This was broken before step 3: a single-day all-day event came back
+  // spanning 24-26 May because the exclusive end was never decremented.
+  const ZONE = 'Europe/Monaco'
+  const original = {
+    id: 'rt', title: 'Race day', description: null, location: null,
+    starts_at: '2026-05-23T22:00:00.000Z',   // 24 May 00:00 Monaco
+    ends_at: '2026-05-24T21:59:59.000Z',     // 24 May 23:59:59 Monaco
+    all_day: true, external_id: 'g-rt', source: 'app',
+  }
+  const pushed = toGoogleEvent(original, ZONE)
+  const pulled = toAppEventRow(
+    { id: 'g-rt', summary: original.title, start: pushed.start, end: pushed.end }, 'cal-1', ZONE)
+  assert.equal(pulled.starts_at, original.starts_at, 'round trip moved the start')
+  assert.equal(pulled.ends_at, original.ends_at, 'round trip moved the end')
+  ok2('an all-day event survives push -> pull byte-identically, span included')
 }
 
 console.log(`\n${pass + p2} checks passed.\n`)

@@ -26,6 +26,7 @@ import type { CalendarEvent, Calendar, SocialPost, Idea } from '@/types/database
 import { GLASS, INK, MOTION, canHover, dayTint, platformStyle, TODAY_BORDER } from '@/lib/glass'
 import { derivePublishState } from '@/components/ui/PublishStatusBadge'
 import { eventCoversDay } from '@/lib/calendar-utils'
+import { timeWithZone } from '@/lib/zoned-time'
 
 const MAX_ROWS = 3
 
@@ -93,7 +94,7 @@ export function MonthGrid({
             ...events.filter((e) => eventCoversDay(e, day)).map<Row>((e) => ({
               kind: 'event',
               id: e.id,
-              time: e.all_day ? 'ALL DAY' : format(parseISO(e.starts_at), 'h:mm a'),
+              time: e.all_day ? 'ALL DAY' : timeWithZone(e.starts_at, e.time_zone),
               label: 'EVT',
               title: e.title,
               edge: (e.calendar as Calendar | undefined)?.color ?? '#0b3a50',

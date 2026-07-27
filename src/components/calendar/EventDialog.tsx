@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { createEvent, updateEvent } from '@/lib/events'
-import { toDatetimeLocalInput, toDateInput } from '@/lib/datetime-local'
+import { formatInZone, instantFromLocalInput, dayEndInZone, offsetLabel } from '@/lib/zoned-time'
 import type { CalendarEvent, Calendar } from '@/types/database'
 import { cn } from '@/lib/utils'
 
@@ -33,9 +33,10 @@ const inputClass =
 
 const labelClass = 'text-[13px] font-medium text-[#333] block mb-1.5 tracking-tight'
 
-// See src/lib/datetime-local.ts — these must never be `iso.slice(...)`.
-const toDatetimeLocal = toDatetimeLocalInput
-const toDateLocal = toDateInput
+// This dialog no longer routes through src/lib/datetime-local.ts: every value it
+// shows or reads is now tied to an explicit zone, which those helpers have no
+// parameter for. PostDialog still uses them, and should — `scheduled_at` is an
+// absolute instant by ruling, so its inputs really are device-local.
 
 // The start/end inputs switch between type="date" and type="datetime-local"
 // with the all-day toggle, but the value in state does not follow. A browser
@@ -70,8 +71,24 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
       setTitle(event.title)
       setDescription(event.description ?? '')
       setLocation(event.location ?? '')
-      setStartsAt(event.all_day ? toDateLocal(event.starts_at) : toDatetimeLocal(event.starts_at))
-      setEndsAt(event.ends_at ? (event.all_day ? toDateLocal(event.ends_at) : toDatetimeLocal(event.ends_at)) : '')
+      // Prefilled in the EVENT's zone, and read back in it on save below. The
+      // two must move together: showing 8:00 PM Monaco and then reading it as
+      // 8:00 PM device would write 2:00 AM Monaco — an event moved by opening a
+      // dialog and pressing Save, which is the exact bug this workstream began
+      // with. A NEW event still takes the device's zone below, because that is
+      // genuinely where it is being typed.
+      setStartsAt(
+        event.all_day
+          ? formatInZone(event.starts_at, event.time_zone, 'yyyy-MM-dd')
+          : formatInZone(event.starts_at, event.time_zone, "yyyy-MM-dd'T'HH:mm")
+      )
+      setEndsAt(
+        event.ends_at
+          ? event.all_day
+            ? formatInZone(event.ends_at, event.time_zone, 'yyyy-MM-dd')
+            : formatInZone(event.ends_at, event.time_zone, "yyyy-MM-dd'T'HH:mm")
+          : ''
+      )
       setAllDay(event.all_day)
       setCalendarId(event.calendar_id ?? calendars[0]?.id ?? '')
     } else {
@@ -86,19 +103,49 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
     }
   }, [open, event, defaultDate, calendars])
 
+  // The zone the inputs above are showing, when it differs from the device's.
+  // Built from the stored instant rather than the input string so it stays
+  // correct across a DST boundary, and empty for a new event, which is always
+  // being entered in the device's own zone.
+  const zoneNote = (() => {
+    if (!event?.time_zone || !startsAt) return null
+    const label = offsetLabel(event.starts_at, event.time_zone)
+    if (!label) return null
+    const local = formatInZone(event.starts_at, null, 'h:mm a')
+    return event.all_day
+      ? `Times in ${event.time_zone} (${label})`
+      : `Times in ${event.time_zone} (${label}) · ${local} your time`
+  })()
+
   async function handleSave() {
     setError(null)
     if (!title.trim()) return setError('Give the event a title.')
     if (!startsAt) return setError('Pick a start date.')
 
-    const starts = new Date(allDay ? asDate(startsAt) + 'T00:00:00' : startsAt)
-    if (Number.isNaN(starts.getTime())) return setError('That start date is not valid.')
+    // The zone the inputs are being read in: the event's own when editing one,
+    // the device's for a new event. Null means the device, so a new event
+    // behaves exactly as before.
+    const zone = event?.time_zone ?? null
 
-    let ends: Date | null = null
+    let startsISO: string
+    try {
+      startsISO = allDay
+        ? instantFromLocalInput(asDate(startsAt), zone)
+        : instantFromLocalInput(startsAt, zone)
+    } catch {
+      return setError('That start date is not valid.')
+    }
+
+    let endsISO: string | null = null
     if (endsAt) {
-      ends = new Date(allDay ? asDate(endsAt) + 'T23:59:59' : endsAt)
-      if (Number.isNaN(ends.getTime())) return setError('That end date is not valid.')
-      if (ends < starts) return setError('The end is before the start.')
+      try {
+        endsISO = allDay
+          ? dayEndInZone(asDate(endsAt), zone)
+          : instantFromLocalInput(endsAt, zone)
+      } catch {
+        return setError('That end date is not valid.')
+      }
+      if (endsISO < startsISO) return setError('The end is before the start.')
     }
 
     setSaving(true)
@@ -107,8 +154,8 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
         title: title.trim(),
         description: description || null,
         location: location || null,
-        starts_at: starts.toISOString(),
-        ends_at: ends ? ends.toISOString() : null,
+        starts_at: startsISO,
+        ends_at: endsISO,
         all_day: allDay,
         calendar_id: calendarId || null,
       }
@@ -204,6 +251,16 @@ export function EventDialog({ open, onClose, onSave, onDelete, event, defaultDat
               />
             </div>
           </div>
+
+          {/* Which zone these two inputs are in, shown only when it is not the
+              device's. Without it the fields are actively misleading: a Monaco
+              event on a New York phone reads 8:00 PM with nothing to say that
+              8:00 PM is not the reader's own. Read-only here — step 4 makes the
+              zone editable, and until then a control that set one would let you
+              pick a value with no visible effect. */}
+          {zoneNote && (
+            <p className="text-[12px] text-[#666] tracking-tight -mt-1">{zoneNote}</p>
+          )}
 
           <div>
             <label className={labelClass}>Location</label>
