@@ -1,18 +1,22 @@
 # Per-event timezones — plan
 
-**Status: steps 1–3 shipped; step 4 is next.** Written 27 July 2026.
+**Status: steps 1–4 shipped; step 5 is next.** Written 27 July 2026.
 
-Step 3 is the first one a user can see: events now read in their own zone, with
-a `GMT+2` marker when that differs from the device, and the all-day day-early bug
-is gone.
+Events read in their own zone, with a `GMT+2` marker when that differs from the
+device; the all-day day-early bug is gone; and the zone is now editable. What
+remains is step 5 — sending `timeZone` to Google on the push.
+
+**Migration 008 has been applied** (confirmed by Kevin, 27 July). Earlier notes
+here and in commit messages said it was hand-applied and unverified; that is no
+longer true and the caveat is withdrawn.
 
 | Step | State |
 |---|---|
-| 1. Migration + capture on every write path | shipped (#39) — migration 008 is **hand-applied, not run against production** |
+| 1. Migration + capture on every write path | shipped (#39); migration 008 applied |
 | 2. The render helper, `src/lib/zoned-time.ts` | shipped |
 | 3. Convert the render sites, view by view | shipped — the first visible change; fixed **two** all-day off-by-ones, see below |
-| 4. The zone picker in `EventDialog` | **next** — the dialog already shows which zone it is editing in, read-only |
-| 5. Send `timeZone` on the push | not started |
+| 4. The zone picker in `EventDialog` | shipped — searchable, recents first; see the ruling on what a zone change does |
+| 5. Send `timeZone` on the push | **next** |
 
 Ruled on by Kevin, 27 July — **do not re-litigate these:**
 
@@ -421,6 +425,44 @@ where an event can move.
    views honour a zone, a control that sets one would let you pick a value with
    no visible effect — and an event whose stored zone and displayed time
    disagree is precisely the bug class this whole exercise exists to remove.
+
+   **Shipped.** `ZonePicker`, above `location` as planned. The usability question
+   this plan deferred — "~600 IANA zones and this is used on a phone" — is
+   answered as suggested: a search field with recently-used zones kept at the top,
+   never a 418-row `<select>`. Each row shows the event's own time in that zone
+   alongside the offset, because an offset alone still leaves you doing
+   arithmetic. Ordering and matching live in `src/lib/zone-list.ts` so they are
+   testable rather than a screenshot.
+
+   **Ruled while building, and not covered by this plan: changing an event's zone
+   keeps the entered wall clock and moves the instant.** Typing 8pm in New York
+   for a Monaco dinner and then setting the zone to Monaco gives 8pm *Monaco* —
+   the motivating case in the section above. The alternative, holding the instant
+   and letting the display change, would turn that same act into "you typed 8pm,
+   we stored 2am", which is what option 2 was rejected for doing.
+
+   **`zoneTouched` is the safety mechanism**, and it is the no-backfill ruling
+   made mechanical: an untouched dialog sends no `time_zone` at all, so a null row
+   stays null and looking at an event cannot pin it to wherever it was read. A
+   zone written by accident would be the original drift bug with a quieter
+   symptom.
+
+   Two things found while implementing, both fixed:
+
+   - **`Intl.supportedValuesOf('timeZone')` contains no `UTC`** — 418 canonical
+     names and no `Etc/*` entry of any kind — while `Intl.DateTimeFormat` accepts
+     `UTC` happily. Left alone, the one zone a technical user reaches for first
+     would have been unpickable. It is added by hand.
+   - **Google returns legacy aliases** (`US/Eastern`, `Asia/Calcutta`) that every
+     engine resolves but the canonical list omits. Validity is therefore tested by
+     what `Intl` accepts, not by membership of that list, or an event's own zone
+     would have had no row to check.
+
+   **The `/home` confirmation line needed no change.** This plan says an
+   AI-parsed event takes the device zone and the confirmation should name it "when
+   it differs from the device" — which cannot happen: `createEvent` stamps the
+   device zone, so for an AI-parsed event the two are the same by construction.
+   Recorded rather than silently skipped.
 5. **The push side** — send `timeZone` with `dateTime` so an app-created event
    reaches Google as a wall clock rather than inheriting the target calendar's
    default zone.
