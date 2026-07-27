@@ -42,6 +42,64 @@ at `event.time_zone`. The work unique to option 3 — a migration, capturing the
 zone on write, a fallback for existing rows — is small beside the render-path
 change they share. Option 2 buys very little and costs nearly the same.
 
+## Guarantee: this work never modifies an event in Google
+
+Asked for as an absolute, so it is stated as one, with the verification behind
+it rather than an assurance.
+
+**There are exactly three code paths in this app that mutate a Google
+calendar.** (`getValidAccessToken`'s `POST` is the OAuth token endpoint, not a
+calendar write.)
+
+| Path | Method | Guard |
+|---|---|---|
+| `pushEventToGoogle` | `PATCH` / `POST` | `if (event.source !== 'app') throw` — google-sourced rows are refused outright |
+| `sweepUnpushedEvents` | via the above | doubly guarded: the query filters `.eq('source','app')`, and the push would throw anyway |
+| `deleteEventFromGoogle` | `DELETE` | **none** — see below |
+
+Every step in this plan is therefore safe by construction:
+
+- Steps 1–4 write only to **our** database. The pull is a read from Google.
+- Step 5 adds a `timeZone` field to the body `pushEventToGoogle` already sends,
+  on a path that already refuses anything not `source: 'app'`. It cannot reach a
+  Google-sourced event, because that function returns before building a body.
+
+**Constraint on step 5, binding:** the `source !== 'app'` guard is what makes
+this true. It must not be relaxed, and no new push path may be added that skips
+it. If step 5 ever needs to touch a google-sourced row, that is a different
+change requiring its own ruling.
+
+### What *will* change, so it is not mistaken for a regression
+
+- **How the app displays Google events.** That is the entire feature. A Monaco
+  event currently reads in your device's zone; afterwards it reads in its own,
+  with a `GMT+2` marker when they differ. The event in Google is untouched — the
+  app simply stops mis-stating it.
+- **The stored `starts_at` of all-day Google rows**, when step 3 replaces the
+  `T00:00:00Z` mapping. This rewrites a row in **our** database, not in Google,
+  and the value is re-derived from Google's `start.date` on every sync — so
+  Google stays authoritative and nothing is destroyed. A wrong result here is
+  recoverable by syncing again.
+
+### One pre-existing path this plan does not touch
+
+`deleteEventFromGoogle` has **no source guard**. It takes an `external_id`, and
+`deleteEvent()` reads that off whatever row is being deleted — including a
+google-sourced one. So **deleting a synced event inside this app also deletes it
+from Google.**
+
+That is existing behaviour, it predates this work, and it is arguably correct:
+deleting an event in any Google client deletes it everywhere. But it is the one
+way this app can destroy something in a Google calendar, and it deserves to be
+written down rather than discovered.
+
+Worth knowing alongside it: making `/home`'s event rows open the edit dialog
+(#38) put a Delete button on a second surface. The behaviour is unchanged; the
+number of places it can be reached from went from one to two.
+
+If that should be guarded — deletions staying local for synced events — it is a
+small change, and a separate decision from this plan.
+
 ## The model
 
 Store both:
