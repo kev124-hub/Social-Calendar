@@ -56,6 +56,78 @@ still answers "is this before that". Nothing about the existing queries changes.
 This is what Google does, which is why Google events do not wander and app
 events do.
 
+## Choosing the zone — it is picked, not only detected
+
+**Raised by Kevin, and a hole in the first draft of this plan.** That draft
+captured `Intl.DateTimeFormat().resolvedOptions().timeZone` on write and stopped
+there. Detection is a sound *default* and a bad *only option*: it is correct
+when you create an event where you are standing, and wrong for the case that
+matters most here — sitting in New York in October arranging a Monaco dinner for
+May. The device says `America/New_York`. The event is in `Europe/Monaco`.
+
+So the zone is an editable field, defaulted rather than derived:
+
+- **`EventDialog` gets a zone control**, next to the date and time inputs and
+  above `location`. Defaults to the device zone for a new event; shows the
+  event's own zone when editing.
+- **A null zone displays as "device zone"** and is only written when the field
+  is actually touched — so existing rows stay null per the ruling above, and
+  opening a dialog to look at something does not silently stamp a zone on it.
+  This matters: the drift bug that started all of this was caused by a dialog
+  writing something nobody typed.
+- **AI-parsed events take the device zone**, and the `/home` confirmation line
+  names it when it differs from the device — the same line that already names
+  the destination calendar. The model is *not* asked to infer a zone from the
+  text. It already proved it will guess a weekday wrong and move an event a day;
+  handing it "Monaco → Europe/Monaco" invites the same failure in a field where
+  the error is silent.
+
+**Store IANA names (`Europe/Monaco`), never fixed offsets.** An offset is not a
+zone: New York is GMT-5 in January and GMT-4 in July. Storing `GMT-4` would be
+correct until the clocks changed and then quietly wrong for half the year.
+
+Picker usability is a real question — there are ~600 IANA zones and this is used
+on a phone. Suggested: a short list of recently-used zones plus a search field,
+not a 600-row `<select>`. Worth deciding when we get to it rather than now.
+
+`location` stays free text for humans. Deriving a zone from it would need
+geocoding and a network dependency, and would be wrong for "the Hotel de Paris"
+as often as it was right.
+
+## Showing the zone
+
+**Raised by Kevin: will events show which zone they are in?**
+
+Yes, but **only when it differs from the device's current zone.** Marking every
+event when almost all of them are local is noise, and noise is how a genuinely
+important marker gets ignored. When they differ, the difference is the whole
+point.
+
+- **Compact rows** (month chip, `/home` upcoming, list view): append a short
+  offset — `8:00 PM GMT+2`. Unambiguous without knowing that CEST is a thing.
+- **Detail surfaces** (day view, the dialog): show both readings, because when
+  they differ the second one is the question you actually have — `8:00 PM GMT+2
+  · 2:00 PM your time`.
+
+**Compute the offset from the event's own instant, not from today.** The offset
+for a zone is a function of the date: an event in New York reads GMT-5 in
+January and GMT-4 in July. Formatting "now" and reusing it would be right for
+about half the year, which is the most annoying kind of wrong.
+
+`Intl.DateTimeFormat` does all of this natively via `timeZoneName: 'shortOffset'`
+— no library, and it accounts for DST on the formatted date.
+
+## A note on all-day events
+
+An all-day event is arguably a *date*, not an instant, and the tidiest model
+would store it in a `date` column with no zone at all — which is what Google
+does. This plan keeps it as `timestamptz` + zone to avoid a second column type
+and a second migration in the same change.
+
+The consequence: an all-day event still has a zone, used only to decide which
+local day it falls on. That is enough to fix the bug below, and the date-column
+question is a reasonable follow-up rather than a blocker.
+
 ---
 
 ## A live bug this fixes on the way
@@ -161,17 +233,26 @@ Each step ships and is verifiable on its own. No step leaves the app in a state
 where an event can move.
 
 1. **Migration + capture, no behaviour change.** Add `time_zone`, populate it on
-   every write, keep rendering exactly as now. Completely inert — the column is
-   written and ignored. Verifiable by inspecting rows.
+   every write from the device zone, keep rendering exactly as now. Completely
+   inert — the column is written and ignored. Verifiable by inspecting rows.
 2. **A single render helper**, used nowhere yet: `formatInZone(iso, zone, fmt)`
-   falling back to the device zone when `zone` is null. Unit-tested hard, under
-   several `TZ` values, before anything depends on it.
+   falling back to the device zone when `zone` is null, plus `offsetLabel(iso,
+   zone)` for the `GMT+2` marker. Unit-tested hard, under several `TZ` values,
+   before anything depends on it.
 3. **Convert the render sites, one view at a time** — day, then list, then
    month, then week, then `/home`, then the dialog. Bucketing sites (above) get
    converted with their view, never separately, or an event renders one day and
-   files under another.
-4. **Google sync both directions** — send `timeZone` on push, keep it on pull,
+   files under another. The zone marker goes in with each view, since it is the
+   same call site and splitting it would mean touching every row twice.
+4. **The zone picker in `EventDialog`.** Deliberately after step 3: until the
+   views honour a zone, a control that sets one would let you pick a value with
+   no visible effect — and an event whose stored zone and displayed time
+   disagree is precisely the bug class this whole exercise exists to remove.
+5. **Google sync both directions** — send `timeZone` on push, keep it on pull,
    and fix the all-day `T00:00:00Z` mapping.
+
+Steps 1 and 2 are safe in any order and change nothing observable. The first
+step a user can see is 3.
 
 ## Testing
 
@@ -186,6 +267,11 @@ run under a non-UTC `TZ`. Add to it —
   device zones must produce the same wall clock**, which is the whole point and
   is exactly what no current test asserts
 - Google round-trip: push → pull → the wall clock is unchanged
+- the offset label is computed from the **event's** date, so the same New York
+  event reads GMT-5 in January and GMT-4 in July — a label formatted from "now"
+  passes in one season and fails in the other
+- the marker appears only when the zones differ, and disappears when the device
+  moves into the event's zone
 
 Every one of these is invisible at UTC. See `tests/README.md`.
 
