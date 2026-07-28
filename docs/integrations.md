@@ -53,7 +53,23 @@ TRIPIT_API_SECRET=
 
 ### Notes
 - TripIt's API returns trips as structured data — map to `calendar_events` with source='tripit'
-- Sync on login + manual refresh button in settings
+- **Google → app (pull):** on app open and on return to the tab, throttled to 5
+  minutes and shared across views via `localStorage`, plus a manual button in
+  Settings that bypasses the throttle. See `src/lib/use-focus-sync.ts`.
+  - Deliberately not a background cron: the pull upserts on `external_id` and
+    overwrites the mapped fields, so a local edit to a Google-sourced event is
+    reverted by the next pull. On focus that is at least attributable; in the
+    background an edit would vanish minutes later with nothing to connect it to.
+  - `syncGoogleCalendar` takes a 2-minute lease in `app_credentials` so two
+    devices syncing at once cannot both push the same unpushed event and create a
+    duplicate in Google. It fails **open** — a duplicate is recoverable, a
+    calendar that silently stops syncing is not.
+- **App → Google (push):** immediate, on every write, via the choke point in
+  `src/lib/events.ts`. A failed push leaves `external_id` null and is retried by
+  `sweepUnpushedEvents` on the next sync.
+  - Only `source: 'app'` rows are ever pushed. That guard is what makes "this
+    never modifies an event you created in Google" true, and `tests/google.test.mjs`
+    carries a structural tripwire over it.
 
 ---
 

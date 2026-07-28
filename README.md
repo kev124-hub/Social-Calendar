@@ -33,8 +33,16 @@ the whole thing far simpler than a multi-tenant product would be.
 ### Calendar
 Week, month, day and list views over `calendar_events`, with drag-and-drop
 rescheduling. Two-way **Google Calendar sync** (OAuth; multiple calendars
-selectable in Settings). Scheduled posts appear on the calendar alongside events,
-so content and life are in one place.
+selectable in Settings): writes here reach Google immediately, and Google's
+changes are pulled when you open the app or return to the tab, throttled to five
+minutes — plus a manual Sync button in Settings. Scheduled posts appear on the
+calendar alongside events, so content and life are in one place.
+
+**Events carry their own timezone.** An event created as 8pm in Monaco still reads
+8pm in Monaco from a phone in New York, with a `GMT+2` marker when the two differ.
+`calendar_events.time_zone` holds the IANA zone and every render and bucketing site
+reads it alongside the instant; a null falls back to the device zone. See
+`docs/design/timezones/per-event-timezone-plan.md`.
 
 **AI event entry** — type or paste a description ("dinner with the Ferrari people
 Thursday 8pm at Cipriani") and Claude parses it into a structured event via
@@ -403,6 +411,7 @@ Supabase SQL editor — there is no migration runner.
 | `005_publishing.sql` | Publishing fields on `social_posts` |
 | `006_publish_worker.sql` | Worker bookkeeping + `app_credentials` |
 | `007_notify_to_post.sql` | `notified_at` + notify queue index |
+| `008_event_timezone.sql` | `calendar_events.time_zone` (nullable IANA zone) |
 
 > **After applying any migration, run this in the SQL editor:**
 > ```sql

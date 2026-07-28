@@ -8,8 +8,15 @@
 
 ## ⚠️ Corrections to this file — read before building
 
-`handoff-riviera-glass-2026-07-26-consolidated.md` governs current state and is
-the file to read alongside this one. The items below were written before later
+`HANDOFF.md` § CURRENT STATE governs current state and is the file to read
+alongside this one. (It used to point at
+`handoff-riviera-glass-2026-07-26-consolidated.md`, deleted 28 July once its live
+content — the ReadyReel gate and defects — was folded into HANDOFF.md. It is in
+git history.)
+
+**Phases A and B are shipped.** Only Phase C (ReadyReel) is left, and HANDOFF.md
+carries its current status, including a 28 July thumbnail investigation and the
+fact that the gate is sidesteppable. The items below were written before later
 rulings landed, or were contradicted by building Phase A. They are **corrected
 in place**; the ones marked **load-bearing** are those that will cost you real
 work. (Deliberately unnumbered as a group — an earlier "three things" lead-in
