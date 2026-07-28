@@ -185,28 +185,46 @@ riviera-glass idiom.
   understates — see the comment there.
 - The 24h window on failed posts, and `/home`'s 12s abort not being applied to
   `CalendarView`/`PipelineBoard` — flagged repeatedly, never ruled on.
-- **TripIt-fed events render a `GMT+0` marker — worth investigating.** Seen on
-  `/home` 28 July: "Check-in: TWA Hotel · 12:00 PM GMT+0" and "DL5316 RIC to JFK ·
-  3:42 PM GMT+0", both from the TripIt calendar, while Google-native events on the
-  same list carry no marker. So those rows' `time_zone` resolves to UTC while the
-  device is not UTC, and the marker is doing its job correctly.
-  **The question is whether UTC is the truth or a placeholder.** A flight out of
-  Richmond wants a Richmond wall clock; `3:42 PM GMT+0` is neither the device
-  reading nor the airport's. Two possibilities, and they need different fixes:
-  1. **The feed's instants are right** and the events genuinely carry UTC. Then the
-     display is honest but unhelpful, and the fix is presentational — for a foreign
-     zone on a compact row, showing the device reading may serve better than the
-     event's own.
-  2. **TripIt wrote a floating local wall clock and labelled it UTC.** Then the
-     stored instant is wrong by the offset, which also mis-orders "next up" and the
-     week strip. That is a data problem in the pull, not a rendering one.
-  **How to tell:** open one of those events in Google Calendar and compare its time
-  and zone against TripIt. Before per-event timezones these rendered in the device
-  zone, so this is a visible change in behaviour for TripIt rows specifically —
-  which makes it the most likely place for the timezone work to have made something
-  worse rather than better. Not yet diagnosed; not blocking.
-- **B7's Supabase inactivity question resolves ~1 August 2026.** Before then,
-  silence proves nothing and nothing should be built. See § Stage B7.
+- **TripIt-fed events rendered a `GMT+0` wall clock. FIXED 28 July.** A subscribed
+  feed defaults to UTC, so every flight arrived labelled UTC and we rendered the
+  UTC wall clock: `1:04 AM GMT+0` where Google shows `9:04pm`. `toAppEventRow` now
+  treats a UTC zone on a **timed** event as a placeholder and drops it, so the row
+  reads in the device zone — byte-for-byte what Google displays. All-day rows
+  **keep** UTC, because there the zone only decides which local day the stored
+  midnight falls on; dropping it would revive the day-early bug step 3 fixed.
+  Existing rows repair themselves on the next sync, since the pull upserts on
+  `external_id`.
+
+  **What this does not do, deliberately.** It does not show the true local time at
+  the far end of a journey. Google does not either — it renders a 9:00 AM Dublin
+  arrival as `4:00am` Eastern, and TripIt's real times (`9:04 PM EDT` /
+  `9:00 AM IST`) exist only as **prose in the event description**, which is not a
+  field anything can read. Matching Google is the goal; beating it would need the
+  venue zone derived from an airport code, which is a different project.
+
+  **The structural gap, recorded rather than fixed:** `calendar_events` holds ONE
+  zone, and a flight has two. `end.timeZone` is sent by Google and discarded by
+  the pull, and every render of `ends_at` uses the *start's* zone. The per-event
+  timezone plan modelled one zone per event by design — it was written around
+  "dinner at 8, wherever I am" — so this is a gap in the plan rather than a defect
+  in its implementation. Fixing it means a migration for `end_time_zone`, capture,
+  render, push, and a ruling on which end decides the day a range files under.
+
+  **Kevin's stance, 28 July:** he will use the calendar knowing timezones are still
+  imperfect, cross-checking against **TripIt and Flighty**, and will report
+  concrete problems as they appear. So treat further timezone work as *reactive*
+  — do not pre-emptively build the two-zone model without a real case from him.
+
+- **The TWA Hotel check-in instant does not match Google, and is unexplained.** We
+  stored `12:00Z` (8:00 am Eastern); Google shows 1:00 pm Eastern (`17:00Z`). Five
+  hours apart, so it is not the UTC-placeholder issue wearing a different hat, and
+  the fix above does not touch it. Likely TripIt publishing a nominal noon for a
+  hotel check-in while the native record says otherwise — note Google also shows a
+  "check-out" at 7–8pm, which is not a real checkout time either. Diagnose with:
+  `select title, starts_at, time_zone, source, external_id, calendar_id from
+  calendar_events where title ilike '%TWA%' order by starts_at;` — two rows means
+  duplicate records from two calendars; one row at `12:00Z` means the feed says so.
+  Left alone until it bothers anyone.
 
 ### Verification you cannot do in this container — plan around it
 - **Touch.** CDP touch events reach the page but do not drive Chromium's
