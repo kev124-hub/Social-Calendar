@@ -101,28 +101,45 @@ the token crosses the 10-days-remaining threshold. It fails non-fatally by desig
 and a missing `META_APP_ID`/`META_APP_SECRET` triggers a daily warning email, so
 the worst case is a manual rotation. **Do not describe it as tested.**
 
-### The only unbuilt planned feature: ReadyReel
+### Stage numbering — check it before acting on a number
+
+The riviera-glass stage table lived in a handoff deleted on 28 July, so the numbers
+now have no home but this line. **Stage 5 = ReadyReel** (the revolving reels display,
+in `/home`). **Stage 6 = the Today pane** (right panel restyle). Stages 7–9 are
+superseded or done.
+
+Kevin refers to the reels as "stage 6", which produced one brief for the wrong
+feature on 28 July. **If a stage number is used, confirm which feature is meant.**
+
+### The only unbuilt planned feature: ReadyReel (Stage 5)
 
 Phase C of `docs/design/home/riviera-glass-home-plan.md`. Phases A and B shipped.
 Kevin's gate, from 25 July: *"super useful, but only if the thumbnails show."*
 
-**Thumbnail investigation, 28 July — encouraging but not conclusive:**
+**RESOLVED 28 July — the thumbnails show, so Kevin's gate is met.** Dropbox
+returned a real frame for the 84 MB `Need a minute.mp4` — a beach/pool still, not a
+grey placeholder — rendered and confirmed visually by Kevin. **Stage 5 is
+unblocked.** The detail behind it:
 - The Ready-to-Post folder holds **exactly one file**, `Need a minute.mp4`, 84 MB.
   The **n=1 state is still today's reality**, which is what the sparse-first v2
   design was reworked for.
 - Dropbox **did** return a 640×480 thumbnail JPEG URL for that 84 MB video.
-- **But that is not yet proof for this app.** It came through a user-account MCP
-  connector and Dropbox's *preview* service — not the app's scoped-app credentials
-  calling `/2/files/get_thumbnail_v2`, which is the specific unknown. The image
-  itself could not be inspected: this container's egress proxy blocks
-  `dropboxusercontent.com` (and the Vercel preview URL) with a 403.
+- **One thing is still untested for this app specifically.** The frame came through
+  a user-account MCP connector and Dropbox's *preview* service, not the app's
+  scoped-app credentials calling `/2/files/get_thumbnail_v2`. That a real thumbnail
+  exists server-side for this file is now certain; that the app's own auth path
+  reaches it is very likely but unproven. The `<video>` fallback below removes the
+  risk either way.
 - **`src/lib/dropbox.ts` has no thumbnail call at all** — only `listReadyFolder`
   and `getTemporaryLink`. Building this means adding one regardless.
 - **The gate is sidesteppable.** A muted
   `<video preload="metadata" src={temporaryLink}#t=0.1>` face shows the first
   frame with no thumbnail API involved, and `getTemporaryLink()` already exists.
-  At n=1 that is trivially sufficient. Treat "blocked" as applying to the
-  thumbnail-API approach, not to the feature.
+  At n=1 that is trivially sufficient. So even the remaining unknown is not a
+  blocker — it is a choice between two working approaches.
+
+**A task brief exists: `handoff-stage5-readyreel-2026-07-28.md`.** This is the
+feature Kevin wants built next. Delete the brief when it ships.
 
 Three known defects to fix when it is built, all diagnosed in advance:
 1. **The cylinder radius is wrong.** Fixed at 104px; the needed radius is
@@ -134,7 +151,14 @@ Three known defects to fix when it is built, all diagnosed in advance:
 `@keyframes glass-float` is **already in `globals.css`** (line 251). The 25 July
 handoff told you to add it; that is done.
 
-### Stage 6 "Today pane" — resolved by action, 28 July
+### Stage 6 "Today pane" — resolved by action, 28 July; brief written
+
+**A task brief exists: `handoff-stage6-today-pane-2026-07-28.md`.** It is scoped to
+Stage 6 alone and is **to be deleted when Stage 6 ships** — it is not a second
+state document. It carries two things that would otherwise be lost: that README §4
+describes the *rejected* replace design, and that "fits without scrolling"
+conflicts with keeping the TimeGrid.
+
 It sat blocked on Kevin (merge vs replace vs defer) from 26 July. His request to
 make the right panel show a chosen day settled it as **merge**: the panel keeps
 its Calendars toggles and TimeGrid, and now follows whichever day is selected in
@@ -153,9 +177,34 @@ riviera-glass idiom.
 - **A local edit to a Google-sourced event is reverted by the next pull.** The
   upsert overwrites the mapped fields. This is why sync is on focus rather than a
   background cron — an edit vanishing while you watch is at least attributable.
-- The upcoming-events list caps at 5 with **no `+n more`**, unlike NeedsAttention.
+- ~~The upcoming-events list caps at 5 with no `+n more`.~~ **Wrong — it has one.**
+  `EventsPanel.tsx:254` renders `+{extra} more →` (`MAX_ROWS = 5`), confirmed on
+  screen showing "+34 MORE". This item was carried forward from an older handoff
+  without checking the code; corrected 28 July. A real nuance survives: the count
+  is computed off a capped `allUpcoming`, so beyond ~40 upcoming events the "+n"
+  understates — see the comment there.
 - The 24h window on failed posts, and `/home`'s 12s abort not being applied to
   `CalendarView`/`PipelineBoard` — flagged repeatedly, never ruled on.
+- **TripIt-fed events render a `GMT+0` marker — worth investigating.** Seen on
+  `/home` 28 July: "Check-in: TWA Hotel · 12:00 PM GMT+0" and "DL5316 RIC to JFK ·
+  3:42 PM GMT+0", both from the TripIt calendar, while Google-native events on the
+  same list carry no marker. So those rows' `time_zone` resolves to UTC while the
+  device is not UTC, and the marker is doing its job correctly.
+  **The question is whether UTC is the truth or a placeholder.** A flight out of
+  Richmond wants a Richmond wall clock; `3:42 PM GMT+0` is neither the device
+  reading nor the airport's. Two possibilities, and they need different fixes:
+  1. **The feed's instants are right** and the events genuinely carry UTC. Then the
+     display is honest but unhelpful, and the fix is presentational — for a foreign
+     zone on a compact row, showing the device reading may serve better than the
+     event's own.
+  2. **TripIt wrote a floating local wall clock and labelled it UTC.** Then the
+     stored instant is wrong by the offset, which also mis-orders "next up" and the
+     week strip. That is a data problem in the pull, not a rendering one.
+  **How to tell:** open one of those events in Google Calendar and compare its time
+  and zone against TripIt. Before per-event timezones these rendered in the device
+  zone, so this is a visible change in behaviour for TripIt rows specifically —
+  which makes it the most likely place for the timezone work to have made something
+  worse rather than better. Not yet diagnosed; not blocking.
 - **B7's Supabase inactivity question resolves ~1 August 2026.** Before then,
   silence proves nothing and nothing should be built. See § Stage B7.
 
