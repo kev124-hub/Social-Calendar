@@ -174,6 +174,26 @@ riviera-glass idiom.
   zone. Tidier; deliberately deferred to avoid a second migration mid-workstream.
 - **An app-created event edited *in Google* does not come back.** The app owns what
   it created; full bidirectional conflict resolution was never attempted.
+- **Deleting an event in Google now deletes it here. FIXED 28 July.** The pull
+  upserted and only upserted, so a Google-side deletion left its row in the app
+  permanently — Kevin hit this the same day. After each calendar's pages are
+  fetched, the sync now compares the ids Google returned against the
+  google-sourced rows it holds for that calendar inside the queried window, and
+  removes the difference. `staleEventIds` is pure and tested, because it is the
+  only part of the sync that destroys data.
+  - `showDeleted=true` is deliberately **not** the mechanism: with
+    `singleEvents=true`, Google's list endpoint does not reliably return
+    standalone deleted events, and the documented route for deletions is
+    incremental sync with a `syncToken` — a token per calendar plus 410 handling.
+    Comparing what came back needs neither and is exact for the window fetched.
+  - **Guards:** it runs only after every page succeeded (the loop throws
+    otherwise, so a partial fetch can never read as "Google deleted everything");
+    it is scoped to `source = 'google'`, that one calendar, and the queried
+    window; and a row without an `external_id` is never touched.
+  - **Outside the 30/90-day window nothing is reconciled**, so deleting a
+    far-future event does not propagate until the window reaches it.
+  - Deletion is now symmetric in both directions — note that deleting in the app
+    still deletes from Google, via the unguarded `deleteEventFromGoogle` above.
 - **A local edit to a Google-sourced event is reverted by the next pull.** The
   upsert overwrites the mapped fields. This is why sync is on focus rather than a
   background cron — an edit vanishing while you watch is at least attributable.

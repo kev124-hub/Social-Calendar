@@ -455,4 +455,47 @@ console.log('\nthe sync lease:')
   ok2('an unparseable timestamp is treated as no lease, not as one held forever')
 }
 
+
+// ── Deletions in Google must reach the app ──────────────────────────────
+// The pull upserts and only upserts, so deleting an event in Google left its row
+// here forever — Kevin hit this on 28 July. `staleEventIds` is the diff that
+// decides what to remove, kept pure because it is the only part of the sync that
+// destroys data.
+console.log('\nreconciling deletions:')
+{
+  const { staleEventIds } = await import('../src/lib/google-calendar.ts')
+  const row = (id, ext) => ({ id, external_id: ext })
+
+  // The plain case: Google returned two of the three we hold.
+  assert.deepEqual(
+    staleEventIds([row('a', 'g1'), row('b', 'g2'), row('c', 'g3')], new Set(['g1', 'g3'])),
+    ['b']
+  )
+  ok2('a row Google no longer returns is marked for deletion')
+
+  assert.deepEqual(staleEventIds([row('a', 'g1')], new Set(['g1'])), [])
+  ok2('a row Google still returns is left alone')
+
+  // A row with no external_id is not Google's to delete, whatever the set says.
+  assert.deepEqual(staleEventIds([row('a', null), row('b', 'g2')], new Set([])), ['b'])
+  ok2('a row without an external_id is never touched — it did not come from Google')
+
+  // Everything deleted in Google: the honest answer is everything, and the
+  // caller's guard is that this only runs after every page fetch SUCCEEDED.
+  assert.deepEqual(staleEventIds([row('a', 'g1'), row('b', 'g2')], new Set([])), ['a', 'b'])
+  ok2('an empty seen-set removes them all, which is only safe because a failed fetch throws before this')
+
+  assert.deepEqual(staleEventIds([], new Set(['g1'])), [])
+  ok2('nothing cached, nothing to remove')
+
+  // The set is built from ALL pages. A one-page seen-set against two pages of
+  // cached rows is exactly how a paging bug would become data loss.
+  const twoPages = new Set(['g1', 'g2', 'g3', 'g4'])
+  assert.deepEqual(
+    staleEventIds([row('a', 'g1'), row('b', 'g4'), row('c', 'gone')], twoPages),
+    ['c']
+  )
+  ok2('ids from every page are honoured, so paging cannot silently delete a later page')
+}
+
 console.log(`\n${pass + p2} checks passed.\n`)

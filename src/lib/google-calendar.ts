@@ -439,6 +439,42 @@ const UTC_ALIASES = new Set([
   'etc/gmt+0', 'etc/gmt-0', 'etc/gmt0', 'gmt+0', 'gmt-0', 'gmt0',
 ])
 
+/**
+ * Local rows Google no longer has — the ones a deletion in Google left behind.
+ *
+ * The pull upserts and only upserts, so until now nothing ever removed a cached
+ * Google event. Deleting one in Google made it vanish from the list we fetch, we
+ * simply stopped updating that row, and it sat in the app forever.
+ *
+ * `showDeleted=true` is NOT the fix. With `singleEvents=true` Google's list
+ * endpoint does not reliably return standalone deleted events — the documented
+ * mechanism for deletions is incremental sync with a `syncToken`, which means
+ * storing a token per calendar and handling its expiry with a 410. Comparing what
+ * came back against what we hold needs neither, and is exact for the window we
+ * actually fetched.
+ *
+ * Kept pure and exported because it decides what to DELETE. The guards are the
+ * whole point:
+ *
+ * - **Only rows with an `external_id`.** A row without one is not Google's.
+ * - **Only ids Google did not return.** `seen` must be every non-cancelled id
+ *   from every page of that calendar, or a paging bug becomes data loss.
+ * - The caller adds the rest — `source = 'google'`, this calendar only, and only
+ *   inside the time window that was actually queried.
+ *
+ * An event rescheduled OUT of the window is correctly removed here: its old
+ * occurrence genuinely no longer exists, and the new one arrives when the window
+ * reaches it.
+ */
+export function staleEventIds(
+  local: { id: string; external_id: string | null }[],
+  seen: Set<string>
+): string[] {
+  return local
+    .filter((row) => row.external_id && !seen.has(row.external_id))
+    .map((row) => row.id)
+}
+
 export function toAppEventRow(
   e: GoogleEvent,
   dbCalendarId: string,
@@ -579,7 +615,7 @@ export async function syncGoogleCalendar(timeZone?: string) {
   // Checked after the connection test so a disconnected account still reports
   // that clearly rather than as a skipped run.
   if (!(await acquireSyncLease(supabase))) {
-    return { synced: 0, pushed: 0, pushFailures: [] as string[], skipped: true }
+    return { synced: 0, removed: 0, pushed: 0, pushFailures: [] as string[], skipped: true }
   }
   // try/finally so a Google or database failure releases the lease rather
   // than making the next attempt look like a skipped run for two minutes.
@@ -598,6 +634,7 @@ export async function syncGoogleCalendar(timeZone?: string) {
     const swept = await sweepUnpushedEvents(zone, timeMin, timeMax)
 
     let totalUpserted = 0
+    let totalRemoved = 0
 
     // Fetched once per sync rather than only when a calendar is missing, because
     // the per-event zone needs it too: an event that carries no `start.timeZone`
@@ -640,10 +677,18 @@ export async function syncGoogleCalendar(timeZone?: string) {
 
       // Fetch events from Google
       let pageToken: string | undefined
+      // Every id this calendar returned, across every page. Built before the
+      // echo filter on purpose: an app-pushed event Google hands back is still
+      // an event Google has, and its absence from this set would be a lie.
+      const seen = new Set<string>()
       do {
         const data = await listGoogleEvents(calendarId, timeMin, timeMax, pageToken)
         const items: GoogleEvent[] = data.items ?? []
         pageToken = data.nextPageToken
+
+        for (const e of items) {
+          if (e.id && e.status !== 'cancelled') seen.add(e.id)
+        }
 
         if (!items.length) break
 
@@ -667,6 +712,42 @@ export async function syncGoogleCalendar(timeZone?: string) {
           totalUpserted += count ?? rows.length
         }
       } while (pageToken)
+
+      // ── Reconcile: delete what Google no longer has ──────────────────
+      // Only reachable once every page above succeeded — the loop throws
+      // otherwise — so a partial fetch can never be read as "Google deleted
+      // everything". Scoped to this calendar, to google-sourced rows, and to the
+      // window actually queried, because that is the only span we have evidence
+      // about.
+      const { data: cached, error: cacheError } = await supabase
+        .from('calendar_events')
+        .select('id, external_id')
+        .eq('source', 'google')
+        .eq('calendar_id', dbCalendarId)
+        .gte('starts_at', timeMin)
+        .lte('starts_at', timeMax)
+
+      if (cacheError) {
+        // Reported, not thrown: failing to tidy up must not cost the import that
+        // just succeeded.
+        console.warn(`Could not read cached events to reconcile: ${cacheError.message}`)
+      } else {
+        const stale = staleEventIds(cached ?? [], seen)
+        // Chunked because a delete filter is a URL, and a long trip can leave
+        // hundreds of stale rows behind at once.
+        for (let i = 0; i < stale.length; i += 200) {
+          const batch = stale.slice(i, i + 200)
+          const { error: deleteError } = await supabase
+            .from('calendar_events')
+            .delete()
+            .in('id', batch)
+          if (deleteError) {
+            console.warn(`Could not remove ${batch.length} deleted events: ${deleteError.message}`)
+            break
+          }
+          totalRemoved += batch.length
+        }
+      }
     }
 
     // Update last synced time. `time_zone` is recorded so a sweep triggered
@@ -677,6 +758,7 @@ export async function syncGoogleCalendar(timeZone?: string) {
 
     return {
       synced: totalUpserted,
+      removed: totalRemoved,
       pushed: swept.pushed,
       pushFailures: swept.failures,
       skipped: false,
