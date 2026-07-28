@@ -71,7 +71,7 @@ calendar write.)
 |---|---|---|
 | `pushEventToGoogle` | `PATCH` / `POST` | `if (event.source !== 'app') throw` — google-sourced rows are refused outright |
 | `sweepUnpushedEvents` | via the above | doubly guarded: the query filters `.eq('source','app')`, and the push would throw anyway |
-| `deleteEventFromGoogle` | `DELETE` | **none** — see below |
+| `deleteEventFromGoogle` | `DELETE` | `deleteEvent()` refuses a non-`'app'` row before calling it — see below |
 
 Every step in this plan is therefore safe by construction:
 
@@ -99,17 +99,24 @@ change requiring its own ruling.
   Google stays authoritative and nothing is destroyed. A wrong result here is
   recoverable by syncing again.
 
-### One pre-existing path this plan does not touch
+### One pre-existing path this plan flagged — since closed
 
-`deleteEventFromGoogle` has **no source guard**. It takes an `external_id`, and
-`deleteEvent()` reads that off whatever row is being deleted — including a
-google-sourced one. So **deleting a synced event inside this app also deletes it
-from Google.**
+**When this plan was written**, `deleteEventFromGoogle` had no source guard: it
+takes an `external_id`, `deleteEvent()` read that off whatever row was being
+deleted including a google-sourced one, and so deleting a synced event inside this
+app also deleted it from Google. That was called out here as the one way this app
+could destroy something in a Google calendar.
 
-That is existing behaviour, it predates this work, and it is arguably correct:
-deleting an event in any Google client deletes it everywhere. But it is the one
-way this app can destroy something in a Google calendar, and it deserves to be
-written down rather than discovered.
+**It has since been guarded, and this section is kept as the record of why.**
+`deleteEvent()` now refuses any row whose `source` is not `'app'` before touching
+anything, and fails closed on an unrecognised source. `EventDialog` shows
+"Synced from Google — delete it there." with no Delete button for such a row.
+
+The reasoning in the code is worth repeating: deleting locally *only* would have
+been worse than either alternative, because the pull upserts on `external_id` and
+the next sync re-imports the row — the event returns by itself, which reads as a
+bug in whichever direction you were not expecting. Refusing is the only outcome
+that is still true five minutes later.
 
 Worth knowing alongside it: making `/home`'s event rows open the edit dialog
 (#38) put a Delete button on a second surface. The behaviour is unchanged; the
