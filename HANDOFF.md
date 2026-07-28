@@ -4,18 +4,10 @@
 the repo's original build commits are from late April 2026; this document and
 its plan are from July 23, 2026, and reflect the repo's state as of that day.)
 
-> **Updated July 25, 2026 — B0 CLOSED, and the built B4 pipeline is VERIFIED IN
-> PRODUCTION at full quality parity.** Workstream A (mobile calendar fixes)
-> shipped and merged (PR #4). The B0 spike ran to completion: **B0(a) PASSES**
-> (the Graph API accepts the ~2K file, audio intact) and **B0(b) PASSES** (served
-> quality reaches full parity with a native upload — asynchronously after
-> publish). A third round then verified the *deployed* pipeline on a real post
-> (`DbON80djKs7`): it served the full 1080p VP9 ladder **~15 minutes** after
-> publish, and its birth-encode bitrates were byte-identical to the B0 API arm —
-> proof the pipeline delivers the original master bytes with no intermediate
-> re-encode. **No fallback transcode was needed and no B4 code changes are
-> required by any of these results.** See § Stage B0 "B0 results" and § Open
-> Questions #1 for the measurements.
+> **Updated July 28, 2026.** The July 23–25 plan (Workstreams A and B) is
+> complete and is preserved below as a historical record — source comments cite
+> it. **For what is true today, read § CURRENT STATE.** Do not read the stage
+> sections as a to-do list; every stage in them is finished.
 
 ## ⚠️ START HERE — Source-of-Truth Protocol (read before anything else)
 
@@ -53,103 +45,156 @@ file. Specifically:
 
 ---
 
-## 📍 CURRENT STATE — read this first (updated July 25, 2026)
+## 📍 CURRENT STATE — read this first (updated July 28, 2026)
 
-**Workstream A: shipped. Workstream B: B0–B4 done and verified in production.
-The auto-publish pipeline is LIVE and running unattended.**
+**The auto-publish pipeline is live and unattended. The per-event timezone
+workstream is complete. Google Calendar sync now runs on app focus, not only on a
+button. One planned feature remains unbuilt: ReadyReel.**
+
+Everything below the § Goal heading is a **historical record** of the July 23–25
+plan (Workstreams A and B) and is kept because source comments cite it — see
+`instagram.ts`, `admin.ts`, `inspirations/route.ts`, `extension-key/route.ts`.
+Read it for rationale, not for current state. This section is current state.
 
 ### What works right now, in production
-- Posts marked `publish_mode='auto'` + `stage='scheduled'` with a due
-  `scheduled_at` are published to Instagram automatically, at original ~2K
-  quality, with no third-party re-encode anywhere in the chain.
-- Two cron-job.org pingers run every 5 minutes, both sending
-  `Authorization: Bearer <CRON_SECRET>`:
-  `/api/cron/send-notifications` (B1) and `/api/cron/publish-posts` (B4).
-- Meta credentials are set in Vercel.
-- The pipeline UI (B6) exposes all of it: per-post auto/notify toggle, publish
-  status badges on every card, failure reasons, IG permalinks, and "Publish now".
-- Notify-mode posts (B5, live since migration 007 on July 25) email Kevin at
-  their scheduled time with the caption, hashtags and a media download link.
-- Migrations 005, 006 and 007 are all applied to prod.
+- **Auto-publish (Instagram).** Posts with `publish_mode='auto'`, `stage='scheduled'`
+  and a due `scheduled_at` publish themselves at original ~2K quality with no
+  intermediate re-encode. Verified end to end in July (evidence table below).
+- **Two cron-job.org pingers, every 5 minutes**, both sending
+  `Authorization: Bearer <CRON_SECRET>`: `/api/cron/publish-posts` and
+  `/api/cron/send-notifications`. **Confirmed healthy 28 July** from the
+  cron-job.org dashboard — consistent 5-minute cadence, all 200 OK.
+  - **`vercel.json` schedules only `send-notifications`, daily.** The real cadence
+    for both is the external pinger, because Vercel Hobby allows only daily crons.
+    Reading `vercel.json` alone will tell you the publish worker never runs. It
+    does. The route header in `publish-posts/route.ts` says so; believe it over
+    the config.
+  - **A green 200 there does not prove publishing works.** That route returns 200
+    even when `result.ok` is false, deliberately, so the pinger's failure alerts
+    stay reserved for unreachability. A dead Instagram token would show 288 green
+    checks a day. The state is in the JSON body.
+- **Notify-mode posts** email at their scheduled time with caption, hashtags and a
+  media link.
+- **Per-event timezones.** `calendar_events.time_zone` is captured on every write
+  path, honoured by every render and bucketing site, editable via a searchable
+  picker, and round-trips through Google. Migration 008 is **applied**.
+- **Google Calendar sync, both directions.** App → Google is immediate on every
+  write. Google → app pulls on app open and on return to the tab, throttled to 5
+  minutes and shared across views, plus the manual button in Settings.
 
-### Acceptance evidence (July 25, 2026)
+### Migrations
+001–008 are all applied. `008_event_timezone.sql` adds the nullable
+`calendar_events.time_zone`; a null means "unknown" and readers fall back to the
+device zone, which is a **permanently supported path**, not a migration window.
+
+### Acceptance evidence (July 25, 2026 — unchanged, still the record)
 | Path | Evidence |
 |---|---|
 | Manual "Publish now" | Post `1bc953a2` → container `18030885791835746` → media `17871012090627085` → https://www.instagram.com/reel/DbON80djKs7/ — 1 attempt, no retries |
-| Automatic cron path | Post `52f959ab` ("I need a Minute") → run 1 `considered:1, created:1` (container `18030889445835746`) → run 2 `published:1`, media `18097399642995606`, https://www.instagram.com/reel/DbOQbNblyM7/ — **entirely unattended, no human step** |
-| Auth + config | Cron returns `{"ok":true,...,"token":{"status":"ok","daysLeft":59}}` — proves CRON_SECRET, all four Meta env vars, and a live `debug_token` round trip |
-| Dropbox picker | Confirmed listing real files in prod; `get_temporary_link` resolves the team-namespace path with **no** `Dropbox-API-Path-Root` header |
-| `app_credentials` | Token persisted with `expires_at` 2026-09-23, matching Meta's debugger exactly |
-| **Served quality** | `DbON80djKs7` DASH manifest at 5 min = 720p H.264 @1.48 Mbps + HE-AAC 118 kbps (birth state, **byte-identical bitrates to the B0 API arm** → the exact master bytes reached Meta, uncorrupted, no intermediate re-encode); at ~15 min = **1080×1920 VP9 @2.27 Mbps + 720×1280 VP9 @1.57 Mbps + HE-AAC** — full parity with native |
+| Automatic cron path | Post `52f959ab` → run 1 `considered:1, created:1` → run 2 `published:1`, https://www.instagram.com/reel/DbOQbNblyM7/ — **entirely unattended** |
+| Auth + config | Cron returned `{"ok":true,...,"token":{"status":"ok","daysLeft":59}}` — proves CRON_SECRET, all four Meta env vars, a live `debug_token` round trip |
+| **Served quality** | `DbON80djKs7` at ~15 min = 1080×1920 VP9 @2.27 Mbps + 720×1280 VP9 @1.57 Mbps + HE-AAC — full parity with a native upload, birth bitrates byte-identical to the B0 API arm |
 
 ### The one path still unproven
 **`fb_exchange_token` token refresh.** It cannot run until ~**13 Sept 2026**, when
-the token crosses the 10-days-remaining threshold. Everything else in B4 has been
-exercised against the live API. It is written to fail non-fatally, and a missing
-`META_APP_ID`/`META_APP_SECRET` now triggers a daily warning email — so the worst
-case is a manual rotation, not a lost post. **Do not describe it as tested.**
+the token crosses the 10-days-remaining threshold. It fails non-fatally by design
+and a missing `META_APP_ID`/`META_APP_SECRET` triggers a daily warning email, so
+the worst case is a manual rotation. **Do not describe it as tested.**
 
-### Immediately outstanding
-1. ~~**Branch cleanup**~~ **Done, and it now takes care of itself (July 25).**
-   **Settings → General → Automatically delete head branches** is enabled and
-   confirmed working — merged branches are removed automatically, so this should
-   not reappear as a task. (If a branch ever does need deleting by hand: this
-   environment's git proxy rejects delete-ref pushes and the GitHub MCP server has
-   no delete-branch tool, so it must be done from the GitHub branches page.)
-2. ~~**Re-measure the test reels' DASH manifests**~~ **Done for `DbON80djKs7`
-   (July 25) — B0's async-promotion finding holds for app-published posts, and the
-   transient window was only ~15 min.** See the Served-quality row above. The
-   automatic-path reel `DbOQbNblyM7` was not separately measured and does not need
-   to be: after candidate selection the two paths run identical code, and the
-   finding now has three independent confirmations. **Standing rule regardless:
-   never archive a post before its encodes settle** — archiving freezes rendition
-   generation.
-3. ~~Delete the leftover test posts.~~ **Done (Kevin, July 25)** — including
-   `04d4cd61-6ce3-4001-af28-47f7a0e7d785` ("Need a Minute").
-4. ~~**Undecided:** whether `/api/cron/publish-posts` should return 503~~
-   **Decided July 25: no — the app emails instead.** See Open Questions #7. There
-   are **no unresolved decisions** left in Workstream B.
-5. ~~**Apply `supabase/migrations/007_notify_to_post.sql`**~~ **Done (Kevin,
-   July 25)**, with `NOTIFY pgrst, 'reload schema';`. **Stage B5 is therefore
-   live**: notify-mode posts that come due now email Kevin within 5 minutes.
-   Not yet observed end-to-end against a real post — the first real reminder is
-   the confirmation. If none arrives when one is due, check
-   `/api/cron/send-notifications` for a `notifyError` in the response body.
+### The only unbuilt planned feature: ReadyReel
 
-### Next work, in order
-**None — every planned stage is complete.** ~~B6~~, ~~B5~~, ~~B7~~ and ~~the
-README~~ all landed on July 25, 2026. Migration 007 is applied, so B5 is live.
+Phase C of `docs/design/home/riviera-glass-home-plan.md`. Phases A and B shipped.
+Kevin's gate, from 25 July: *"super useful, but only if the thumbnails show."*
 
-Two items are on a **clock**, not a task list:
-1. **B5's first real reminder** is its end-to-end confirmation — it has not yet
-   been observed against a genuine post.
-2. **B7 resolves on ~August 1, 2026.** If a Supabase inactivity warning arrives
-   after the pingers have run a full week, the choice is Supabase Pro (~$25/mo) or
-   accepting the risk — see § Stage B7. Before that date, silence proves nothing
-   and nothing should be built.
+**Thumbnail investigation, 28 July — encouraging but not conclusive:**
+- The Ready-to-Post folder holds **exactly one file**, `Need a minute.mp4`, 84 MB.
+  The **n=1 state is still today's reality**, which is what the sparse-first v2
+  design was reworked for.
+- Dropbox **did** return a 640×480 thumbnail JPEG URL for that 84 MB video.
+- **But that is not yet proof for this app.** It came through a user-account MCP
+  connector and Dropbox's *preview* service — not the app's scoped-app credentials
+  calling `/2/files/get_thumbnail_v2`, which is the specific unknown. The image
+  itself could not be inspected: this container's egress proxy blocks
+  `dropboxusercontent.com` (and the Vercel preview URL) with a 403.
+- **`src/lib/dropbox.ts` has no thumbnail call at all** — only `listReadyFolder`
+  and `getTemporaryLink`. Building this means adding one regardless.
+- **The gate is sidesteppable.** A muted
+  `<video preload="metadata" src={temporaryLink}#t=0.1>` face shows the first
+  frame with no thumbnail API involved, and `getTemporaryLink()` already exists.
+  At n=1 that is trivially sufficient. Treat "blocked" as applying to the
+  thumbnail-API approach, not to the feature.
 
-Unstarted ideas that were always out of scope for this plan: web push (VAPID),
-TikTok/LinkedIn auto-posting (needs app review), and the resumable-upload ingest
-variant (§ Stage B0 — not needed; URL ingest reaches quality parity on its own).
+Three known defects to fix when it is built, all diagnosed in advance:
+1. **The cylinder radius is wrong.** Fixed at 104px; the needed radius is
+   `(FACE_W/2)/tan(π/n)`. Faces interpenetrate past ~8 — cap at 8 or compute it.
+2. **The copy promises drag that is not wired.** Only `onPick` exists. Ship
+   click-to-schedule and reword.
+3. **Expect the n=1 state.** Confirmed above.
+
+`@keyframes glass-float` is **already in `globals.css`** (line 251). The 25 July
+handoff told you to add it; that is done.
+
+### Stage 6 "Today pane" — resolved by action, 28 July
+It sat blocked on Kevin (merge vs replace vs defer) from 26 July. His request to
+make the right panel show a chosen day settled it as **merge**: the panel keeps
+its Calendars toggles and TimeGrid, and now follows whichever day is selected in
+the week board. What remains of Stage 6 is only whether to restyle it in the
+riviera-glass idiom.
+
+### Open items, none of them blocking
+- **`deleteEventFromGoogle` has no source guard.** Deleting a synced event in this
+  app deletes it from Google. Pre-existing, arguably correct, and the one way this
+  app can destroy something in a Google calendar. #38 gave it a second surface to
+  be reached from. A decision, not a bug fix.
+- **All-day events could live in a `date` column** rather than `timestamptz` +
+  zone. Tidier; deliberately deferred to avoid a second migration mid-workstream.
+- **An app-created event edited *in Google* does not come back.** The app owns what
+  it created; full bidirectional conflict resolution was never attempted.
+- **A local edit to a Google-sourced event is reverted by the next pull.** The
+  upsert overwrites the mapped fields. This is why sync is on focus rather than a
+  background cron — an edit vanishing while you watch is at least attributable.
+- The upcoming-events list caps at 5 with **no `+n more`**, unlike NeedsAttention.
+- The 24h window on failed posts, and `/home`'s 12s abort not being applied to
+  `CalendarView`/`PipelineBoard` — flagged repeatedly, never ruled on.
+- **B7's Supabase inactivity question resolves ~1 August 2026.** Before then,
+  silence proves nothing and nothing should be built. See § Stage B7.
+
+### Verification you cannot do in this container — plan around it
+- **Touch.** CDP touch events reach the page but do not drive Chromium's
+  compositor. Every phone bug this project has had was found by Kevin, not by a
+  test. Phase A shipped two tap bugs past a clean desktop pass.
+- **Anything requiring the database.** There is no `.env.local` here and no
+  credentials, so the app cannot run against real data.
+- **The Vercel preview URL and `dropboxusercontent.com`** — the egress proxy
+  returns 403 for both.
+- **Consequence, learned the hard way on 28 July:** `tsc --noEmit` clean plus
+  `next build` compiling does **not** cover render-time correctness. A closure
+  reading a `const` declared later in the same component passes both and crashes
+  the page — TypeScript will not claim use-before-declaration through a closure.
+  `/calendar` shipped white because of exactly that. **For UI work the preview is
+  the gate; green local checks are not.**
 
 ### Repo / workflow state
-- Designated branch `claude/b0-b4-quality-verification-66dnqx`. Its PR #14 (B0
-  docs) is merged; B6 went out on the same branch restarted from main. **When
-  starting fresh work after a PR merges, restart the branch from main**
-  (`git fetch origin main && git checkout -B <branch> origin/main`) rather than
-  stacking on merged history.
+- **After a PR merges, prune before you reset:**
+  `git fetch --prune origin && git checkout -B <branch> origin/main`. Without
+  `--prune` the stale `origin/<branch>` ref makes the stop hook report GitHub's
+  merge commit as your own unverified work. See `AGENTS.md`.
 - `node_modules` is NOT present in a fresh container — run `npm ci` first, or the
   `node_modules/next/dist/docs/` guides that `AGENTS.md` mandates won't exist.
-- `npm run build` now succeeds with **no env vars set at all**.
+- `npm run build` succeeds with **no env vars set at all**.
 - `npm run lint` reports **37 pre-existing problems** on `main` (17 errors, 20
-  warnings) in older files. Don't mistake them for regressions; check whether your
-  changed files appear before investigating. (This line read "42 (20 errors, 22
-  warnings)" until 26 July — the fourth document to carry a wrong baseline.
-  Re-verified by running the linter. **Re-run it yourself rather than trusting
-  any document, including this one.**)
-- `handoff-b4-start-2026-07-24.md` was deleted on 26 July — B4 is finished and
-  the file was superseded. It is in git history if you need it. This file is
-  the source of truth.
+  warnings) in older files. Don't mistake them for regressions. This baseline has
+  been carried wrongly by **five** documents now (it read 42 until 26 July, and
+  36 in three commit messages on 27 July). **Re-run the linter yourself rather
+  than trusting any document, including this one.**
+- `npm test` is 208 checks, no framework. **Run it under a non-UTC `TZ`** — several
+  of the bugs it guards are invisible at UTC+0. See `tests/README.md`.
+- Superseded handoffs are **deleted, not archived** — they are in git history.
+  `handoff-b4-start-2026-07-24.md` went on 26 July;
+  `handoff-riviera-glass-2026-07-25.md`,
+  `handoff-riviera-glass-2026-07-26-consolidated.md` and
+  `handoff-2026-07-27-stage9-shipped.md` went on 28 July, with their live content
+  folded into this section. This file is the source of truth.
 
 ---
 
@@ -231,7 +276,11 @@ that can guarantee no-middleman 2K publishing. The Notion migration is ruled out
 
 ---
 
-## Current State of the Repo
+## Current State of the Repo — AS OF JULY 23, 2026 (historical)
+
+> Superseded by § CURRENT STATE at the top of this file. Kept because the
+> "Known problems" and "Mobile bug → root cause map" below record why things
+> were built the way they were. Do not read it as present-day fact.
 
 **Nothing from the plan below is built yet.** The session that wrote this file
 made zero code changes. The repo state (branch history on `main`, 20 commits):

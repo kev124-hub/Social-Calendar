@@ -1,6 +1,27 @@
 # Build Phases
 
-Detailed task breakdown for each phase. Work through phases in order.
+**⚠️ HISTORICAL — this is the original April 2026 task breakdown, kept for the
+record. Every checkbox below is still unticked and most of them are DONE. Do not
+read it as a to-do list.**
+
+For what is actually built and what is left, read **`HANDOFF.md` § CURRENT
+STATE**. Verified against the code on 28 July 2026:
+
+| Area | Reality |
+|---|---|
+| Phase 1 — Core App | **Shipped.** Calendar, pipeline, UGC, ideas, email notifications, deployed. |
+| Inspiration Board | **Shipped** — `src/components/inspiration/`. |
+| Chrome Extension | **Shipped** — `extension/` (MV3, popup, options, background). |
+| Claude Event Entry | **Shipped** — `AIEventInput.tsx` + `/api/claude/parse-event`. |
+| PWA | **Partial.** `public/manifest.json` and `public/sw.js` exist, but the service worker is offline caching only — **no push handler, no VAPID anywhere**. Notifications are email-only. |
+| Social profile OAuth (IG / TikTok / LinkedIn) | **Not built.** No OAuth routes for profile display. Note Instagram *publishing* works via a long-lived token in env, so what is missing here is cosmetic, not functional. |
+| Auto-publish pipeline | **Shipped and live** — not in this document at all; it was Workstream B, see HANDOFF.md. |
+| Per-event timezones | **Shipped** — not in this document either; see `docs/design/timezones/`. |
+| Phase 3 — iCloud CalDAV, analytics, global search | **Not built.** Still genuinely optional. |
+
+The checkboxes are left unticked rather than back-filled: ticking two hundred
+boxes from inference would assert a precision this reconstruction does not have,
+and the table above is the honest summary.
 
 ---
 

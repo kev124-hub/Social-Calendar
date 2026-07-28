@@ -29,6 +29,24 @@ CREATE TABLE calendars (
 ## calendar_events
 App-native events plus cached events from external calendars.
 
+**`starts_at` is an instant; `time_zone` is what makes it a wall clock.**
+`starts_at` is a `timestamptz`, so on its own it renders in whatever zone the
+device is set to — a dinner created as 8pm in Monaco reads as 2pm in New York.
+`time_zone` (IANA name, never a fixed offset — offsets move with DST) records the
+zone the time was *meant* in, and every render and bucketing site reads the pair.
+
+**A null `time_zone` means "unknown" and falls back to the device zone**, which is
+exactly the pre-008 behaviour. That is a **permanently supported path**, not a
+migration window: rows outside the 30/90-day sync window, rows on calendars later
+disconnected, and app rows predating 008 are all null indefinitely.
+
+**All-day rows sit at midnight in their OWN zone** — not UTC midnight, and not
+device-local midnight. `ends_at` is that day's last second in the same zone.
+Google's all-day `end.date` is *exclusive* and is decremented on the way in.
+
+See `docs/design/timezones/per-event-timezone-plan.md` for the full design and the
+three all-day off-by-ones it fixed.
+
 ```sql
 CREATE TABLE calendar_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -40,6 +58,7 @@ CREATE TABLE calendar_events (
   starts_at TIMESTAMPTZ NOT NULL,
   ends_at TIMESTAMPTZ,
   all_day BOOLEAN DEFAULT false,
+  time_zone TEXT,             -- IANA zone the wall clock was meant in (migration 008)
   notification_at TIMESTAMPTZ,
   notification_method TEXT CHECK (notification_method IN ('email', 'push', 'both')),
   source TEXT NOT NULL CHECK (source IN ('app', 'google', 'tripit', 'icloud')),
@@ -81,6 +100,7 @@ CREATE TABLE social_posts (
   publish_locked_at TIMESTAMPTZ,          -- cooperative lease; a stale lease can be stolen
   publish_attempts INTEGER NOT NULL DEFAULT 0,  -- container-creation attempts (max 2: initial + one retry)
   ig_container_created_at TIMESTAMPTZ,    -- container age, for stuck-ingest detection
+  -- Per-event timezones (migration 008_event_timezone.sql)
   -- Notify-to-post (migration 007_notify_to_post.sql)
   notified_at TIMESTAMPTZ,                -- when the "time to post this" email went out; NULL = not yet
   created_at TIMESTAMPTZ DEFAULT now(),
