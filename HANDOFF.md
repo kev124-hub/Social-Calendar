@@ -106,23 +106,27 @@ the worst case is a manual rotation. **Do not describe it as tested.**
 Phase C of `docs/design/home/riviera-glass-home-plan.md`. Phases A and B shipped.
 Kevin's gate, from 25 July: *"super useful, but only if the thumbnails show."*
 
-**Thumbnail investigation, 28 July — encouraging but not conclusive:**
+**RESOLVED 28 July — the thumbnails show, so Kevin's gate is met.** Dropbox
+returned a real frame for the 84 MB `Need a minute.mp4` — a beach/pool still, not a
+grey placeholder — rendered and confirmed visually by Kevin. **Stage 5 is
+unblocked.** The detail behind it:
 - The Ready-to-Post folder holds **exactly one file**, `Need a minute.mp4`, 84 MB.
   The **n=1 state is still today's reality**, which is what the sparse-first v2
   design was reworked for.
 - Dropbox **did** return a 640×480 thumbnail JPEG URL for that 84 MB video.
-- **But that is not yet proof for this app.** It came through a user-account MCP
-  connector and Dropbox's *preview* service — not the app's scoped-app credentials
-  calling `/2/files/get_thumbnail_v2`, which is the specific unknown. The image
-  itself could not be inspected: this container's egress proxy blocks
-  `dropboxusercontent.com` (and the Vercel preview URL) with a 403.
+- **One thing is still untested for this app specifically.** The frame came through
+  a user-account MCP connector and Dropbox's *preview* service, not the app's
+  scoped-app credentials calling `/2/files/get_thumbnail_v2`. That a real thumbnail
+  exists server-side for this file is now certain; that the app's own auth path
+  reaches it is very likely but unproven. The `<video>` fallback below removes the
+  risk either way.
 - **`src/lib/dropbox.ts` has no thumbnail call at all** — only `listReadyFolder`
   and `getTemporaryLink`. Building this means adding one regardless.
 - **The gate is sidesteppable.** A muted
   `<video preload="metadata" src={temporaryLink}#t=0.1>` face shows the first
   frame with no thumbnail API involved, and `getTemporaryLink()` already exists.
-  At n=1 that is trivially sufficient. Treat "blocked" as applying to the
-  thumbnail-API approach, not to the feature.
+  At n=1 that is trivially sufficient. So even the remaining unknown is not a
+  blocker — it is a choice between two working approaches.
 
 Three known defects to fix when it is built, all diagnosed in advance:
 1. **The cylinder radius is wrong.** Fixed at 104px; the needed radius is
@@ -134,7 +138,14 @@ Three known defects to fix when it is built, all diagnosed in advance:
 `@keyframes glass-float` is **already in `globals.css`** (line 251). The 25 July
 handoff told you to add it; that is done.
 
-### Stage 6 "Today pane" — resolved by action, 28 July
+### Stage 6 "Today pane" — resolved by action, 28 July; brief written
+
+**A task brief exists: `handoff-stage6-today-pane-2026-07-28.md`.** It is scoped to
+Stage 6 alone and is **to be deleted when Stage 6 ships** — it is not a second
+state document. It carries two things that would otherwise be lost: that README §4
+describes the *rejected* replace design, and that "fits without scrolling"
+conflicts with keeping the TimeGrid.
+
 It sat blocked on Kevin (merge vs replace vs defer) from 26 July. His request to
 make the right panel show a chosen day settled it as **merge**: the panel keeps
 its Calendars toggles and TimeGrid, and now follows whichever day is selected in
