@@ -49,7 +49,8 @@ file. Specifically:
 
 **The auto-publish pipeline is live and unattended. The per-event timezone
 workstream is complete. Google Calendar sync now runs on app focus, not only on a
-button. One planned feature remains unbuilt: ReadyReel.**
+button. ReadyReel shipped on 28 July — every planned feature of the riviera-glass
+redesign is now built.**
 
 Everything below the § Goal heading is a **historical record** of the July 23–25
 plan (Workstreams A and B) and is kept because source comments cite it — see
@@ -104,52 +105,83 @@ the worst case is a manual rotation. **Do not describe it as tested.**
 ### Stage numbering — check it before acting on a number
 
 The riviera-glass stage table lived in a handoff deleted on 28 July, so the numbers
-now have no home but this line. **Stage 5 = ReadyReel** (the revolving reels display,
-in `/home`). **Stage 6 = the Today pane** (right panel restyle). Stages 7–9 are
-superseded or done.
+now have no home but this line. **Stage 5 = ReadyReel** (the revolving reels display
+in `/home`) — **shipped 28 July**. **Stage 6 = the Today pane** (right panel
+restyle) — the only stage left. Stages 7–9 are superseded or done.
 
 Kevin refers to the reels as "stage 6", which produced one brief for the wrong
 feature on 28 July. **If a stage number is used, confirm which feature is meant.**
 
-### The only unbuilt planned feature: ReadyReel (Stage 5)
+### ReadyReel (Stage 5) — SHIPPED 28 July, PR #51
 
-Phase C of `docs/design/home/riviera-glass-home-plan.md`. Phases A and B shipped.
-Kevin's gate, from 25 July: *"super useful, but only if the thumbnails show."*
+Phase C of `docs/design/home/riviera-glass-home-plan.md`, and the last unbuilt
+piece of the redesign. Kevin's gate from 25 July — *"super useful, but only if
+the thumbnails show"* — is met: they show. `handoff-stage5-readyreel-2026-07-28.md`
+was deleted with this change, as it instructed.
 
-**RESOLVED 28 July — the thumbnails show, so Kevin's gate is met.** Dropbox
-returned a real frame for the 84 MB `Need a minute.mp4` — a beach/pool still, not a
-grey placeholder — rendered and confirmed visually by Kevin. **Stage 5 is
-unblocked.** The detail behind it:
-- The Ready-to-Post folder holds **exactly one file**, `Need a minute.mp4`, 84 MB.
-  The **n=1 state is still today's reality**, which is what the sparse-first v2
-  design was reworked for.
-- Dropbox **did** return a 640×480 thumbnail JPEG URL for that 84 MB video.
-- **One thing is still untested for this app specifically.** The frame came through
-  a user-account MCP connector and Dropbox's *preview* service, not the app's
-  scoped-app credentials calling `/2/files/get_thumbnail_v2`. That a real thumbnail
-  exists server-side for this file is now certain; that the app's own auth path
-  reaches it is very likely but unproven. The `<video>` fallback below removes the
-  risk either way.
-- **`src/lib/dropbox.ts` has no thumbnail call at all** — only `listReadyFolder`
-  and `getTemporaryLink`. Building this means adding one regardless.
-- **The gate is sidesteppable.** A muted
-  `<video preload="metadata" src={temporaryLink}#t=0.1>` face shows the first
-  frame with no thumbnail API involved, and `getTemporaryLink()` already exists.
-  At n=1 that is trivially sufficient. So even the remaining unknown is not a
-  blocker — it is a choice between two working approaches.
+`src/components/home/ReadyReel.tsx` renders it; the arithmetic lives in
+`src/lib/ready-reel.ts` (pure, no React, no `@/` alias — `tests/ready-reel.test.mjs`
+loads it directly) and the hover/spin CSS is in `globals.css`.
 
-**A task brief exists: `handoff-stage5-readyreel-2026-07-28.md`.** This is the
-feature Kevin wants built next. Delete the brief when it ships.
+**The face is the file's own first frame**, played from `getTemporaryLink()` —
+the URL the publish worker already ingests, so it needed no new auth path.
+`/2/files/get_thumbnail_v2` was never called and `src/lib/dropbox.ts` still has
+no thumbnail function. That option remains open as an optimisation if video
+faces ever prove heavy; it was not needed and is not missing.
 
-Three known defects to fix when it is built, all diagnosed in advance:
-1. **The cylinder radius is wrong.** Fixed at 104px; the needed radius is
-   `(FACE_W/2)/tan(π/n)`. Faces interpenetrate past ~8 — cap at 8 or compute it.
-2. **The copy promises drag that is not wired.** Only `onPick` exists. Ship
-   click-to-schedule and reword.
-3. **Expect the n=1 state.** Confirmed above.
+**Four rounds of Kevin's feedback shaped it, and each is worth not re-deriving:**
+1. **Thumbnails show.** Confirmed on the preview.
+2. **"just still images, no revolving."** v2 gave 2–3 files a static fan and only
+   spun at 4+. That is a sparse-first design tuned for a volume this feature does
+   not run at. **The fan is gone; the cylinder starts at two files.** One file
+   keeps the floating hero card — a lone face on a cylinder spends half of every
+   revolution showing its own blank back.
+3. **"the spacing between them is very wide."** The radius floor was 0.8 of a face
+   width, forcing a 260px ring where the geometry asked for 162px. It is 0.3 now
+   and **binds at two faces only**; three and up sit at their exact apothem. It
+   cannot be removed — a two-sided polygon has no apothem, so two cards would sit
+   coplanar.
+4. **"make the cards a little bigger."** Faces are 128/110/88px across the three
+   count bands. The ceiling is the ~415px column, and the widest ring (eight
+   faces) is ~320px.
 
-`@keyframes glass-float` is **already in `globals.css`** (line 251). The 25 July
-handoff told you to add it; that is done.
+**The three pre-diagnosed defects were fixed, not ported.** Radius computed from
+count and face size with faces capped at 8; the drag copy reworded to the click
+that exists; `glass-float` not duplicated.
+
+**Two defects that only a renderer could have found.** The 3D transforms are pure
+CSS, so they can be rendered in headless Chromium with placeholder cards and no
+credentials at all — do this before trusting any change to the geometry.
+- **The far side of the ring drew through the near side, MIRRORED.** The back of
+  a rotated element is visible by default; Kevin would have seen his reels
+  backwards. `backface-visibility: hidden`, prefixed form included for iOS Safari.
+- **Faces were 2:3 against 9:16 content**, so `object-fit: cover` was cropping the
+  top and bottom off every frame — where the hook text sits.
+
+**Load-bearing, do not undo:**
+- **Hover is CSS behind `@media (hover: hover)`, never React state.** `mouseenter`
+  fires on a tap with no `mouseleave`, which would leave the cylinder paused after
+  the first touch. Same trap as `glass.ts`'s `canHover` note from Stage 3. The
+  hover *composes* with each face's ring slot via `--face-transform`; an absolute
+  transform would rip the card out of the ring.
+- **Backface-hiding costs coverage.** A ring whose faces sit more than 180° apart
+  has an angle with nothing on screen and blinks empty. Guarded by a test.
+- **`?links=1` on `/api/dropbox/ready` is opt-in.** Each link is its own Dropbox
+  round trip and the post dialog's picker does not need one. Links are minted for
+  the visible faces only; the count above the reel still reports the whole folder.
+- **Links expire in ~4h**, so /home re-mints on a return to the tab once they are
+  old enough. A stale link paints nothing, with no error anywhere to explain it.
+- **Clicking a face prefills `PostDialog`; it is not a second write path.**
+  `defaultDropboxPath`/`defaultTitle` seed a new post at the `editing` stage, which
+  auto-advances to `scheduled` the moment a date is set.
+- **Row 3 is needs-attention over events on the left, reel on the right.** Kevin's
+  28 July ruling. There is no Row 4, whatever the home plan says.
+
+**Open, none blocking:** no "Open Dropbox folder" button in the empty state (the
+team-namespace URL is unknown — ask Kevin, it is two lines); the 1.35/1 column
+ratio was never revisited after the bulk moved left; and **motion was never
+verified from a build container** — frozen angles cannot settle whether a 22s
+revolution is restful. Touch remains untestable here, as always.
 
 ### Stage 6 "Today pane" — resolved by action, 28 July; brief written
 
@@ -284,7 +316,7 @@ riviera-glass idiom.
   been carried wrongly by **five** documents now (it read 42 until 26 July, and
   36 in three commit messages on 27 July). **Re-run the linter yourself rather
   than trusting any document, including this one.**
-- `npm test` is 208 checks, no framework. **Run it under a non-UTC `TZ`** — several
+- `npm test` is 242 checks, no framework. **Run it under a non-UTC `TZ`** — several
   of the bugs it guards are invisible at UTC+0. See `tests/README.md`.
 - Superseded handoffs are **deleted, not archived** — they are in git history.
   `handoff-b4-start-2026-07-24.md` went on 26 July;
