@@ -69,6 +69,10 @@ export function GoogleCalendarSettings({
       // not got yet — usually zero, because the push happens at write time; a
       // non-zero count means it is catching up after a connection failure.
       const parts = [`✓ Imported ${data.synced} events`]
+      // Deletions in Google used to leave their rows here forever. Reported so a
+      // disappearance is something the app told you about, not something you
+      // notice later and mistrust.
+      if (data.removed) parts.push(`removed ${data.removed} deleted in Google`)
       if (data.pushed) parts.push(`sent ${data.pushed} to Google`)
       if (data.pushFailures?.length) {
         // Show WHY, not just how many. A bare count ("2 could not be sent")

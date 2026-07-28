@@ -102,7 +102,9 @@ export function useFocusSync({
         const data = await res.json().catch(() => null)
         // Only refetch when the sync did something. A no-op sync re-rendering
         // the calendar every five minutes is a flicker with no information in it.
-        if (data && !data.skipped && (data.synced > 0 || data.pushed > 0)) {
+        // `removed` counts too: a sync whose only effect was deleting an event
+        // Google no longer has still changes what is on screen.
+        if (data && !data.skipped && (data.synced > 0 || data.removed > 0 || data.pushed > 0)) {
           onSyncedRef.current?.()
         }
       } catch {
