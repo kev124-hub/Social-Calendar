@@ -101,7 +101,17 @@ the token crosses the 10-days-remaining threshold. It fails non-fatally by desig
 and a missing `META_APP_ID`/`META_APP_SECRET` triggers a daily warning email, so
 the worst case is a manual rotation. **Do not describe it as tested.**
 
-### The only unbuilt planned feature: ReadyReel
+### Stage numbering — check it before acting on a number
+
+The riviera-glass stage table lived in a handoff deleted on 28 July, so the numbers
+now have no home but this line. **Stage 5 = ReadyReel** (the revolving reels display,
+in `/home`). **Stage 6 = the Today pane** (right panel restyle). Stages 7–9 are
+superseded or done.
+
+Kevin refers to the reels as "stage 6", which produced one brief for the wrong
+feature on 28 July. **If a stage number is used, confirm which feature is meant.**
+
+### The only unbuilt planned feature: ReadyReel (Stage 5)
 
 Phase C of `docs/design/home/riviera-glass-home-plan.md`. Phases A and B shipped.
 Kevin's gate, from 25 July: *"super useful, but only if the thumbnails show."*
@@ -127,6 +137,9 @@ unblocked.** The detail behind it:
   frame with no thumbnail API involved, and `getTemporaryLink()` already exists.
   At n=1 that is trivially sufficient. So even the remaining unknown is not a
   blocker — it is a choice between two working approaches.
+
+**A task brief exists: `handoff-stage5-readyreel-2026-07-28.md`.** This is the
+feature Kevin wants built next. Delete the brief when it ships.
 
 Three known defects to fix when it is built, all diagnosed in advance:
 1. **The cylinder radius is wrong.** Fixed at 104px; the needed radius is

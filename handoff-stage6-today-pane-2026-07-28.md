@@ -2,6 +2,13 @@
 
 **Written 28 July 2026.** Scope: **one task only** — Stage 6.
 
+> **⚠️ Kevin's intent was Stage 5, not this.** He asked for "stage 6" believing it
+> meant the revolving reels display; the stage table numbers the reels **Stage 5**
+> and this pane **Stage 6**. A separate brief —
+> `handoff-stage5-readyreel-2026-07-28.md` — covers the reels, and that is the one
+> he wants built. **This file is still valid work, just not the priority.** Do not
+> start it unless Kevin says so.
+>
 > **This is a task brief, not a state document.** `HANDOFF.md` § CURRENT STATE is
 > the source of truth for what this project is and what else is outstanding. Read
 > it first, then this. **Delete this file when Stage 6 ships** — three overlapping
@@ -54,30 +61,29 @@ It also places **ReadyReel inside the Today pane**, which contradicts the `/home
 plan that puts ReadyReel in Row 3 of `/home`. ReadyReel is Stage 5 and **not this
 session's job** — see below.
 
-### ⚠️ UNRESOLVED TENSION — decide this early, and say which way you went
+### SETTLED: scrolling — there was never a tension, and Kevin has ruled anyway
 
-The stage exists to fix a specific complaint (riviera-glass README, problem #3):
+An earlier draft of this brief claimed "fits without scrolling" and "keeps the
+TimeGrid" were incompatible and needed a decision. **That was wrong, and it was
+wrong because the draft trusted a document instead of reading the code.** Kevin
+caught it: *"isn't this what is already there?"* It is. Verified 28 July:
 
-> right-hand Today pane required scrolling
+| element | class | effect |
+|---|---|---|
+| inner column | `overflow-hidden` | the pane itself **cannot** scroll |
+| Calendars, day nav, icon rail | `shrink-0` | fixed |
+| `TimeGrid` root | `overflow-y-auto flex-1` | **the only scrolling region** |
 
-But the merge decision keeps the **TimeGrid**, which is 6am–10pm at
-`HOUR_PX = 56` — about **896px of content**. It cannot fit a viewport-height pane
-without scrolling. **"Fits without scrolling" and "keeps the TimeGrid" are
-incompatible as literally stated.**
+The riviera-glass README's problem #3 ("right-hand Today pane required scrolling")
+describes a state that no longer exists. **There is no layout decision to make
+before styling.**
 
-Nobody has ruled on this. Reasonable resolutions, roughly in order of how well
-they honour both:
-
-1. **Let the TimeGrid be the one scrolling region**, with everything above it
-   (Calendars, day nav) fixed. The pane as a whole does not scroll; the grid does.
-   This is close to today's structure and is probably what "merge" means in
-   practice.
-2. **Collapse the TimeGrid to the day's occupied hours** rather than a fixed
-   6am–10pm window, so a light day genuinely fits.
-3. **Ask Kevin.** He is responsive and has strong opinions about this pane.
-
-Whichever you pick, **write it down in the commit and in `HANDOFF.md`** — this is
-the second decision on this pane that would otherwise be lost.
+**Kevin's ruling, for the one thing that could still be improved:** the TimeGrid's
+window is a fixed `START_HOUR = 6` to `END_HOUR = 22` at `HOUR_PX = 56`, so a day
+with two events still scrolls through sixteen hours of empty grid. If that bothers
+you in practice, **collapsing the grid to the day's occupied hours is an approved
+solution** — his words: "an acceptable solution". Optional, not required, and
+independent of the restyle.
 
 ### Must not be lost in the restyle
 
