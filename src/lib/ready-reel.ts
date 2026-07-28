@@ -70,20 +70,19 @@ export const HERO_FACE = { w: 108, h: Math.round(108 * FACE_ASPECT) }
 /**
  * Floor under the computed radius, as a fraction of the face width.
  *
- * The exact apothem collapses at low face counts — 27% of a face width at
- * three, zero at two — which would stack the faces almost on top of one another
- * and turn the spin into a flicker. A radius *larger* than the apothem never
- * causes interpenetration; only a smaller one does. So clamping upward is safe
- * in a way clamping downward would not be, and this is the value the small
- * counts Kevin actually has end up using.
+ * It exists for **two faces only**. A two-sided polygon has no apothem — the
+ * tangent runs to infinity and the expression collapses to zero — so without a
+ * floor the two cards would sit coplanar, in the same space. Every other count
+ * has a real apothem larger than this and never reaches the floor.
  *
- * Expressed against the face rather than as a flat pixel count because that is
- * the thing it means: a little under one face width of clearance. The reference
- * implementation's fixed 104px is roughly this at eight faces and far too wide
- * at three, where it flung them out to a 208px ring with 144px of empty air in
- * between.
+ * Kevin, 28 July, on the ring at three files: *"the spacing between them is
+ * very wide. Is it possible to make them closer together?"* It was 0.8 here,
+ * which at three faces forced a 260px ring where the geometry asked for 162px —
+ * more than half of that width was invented. The apothem IS the answer: it is
+ * by definition the radius at which n faces close into a cylinder, edge to
+ * edge. Padding above it is what pulled them apart.
  */
-const MIN_RADIUS_RATIO = 0.8
+const MIN_RADIUS_RATIO = 0.3
 
 /**
  * Which arrangement a folder of `count` files renders as.

@@ -74,12 +74,28 @@ const w9 = faceSize(9).w
 assert.ok(cylinderRadius(9, w9) >= w9 / 2 / Math.tan(Math.PI / 9))
 ok('n=9 — the first count the reference radius was too small for — is clear')
 
-// Clamped upward at small n rather than down. Three faces want an apothem of
-// 27% of a face width, which would stack them almost on top of one another and
-// turn the spin into a flicker; two have no apothem at all.
-assert.equal(cylinderRadius(3, 100), 80)
-assert.equal(cylinderRadius(2, 100), 80)
-ok('small counts get the floor instead of collapsing onto the axis')
+// ...and never exceeds it either, from three faces up. Kevin on the 0.8-of-a-
+// face-width floor this used to carry: "the spacing between them is very wide.
+// Is it possible to make them closer together?" It forced a 260px ring at three
+// faces where the geometry asked for 162px. The apothem is by definition the
+// radius at which the faces close edge to edge; anything above it is invented
+// space, so the floor must not bind here.
+for (let n = 3; n <= MAX_FACES; n++) {
+  const w = faceSize(n).w
+  assert.equal(
+    cylinderRadius(n, w),
+    Math.max(w * 0.3, (w + 8) / 2 / Math.tan(Math.PI / n)),
+    `n=${n} is padded above its apothem`
+  )
+  assert.ok(cylinderRadius(n, w) > w * 0.3, `the floor still binds at n=${n}`)
+}
+ok('three faces up sit at their exact apothem, with no invented spacing')
+
+// The floor exists for two faces alone: a two-sided polygon has no apothem —
+// the tangent runs to infinity and the expression collapses to zero — so
+// without it the two cards would sit coplanar, occupying the same space.
+assert.equal(cylinderRadius(2, 100), 30)
+ok('two faces, which have no apothem at all, get the floor')
 
 // ── The other half of defect 1: a bounded number of faces ───────────────
 // Capping the drawn faces keeps the widget a fixed size however full the
