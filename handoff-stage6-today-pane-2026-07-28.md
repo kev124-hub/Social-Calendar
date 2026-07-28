@@ -182,7 +182,7 @@ whole timezone workstream existed to remove.
 
 ## Errors / blockers
 
-**None.** `main` is green at `cddfd69`; 208 checks pass, `tsc` clean, `next build`
+**None.** `main` is green; **219** checks pass, `tsc` clean, `next build`
 compiles, lint at its 37-problem baseline.
 
 ---
@@ -193,7 +193,7 @@ compiles, lint at its 37-problem baseline.
 - **`npm ci` first** — `node_modules` is absent in a fresh container, and
   `AGENTS.md` requires reading `node_modules/next/dist/docs/` before writing code.
   **This is not the Next.js in your training data.**
-- `npm test` → **208 checks**, no framework, `node --experimental-strip-types`.
+- `npm test` → **219 checks**, no framework, `node --experimental-strip-types`.
   **Run it under a non-UTC `TZ`** (`TZ=America/New_York npm test`) — several
   guarded bugs are invisible at UTC+0. See `tests/README.md`.
 - `npm run lint` → **37 problems (17 errors, 20 warnings)** on `main`, all

@@ -106,7 +106,11 @@ Three things in it are load-bearing — read their comments before editing:
 
 Reference implementation: **`docs/design/riviera-glass/code/ReadyReel.tsx`**
 (documentation, not a build input — `docs/**` is excluded from tsconfig and eslint).
-Target path: `src/components/calendar/ReadyReel.tsx`.
+Target path: **`src/components/home/ReadyReel.tsx`.** The 25 July handoff said
+`components/calendar/`, which was written before `/home` existed as its own route
+with its own component folder. It renders in `/home` beside `NeedsAttention`,
+`EventsPanel`, `WeekStrip` and the rest, so it belongs with them. Flagged rather
+than silently changed, because the old path is quoted in more than one document.
 
 **v2 exists because v1 assumed a full folder.** It drives four modes off
 `items.length` (line 92):
@@ -178,7 +182,7 @@ must list exactly two files).
 
 ## Errors / blockers
 
-**None.** `main` is green; 208 checks pass, `tsc` clean, `next build` compiles, lint
+**None.** `main` is green; **219** checks pass, `tsc` clean, `next build` compiles, lint
 at its 37-problem baseline.
 
 ---
@@ -189,7 +193,7 @@ at its 37-problem baseline.
 - **`npm ci` first** — `node_modules` is absent in a fresh container, and
   `AGENTS.md` requires reading `node_modules/next/dist/docs/` before writing code.
   **This is not the Next.js in your training data.**
-- `npm test` → **208 checks**, no framework, `node --experimental-strip-types`.
+- `npm test` → **219 checks**, no framework, `node --experimental-strip-types`.
   **Run under a non-UTC `TZ`** — several guarded bugs are invisible at UTC+0.
 - `npm run lint` → **37 problems (17 errors, 20 warnings)**, all pre-existing.
   **Re-measure rather than trusting this number**; it has been carried wrongly by
