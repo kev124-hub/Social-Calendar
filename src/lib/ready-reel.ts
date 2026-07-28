@@ -21,7 +21,7 @@ export interface ReelItem {
   link?: string | null
 }
 
-export type ReelMode = 'empty' | 'single' | 'fan' | 'cylinder'
+export type ReelMode = 'empty' | 'single' | 'cylinder'
 
 /**
  * Faces the cylinder will draw at most; the rest become a "+n more" count.
@@ -35,8 +35,14 @@ export type ReelMode = 'empty' | 'single' | 'fan' | 'cylinder'
  */
 export const MAX_FACES = 8
 
-export const FACE_W = 84
-export const FACE_H = 132
+/**
+ * Faces are 9:16 — the shape of the thing they show.
+ *
+ * The reference drew them at 84×132, which is 2:3 and squarer than any reel.
+ * `object-fit: cover` then cropped the top and bottom off every frame, which is
+ * the worst place to lose a vertical video: that is where the hook text sits.
+ */
+const FACE_ASPECT = 16 / 9
 
 /**
  * Breathing room between neighbouring faces, in px. Folded into the radius
@@ -45,18 +51,55 @@ export const FACE_H = 132
 const FACE_GAP = 8
 
 /**
- * The radius the reference implementation was drawn at. Kept as a floor: below
- * ~8 faces the exact apothem is *smaller* than this (46px at n=4), which would
- * pull the ring into a tight box and lose the carousel read. A radius larger
- * than the apothem never causes interpenetration — only a smaller one does — so
- * clamping upward is safe in a way clamping downward would not be.
+ * How big each face is drawn, given how many there are.
+ *
+ * Fewer files get bigger cards. The ring's width is roughly `2·radius + faceW`,
+ * so a small count at a fixed face size left the card adrift in a well twice
+ * its width — which is what a three-file reel looked like on 28 July. Growing
+ * the face fills that space instead of padding it, and at Kevin's usual volume
+ * it also means the thumbnails are large enough to tell apart.
  */
-const BASE_RADIUS = 104
+export function faceSize(count: number): { w: number; h: number } {
+  const w = count <= 3 ? 100 : count <= 5 ? 88 : 78
+  return { w, h: Math.round(w * FACE_ASPECT) }
+}
 
+/** The hero card at one file. Bigger again, because it is the only thing there. */
+export const HERO_FACE = { w: 108, h: Math.round(108 * FACE_ASPECT) }
+
+/**
+ * Floor under the computed radius, as a fraction of the face width.
+ *
+ * The exact apothem collapses at low face counts — 27% of a face width at
+ * three, zero at two — which would stack the faces almost on top of one another
+ * and turn the spin into a flicker. A radius *larger* than the apothem never
+ * causes interpenetration; only a smaller one does. So clamping upward is safe
+ * in a way clamping downward would not be, and this is the value the small
+ * counts Kevin actually has end up using.
+ *
+ * Expressed against the face rather than as a flat pixel count because that is
+ * the thing it means: a little under one face width of clearance. The reference
+ * implementation's fixed 104px is roughly this at eight faces and far too wide
+ * at three, where it flung them out to a 208px ring with 144px of empty air in
+ * between.
+ */
+const MIN_RADIUS_RATIO = 0.8
+
+/**
+ * Which arrangement a folder of `count` files renders as.
+ *
+ * The reference v2 gave 2–3 files a static fan and only spun at 4+. Kevin saw
+ * that at three files on 28 July and it read as broken — a revolving display
+ * that does not revolve. The fan is gone: two files up is a cylinder, because
+ * that is the volume this feature actually runs at.
+ *
+ * One file stays the floating hero card. A single face on a cylinder spends
+ * half of every revolution showing its own blank back, which looks like a
+ * missing thumbnail rather than like motion.
+ */
 export function reelMode(count: number): ReelMode {
   if (count <= 0) return 'empty'
   if (count === 1) return 'single'
-  if (count <= 3) return 'fan'
   return 'cylinder'
 }
 
@@ -69,13 +112,15 @@ export function visibleFaceCount(count: number): number {
  * Distance from the cylinder's axis to each face, in px.
  *
  * `(side/2)/tan(π/n)` is the apothem of a regular n-gon — the exact radius at
- * which n faces of that width tile a closed cylinder edge to edge. Fewer than
- * three faces have no cylinder to speak of; the caller is in `fan` or `single`
- * mode there, and the value is unused.
+ * which n faces of that width tile a closed cylinder edge to edge. Two faces
+ * have no polygon to take an apothem of (the tangent runs to infinity and the
+ * expression collapses to zero), so they fall through to the floor, which is
+ * the right answer anyway: two cards on opposite sides of a short axis.
  */
-export function cylinderRadius(faces: number): number {
-  if (faces < 3) return BASE_RADIUS
-  return Math.max(BASE_RADIUS, (FACE_W + FACE_GAP) / 2 / Math.tan(Math.PI / faces))
+export function cylinderRadius(faces: number, faceW: number): number {
+  const floor = faceW * MIN_RADIUS_RATIO
+  if (faces < 3) return floor
+  return Math.max(floor, (faceW + FACE_GAP) / 2 / Math.tan(Math.PI / faces))
 }
 
 /** Degrees between neighbouring faces. */
@@ -136,15 +181,18 @@ export function oldestWaiting(items: ReelItem[], now: number): string | null {
 }
 
 /**
- * The mono strap line above the reel: what is waiting, how much, how long.
+ * The mono strap line under the panel heading: how much is waiting, how long.
+ *
+ * Deliberately does NOT repeat "READY TO POST" — the reference implementation
+ * had no heading above it and led with those words, which under the panel's own
+ * "Ready to post" title read as a stutter. It went out that way on 28 July and
+ * is visible in Kevin's screenshot.
+ *
  * Reports the true file count even when only MAX_FACES of them are drawn.
  */
 export function reelSummary(items: ReelItem[], now: number): string {
-  if (items.length === 0) return 'READY TO POST · EMPTY'
+  if (items.length === 0) return 'EMPTY'
   const waiting = oldestWaiting(items, now)
   const plural = items.length === 1 ? '' : 'S'
-  return (
-    `READY TO POST · ${items.length} EXPORT${plural}` +
-    (waiting ? ` · OLDEST ${waiting.toUpperCase()}` : '')
-  )
+  return `${items.length} EXPORT${plural}` + (waiting ? ` · OLDEST ${waiting.toUpperCase()}` : '')
 }

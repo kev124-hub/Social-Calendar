@@ -4,10 +4,10 @@ import type { CSSProperties } from 'react'
 import { GLASS, INK, MOTION, RADIUS } from '@/lib/glass'
 import { MONO, PANEL } from './glass-home'
 import {
-  FACE_H,
-  FACE_W,
+  HERO_FACE,
   cylinderRadius,
   faceAngle,
+  faceSize,
   formatBytes,
   isVideoName,
   reelMode,
@@ -25,13 +25,19 @@ import {
 // files, and today it holds exactly one. `single` is the mode this ships into,
 // not an edge case.
 //
-//   0   → a stated empty state. A clear queue is signal, not failure.
-//   1   → one hero card, front-facing, slow idle float. No rotation.
-//   2–3 → a static fan; hover brings one card forward.
-//   4+  → the cylinder, MAX_FACES faces at 360/n apart, 22s spin.
+//   0  → a stated empty state. A clear queue is signal, not failure.
+//   1  → one hero card, front-facing, slow idle float. No rotation.
+//   2+ → the cylinder, up to MAX_FACES faces at 360/n apart, 22s spin.
 //
-// Deviations from the reference, both deliberate:
+// Deviations from the reference, all deliberate:
 //
+//   • v2's static fan for 2–3 files is gone. Kevin saw it at three files on
+//     28 July: "thumbnails show, but just still images, no revolving". A
+//     revolving display that does not revolve at the volume it actually runs at
+//     is not a sparse-first design, it is a broken one. The cylinder starts at
+//     two. One file keeps the float — a lone face on a cylinder spends half
+//     each revolution showing its blank back, which reads as a failed thumbnail
+//     rather than as motion.
 //   • The outer surface is the frosted PANEL every other /home block sits on,
 //     not the reference's saturated purple/blue gradient. Beside NeedsAttention
 //     and EventsPanel that gradient read as a different design system. The
@@ -133,7 +139,8 @@ export function ReadyReel({ items, now, loading, failed, onRetry, onPick, classN
   const faces = visibleFaceCount(items.length)
   const shown = items.slice(0, faces)
   const overflow = items.length - shown.length
-  const radius = cylinderRadius(faces)
+  const face = faceSize(faces)
+  const radius = cylinderRadius(faces, face.w)
   const angle = faceAngle(faces)
 
   return (
@@ -148,11 +155,7 @@ export function ReadyReel({ items, now, loading, failed, onRetry, onPick, classN
         {/* Never claim "EMPTY" for a read that failed or has not landed — the
             folder being clear and the folder being unknown are different facts,
             and only one of them is good news. */}
-        {failed
-          ? 'READY TO POST · UNAVAILABLE'
-          : loading
-            ? 'READY TO POST · CHECKING'
-            : reelSummary(items, now.getTime())}
+        {failed ? 'UNAVAILABLE' : loading ? 'CHECKING…' : reelSummary(items, now.getTime())}
       </p>
 
       {failed ? (
@@ -204,8 +207,8 @@ export function ReadyReel({ items, now, loading, failed, onRetry, onPick, classN
           <Face
             item={items[0]}
             style={{
-              width: 108,
-              height: 168,
+              width: HERO_FACE.w,
+              height: HERO_FACE.h,
               flexShrink: 0,
               animation: 'glass-float 6s ease-in-out infinite',
               transform: 'rotateY(-8deg)',
@@ -231,53 +234,19 @@ export function ReadyReel({ items, now, loading, failed, onRetry, onPick, classN
             </span>
           </span>
         </button>
-      ) : mode === 'fan' ? (
-        <div
-          className="mt-3 flex items-center justify-center py-5"
-          style={{ ...WELL, perspective: 900 }}
-        >
-          <div className="flex items-center" style={{ transformStyle: 'preserve-3d' }}>
-            {shown.map((item, i) => {
-              const offset = i - (shown.length - 1) / 2
-              return (
-                <button
-                  key={item.path}
-                  type="button"
-                  onClick={() => onPick(item)}
-                  title={item.name}
-                  className="glass-reel-face block p-0"
-                  style={
-                    {
-                      width: FACE_W,
-                      height: FACE_H,
-                      marginLeft: i === 0 ? 0 : -18,
-                      transition: MOTION.cardHover,
-                      // Read by the CSS rules in globals.css so the resting
-                      // transform can be per-index while the hover state stays
-                      // a single stylesheet rule — an inline `transform` would
-                      // beat any :hover rule that tried to override it.
-                      '--face-transform': `rotateY(${offset * -16}deg)`,
-                      '--face-z': shown.length - i,
-                    } as CSSProperties
-                  }
-                >
-                  <Face item={item} style={{ width: '100%', height: '100%' }} />
-                </button>
-              )
-            })}
-          </div>
-        </div>
       ) : (
         <div
           className="mt-3 flex items-center justify-center py-5"
-          style={{ ...WELL, minHeight: 188, perspective: 620 }}
+          // Tall enough for the largest face the count can produce, so the well
+          // does not resize as the folder fills and empties.
+          style={{ ...WELL, minHeight: face.h + 32, perspective: 620 }}
         >
           <div
             className="glass-reel"
             style={{
               position: 'relative',
-              width: FACE_W,
-              height: FACE_H,
+              width: face.w,
+              height: face.h,
               transformStyle: 'preserve-3d',
               animation: 'glass-reel-spin 22s linear infinite',
             }}
@@ -288,12 +257,18 @@ export function ReadyReel({ items, now, loading, failed, onRetry, onPick, classN
                 type="button"
                 onClick={() => onPick(item)}
                 title={item.name}
-                className="block p-0"
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  transform: `rotateY(${i * angle}deg) translateZ(${radius}px)`,
-                }}
+                className="glass-reel-face block p-0"
+                style={
+                  {
+                    position: 'absolute',
+                    inset: 0,
+                    transition: MOTION.cardHover,
+                    // Read by the CSS rules in globals.css rather than set as an
+                    // inline `transform`, which would make the :hover rule
+                    // unreachable whatever its specificity.
+                    '--face-transform': `rotateY(${i * angle}deg) translateZ(${radius}px)`,
+                  } as CSSProperties
+                }
               >
                 <Face item={item} style={{ width: '100%', height: '100%' }} />
               </button>

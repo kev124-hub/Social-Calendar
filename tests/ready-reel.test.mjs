@@ -11,10 +11,11 @@
 import assert from 'node:assert/strict'
 
 const {
-  FACE_W,
+  HERO_FACE,
   MAX_FACES,
   cylinderRadius,
   faceAngle,
+  faceSize,
   formatBytes,
   isVideoName,
   oldestWaiting,
@@ -36,11 +37,16 @@ const item = (o) => ({ name: 'a.mp4', path: '/a.mp4', size: 0, modified: null, .
 // is today's reality rather than an edge case.
 assert.equal(reelMode(0), 'empty')
 assert.equal(reelMode(1), 'single')
-assert.equal(reelMode(2), 'fan')
-assert.equal(reelMode(3), 'fan')
 assert.equal(reelMode(4), 'cylinder')
 assert.equal(reelMode(40), 'cylinder')
 ok('the file count picks the mode, and n=1 is `single`')
+
+// The regression this guards: v2 gave 2–3 files a static fan and only spun at
+// 4+. Kevin saw that at three files — "thumbnails show, but just still images,
+// no revolving". Two files up is a cylinder now, and it has to stay one.
+assert.equal(reelMode(2), 'cylinder')
+assert.equal(reelMode(3), 'cylinder')
+ok('two and three files revolve — the volume this actually runs at')
 
 // A negative count is not reachable from a length, but `empty` is the only
 // honest answer if it ever were — certainly not `single`, which would index
@@ -53,26 +59,27 @@ ok('a nonsensical count degrades to `empty`, not to `single`')
 // apothem of (FACE_W/2)/tan(π/n), which passes 104 at n≈9 — beyond that the
 // faces cut through one another and the cylinder renders as a knot.
 for (let n = 3; n <= 64; n++) {
-  const apothem = FACE_W / 2 / Math.tan(Math.PI / n)
+  const w = faceSize(n).w
+  const apothem = w / 2 / Math.tan(Math.PI / n)
   assert.ok(
-    cylinderRadius(n) >= apothem,
-    `radius at n=${n} is ${cylinderRadius(n)}, below the ${apothem.toFixed(1)} the faces need`
+    cylinderRadius(n, w) >= apothem,
+    `radius at n=${n} is ${cylinderRadius(n, w)}, below the ${apothem.toFixed(1)} the faces need`
   )
 }
 ok('the radius always clears the apothem, so faces never interpenetrate')
 
-// The failing case, stated on its own so a regression names itself: 9 faces at
-// the reference's fixed 104 would have overlapped.
-assert.ok(FACE_W / 2 / Math.tan(Math.PI / 9) > 104)
-assert.ok(cylinderRadius(9) > 104)
-ok('n=9 — the first count the fixed 104 was too small for — is clear')
+// The failing case, stated on its own so a regression names itself: at nine
+// faces the reference's fixed 104px was already smaller than the apothem.
+const w9 = faceSize(9).w
+assert.ok(cylinderRadius(9, w9) >= w9 / 2 / Math.tan(Math.PI / 9))
+ok('n=9 — the first count the reference radius was too small for — is clear')
 
-// Clamped upward at small n rather than down: 4 faces want an apothem of 46px,
-// which would pull the ring into a tight box and lose the carousel read. A
-// radius larger than the apothem never causes interpenetration.
-assert.equal(cylinderRadius(4), 104)
-assert.equal(cylinderRadius(3), 104)
-ok('small counts keep the reference radius instead of collapsing inward')
+// Clamped upward at small n rather than down. Three faces want an apothem of
+// 27% of a face width, which would stack them almost on top of one another and
+// turn the spin into a flicker; two have no apothem at all.
+assert.equal(cylinderRadius(3, 100), 80)
+assert.equal(cylinderRadius(2, 100), 80)
+ok('small counts get the floor instead of collapsing onto the axis')
 
 // ── The other half of defect 1: a bounded number of faces ───────────────
 // Capping the drawn faces keeps the widget a fixed size however full the
@@ -83,12 +90,43 @@ assert.equal(visibleFaceCount(MAX_FACES + 30), MAX_FACES)
 assert.equal(visibleFaceCount(0), 0)
 ok('the drawn faces are capped at MAX_FACES')
 
+// ── Face size scales down as the folder fills ───────────────────────────
+// The ring is roughly 2·radius + faceW wide. At a fixed face size a small
+// count left the card adrift in a well twice its width; growing the face fills
+// that space rather than padding it.
+assert.ok(faceSize(2).w > faceSize(8).w)
+assert.ok(faceSize(3).w >= faceSize(5).w)
+assert.ok(faceSize(5).w >= faceSize(8).w)
+ok('fewer files get bigger cards')
+
+// 9:16, the shape of the thing being shown. The reference's 84x132 is 2:3, and
+// object-fit: cover cropped the top and bottom off every frame — which is
+// where the hook text sits.
+for (const n of [1, 2, 3, 4, 6, 8]) {
+  const { w, h } = n === 1 ? HERO_FACE : faceSize(n)
+  assert.ok(Math.abs(h / w - 16 / 9) < 0.02, `n=${n} is ${w}x${h}, not 9:16`)
+}
+ok('every face is 9:16, including the single-file hero')
+
 // The faces have to close the ring, whatever the count.
 assert.equal(faceAngle(4) * 4, 360)
 assert.equal(faceAngle(MAX_FACES) * MAX_FACES, 360)
 // Guards a division by zero rather than returning Infinity into a transform.
 assert.equal(faceAngle(0), 360)
 ok('the face angle closes the ring and survives a zero count')
+
+// ── Something is always facing the viewer ───────────────────────────────
+// The faces are backface-hidden, so a card past 90° from the front is drawn as
+// nothing at all — without that the far side of the ring shows through the near
+// side as a MIRRORED thumbnail, which is what Chromium rendered on 28 July.
+// The cost is that a ring whose faces sit more than 180° apart has an angle
+// with nothing on screen, and the widget blinks empty mid-spin. Spacing at or
+// under 180° means the ±90° windows meet, so every count from two up is
+// covered — and this is what a face cap must not be allowed to break.
+for (let n = 2; n <= MAX_FACES; n++) {
+  assert.ok(faceAngle(n) <= 180, `${n} faces sit ${faceAngle(n)}° apart — the ring blinks empty`)
+}
+ok('no face count leaves the ring empty mid-spin')
 
 // ── The count reported is the folder's, not the reel's ──────────────────
 // A folder of 12 draws 8 faces. Reporting "8 exports" would quietly lose four
@@ -123,15 +161,20 @@ assert.equal(oldestWaiting([item(), item()], now), null)
 ok('the oldest file sets the wait, and no timestamps means no claim')
 
 // ── The strap line ──────────────────────────────────────────────────────
-assert.equal(reelSummary([], now), 'READY TO POST · EMPTY')
+assert.equal(reelSummary([], now), 'EMPTY')
 assert.equal(
   reelSummary([item({ modified: new Date(now - 2 * 86_400_000).toISOString() })], now),
-  'READY TO POST · 1 EXPORT · OLDEST 2 DAYS'
+  '1 EXPORT · OLDEST 2 DAYS'
 )
 // Singular at one, and the age clause is dropped rather than left dangling.
-assert.equal(reelSummary([item()], now), 'READY TO POST · 1 EXPORT')
-assert.equal(reelSummary([item(), item()], now), 'READY TO POST · 2 EXPORTS')
+assert.equal(reelSummary([item()], now), '1 EXPORT')
+assert.equal(reelSummary([item(), item()], now), '2 EXPORTS')
 ok('the strap line pluralises and drops the age clause when there is no age')
+
+// It must NOT lead with "READY TO POST" — the panel's own heading says that
+// directly above it, and the reference's wording read as a stutter on screen.
+assert.doesNotMatch(reelSummary(twelve, now), /READY TO POST/)
+ok('the strap line does not repeat the heading above it')
 
 // ── Which element paints the face ───────────────────────────────────────
 // The Ready-to-Post filter admits stills as well as video (MEDIA_EXT in
