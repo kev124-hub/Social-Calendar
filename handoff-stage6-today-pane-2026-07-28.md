@@ -2,12 +2,11 @@
 
 **Written 28 July 2026.** Scope: **one task only** — Stage 6.
 
-> **⚠️ Kevin's intent was Stage 5, not this.** He asked for "stage 6" believing it
+> **⚠️ Stage 5 came first, and it is done.** Kevin asked for "stage 6" believing it
 > meant the revolving reels display; the stage table numbers the reels **Stage 5**
-> and this pane **Stage 6**. A separate brief —
-> `handoff-stage5-readyreel-2026-07-28.md` — covers the reels, and that is the one
-> he wants built. **This file is still valid work, just not the priority.** Do not
-> start it unless Kevin says so.
+> and this pane **Stage 6**. The reels **shipped on 28 July** in PR #51, and their
+> brief was deleted with them. **This pane is now the only stage left**, but it was
+> deprioritised deliberately — do not start it unless Kevin says so.
 >
 > **This is a task brief, not a state document.** `HANDOFF.md` § CURRENT STATE is
 > the source of truth for what this project is and what else is outstanding. Read
@@ -182,7 +181,7 @@ whole timezone workstream existed to remove.
 
 ## Errors / blockers
 
-**None.** `main` is green; **219** checks pass, `tsc` clean, `next build`
+**None.** `main` is green; **242** checks pass, `tsc` clean, `next build`
 compiles, lint at its 37-problem baseline.
 
 ---
@@ -193,7 +192,7 @@ compiles, lint at its 37-problem baseline.
 - **`npm ci` first** — `node_modules` is absent in a fresh container, and
   `AGENTS.md` requires reading `node_modules/next/dist/docs/` before writing code.
   **This is not the Next.js in your training data.**
-- `npm test` → **219 checks**, no framework, `node --experimental-strip-types`.
+- `npm test` → **242 checks**, no framework, `node --experimental-strip-types`.
   **Run it under a non-UTC `TZ`** (`TZ=America/New_York npm test`) — several
   guarded bugs are invisible at UTC+0. See `tests/README.md`.
 - `npm run lint` → **37 problems (17 errors, 20 warnings)** on `main`, all

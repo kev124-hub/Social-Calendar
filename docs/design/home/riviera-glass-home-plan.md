@@ -14,9 +14,11 @@ alongside this one. (It used to point at
 content — the ReadyReel gate and defects — was folded into HANDOFF.md. It is in
 git history.)
 
-**Phases A and B are shipped.** Only Phase C (ReadyReel) is left, and HANDOFF.md
-carries its current status, including a 28 July thumbnail investigation and the
-fact that the gate is sidesteppable. The items below were written before later
+**All three phases are shipped.** Phase C (ReadyReel) merged on 28 July in PR #51;
+HANDOFF.md § CURRENT STATE records what it became, which differs from this plan in
+two ways worth knowing before reading further: the events panel did **not** move to
+a full-width Row 4, and the thumbnail gate was met by playing the file's own first
+frame rather than by any thumbnail API. The items below were written before later
 rulings landed, or were contradicted by building Phase A. They are **corrected
 in place**; the ones marked **load-bearing** are those that will cost you real
 work. (Deliberately unnumbered as a group — an earlier "three things" lead-in
@@ -235,10 +237,12 @@ Ruling 1 is the only publish-health surface in the app:
 - Both empty → single line "All clear — nothing needs attention." 12.5/500
   `INK.tertiary`. **Do not hide the panel** (its absence would be ambiguous).
 
-**Right column:** in Phases A–B, `Upcoming events` lives here (see Row 4).
-In Phase C, ReadyReel takes this slot and Upcoming events moves to full-width
-Row 4 below. Build the blocks as standalone components so the swap is a
-layout-only change.
+**Right column:** in Phases A–B, `Upcoming events` lived here. **Superseded by
+Kevin's 28 July ruling, which is what shipped:** ReadyReel takes this slot and
+`Upcoming events` stacks *underneath* `Needs attention` in the LEFT column. There
+is no Row 4. His reasoning: "At my volume of content its unlikely that the needs
+attention panel is ever going to be very large", so the left column has the room.
+Building the blocks as standalone components is what kept this layout-only.
 
 ### Row 4 (Phase B) — Events: create + see
 
@@ -384,7 +388,7 @@ over its hooks:
 |---|---|---|
 | **A** | **Built and merged (PR #31).** Route + `HomeView`: header + greeting, next-publish hero (with empty state + auto/notify label rule), stat tiles, week strip, needs-attention (incl. problems-only health per Ruling 1). Shipped beyond the spec: hero/tiles/day-chips are links (they looked tappable and were not), and the posts query is bounded by a 12s abort — a failed or hung read renders a stated error with a retry instead of the layout, since zeros plus "All clear" would assert four things we cannot know. | None. One posts query. |
 | **B** | Quick actions (`PostDialog`, `IdeaDialog`), events block (`AIEventInput`, `EventDialog`, upcoming-events list, inline confirmation). **Plus the `src/lib/events.ts` extraction — load-bearing, not tidying: all four app-side write paths route through it or Stage 9 misses one. See Part 2's extraction section for the verified inventory and the grep done-check.** **Re-add the `/home` sidebar nav entry in this commit.** | Calendars + events queries. |
-| **C** | ReadyReel into Row 3 right; upcoming events moves to Row 4 full-width | Stage 5's thumbnail resolution — hard gate. |
+| **C** | **Built and merged (PR #51).** ReadyReel into Row 3 right; upcoming events stacked under needs-attention in the LEFT column, **not** a full-width Row 4 — Kevin ruled that on 28 July. The thumbnail gate was met without a thumbnail API: the face plays the file's own first frame from `getTemporaryLink()`. Four rounds of his feedback reshaped it after the first merge-ready build — see HANDOFF.md. | Dropbox folder listing, with temporary links opt-in per caller. |
 
 One commit per phase, same convention as Stages 1–7.
 
