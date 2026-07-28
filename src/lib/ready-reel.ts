@@ -51,21 +51,25 @@ const FACE_ASPECT = 16 / 9
 const FACE_GAP = 8
 
 /**
- * How big each face is drawn, given how many there are.
+ * How big each face is drawn, given how many there are. Also the size of the
+ * single-file hero card, which is `faceSize(1)` — deliberately the same value,
+ * so the panel does not change height between one file and three.
  *
- * Fewer files get bigger cards. The ring's width is roughly `2·radius + faceW`,
- * so a small count at a fixed face size left the card adrift in a well twice
- * its width — which is what a three-file reel looked like on 28 July. Growing
- * the face fills that space instead of padding it, and at Kevin's usual volume
- * it also means the thumbnails are large enough to tell apart.
+ * Fewer files get bigger cards. The ring is roughly `2·radius + faceW` wide, so
+ * a small count at a fixed face size left the card adrift in a well two and a
+ * half times its width. Growing the face fills that space rather than padding
+ * the ring, which is the thing Kevin asked to stop doing.
+ *
+ * The upper bound is the well: at eight faces the ring reaches about 320px
+ * inside a column that is roughly 415px wide at the 1180px page maximum. These
+ * three sizes were picked by rendering every count at the real column width,
+ * not by arithmetic — perspective makes the front card larger than its box, so
+ * the fit is not something to reason about from the numbers alone.
  */
 export function faceSize(count: number): { w: number; h: number } {
-  const w = count <= 3 ? 100 : count <= 5 ? 88 : 78
+  const w = count <= 3 ? 128 : count <= 5 ? 110 : 88
   return { w, h: Math.round(w * FACE_ASPECT) }
 }
-
-/** The hero card at one file. Bigger again, because it is the only thing there. */
-export const HERO_FACE = { w: 108, h: Math.round(108 * FACE_ASPECT) }
 
 /**
  * Floor under the computed radius, as a fraction of the face width.

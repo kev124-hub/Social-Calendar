@@ -4,7 +4,6 @@ import type { CSSProperties } from 'react'
 import { GLASS, INK, MOTION, RADIUS } from '@/lib/glass'
 import { MONO, PANEL } from './glass-home'
 import {
-  HERO_FACE,
   cylinderRadius,
   faceAngle,
   faceSize,
@@ -207,8 +206,10 @@ export function ReadyReel({ items, now, loading, failed, onRetry, onPick, classN
           <Face
             item={items[0]}
             style={{
-              width: HERO_FACE.w,
-              height: HERO_FACE.h,
+              // Same size as a small-count cylinder face, so the panel keeps
+              // its height when the folder goes from one file to two.
+              width: face.w,
+              height: face.h,
               flexShrink: 0,
               animation: 'glass-float 6s ease-in-out infinite',
               transform: 'rotateY(-8deg)',

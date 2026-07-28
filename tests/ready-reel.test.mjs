@@ -11,7 +11,6 @@
 import assert from 'node:assert/strict'
 
 const {
-  HERO_FACE,
   MAX_FACES,
   cylinderRadius,
   faceAngle,
@@ -119,10 +118,25 @@ ok('fewer files get bigger cards')
 // object-fit: cover cropped the top and bottom off every frame — which is
 // where the hook text sits.
 for (const n of [1, 2, 3, 4, 6, 8]) {
-  const { w, h } = n === 1 ? HERO_FACE : faceSize(n)
+  const { w, h } = faceSize(n)
   assert.ok(Math.abs(h / w - 16 / 9) < 0.02, `n=${n} is ${w}x${h}, not 9:16`)
 }
 ok('every face is 9:16, including the single-file hero')
+
+// One file and two must draw the same size, or the panel jumps in height the
+// moment a second export lands — the hero card is faceSize(1), not its own
+// constant, so that this cannot drift apart.
+assert.deepEqual(faceSize(1), faceSize(2))
+ok('the hero card and a two-file ring are the same size')
+
+// The ring is roughly 2*radius + faceW. It has to fit the ~415px column at the
+// 1180px page maximum, and the fullest ring is the widest one.
+for (let n = 2; n <= MAX_FACES; n++) {
+  const w = faceSize(n).w
+  const ring = 2 * cylinderRadius(n, w) + w
+  assert.ok(ring <= 340, `${n} faces make a ${ring.toFixed(0)}px ring — too wide for the column`)
+}
+ok('no count makes a ring too wide for the column it sits in')
 
 // The faces have to close the ring, whatever the count.
 assert.equal(faceAngle(4) * 4, 360)
