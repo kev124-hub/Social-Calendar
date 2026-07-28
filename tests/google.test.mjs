@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 const { toGoogleEvent } = await import('../src/lib/google-calendar.ts')
 const { formatInZone } = await import('../src/lib/zoned-time.ts')
+const { isUtcPlaceholder } = await import('../src/lib/google-calendar.ts')
 
 let pass = 0
 const ok = (n) => { pass++; console.log(`  ✓ ${n}`) }
@@ -270,6 +271,83 @@ console.log('\nstep 5 — an app event reaches Google as a wall clock:')
   // fallback — which is what proves the push actually carried it.
   assert.equal(back.time_zone, MONACO)
   ok('a timed event survives push -> pull with its instant AND its zone intact')
+}
+
+// ── A UTC zone from a feed is a placeholder, not an intention ───────────
+// Kevin's TripIt calendar is a subscription whose default zone is UTC, so every
+// flight arrived labelled UTC and rendered as a UTC wall clock: "1:04 AM GMT+0"
+// where Google shows "9:04pm". Faithful to the field and useless to a person.
+console.log('\nUTC from a feed is dropped on timed events:')
+{
+  const NY = 'America/New_York'
+
+  // The real event, with the instants Google reports for it.
+  const flight = toAppEventRow({
+    id: 'b6841', summary: 'B6841 JFK to DUB',
+    start: { dateTime: '2026-08-07T01:04:00Z', timeZone: 'UTC' },   // 9:04pm EDT
+    end: { dateTime: '2026-08-07T08:00:00Z', timeZone: 'UTC' },     // 4:00am EDT
+  }, 'cal-1', 'UTC')
+
+  assert.equal(flight.time_zone, null, 'a UTC zone on a timed event must be dropped')
+  // The instants are untouched — this changes what we claim to know, not the data.
+  assert.equal(flight.starts_at, '2026-08-07T01:04:00Z')
+  assert.equal(flight.ends_at, '2026-08-07T08:00:00Z')
+  // And a null zone reads in the reader's zone, which is what Google shows.
+  assert.equal(formatInZone(flight.starts_at, NY, 'h:mm a'), '9:04 PM')
+  assert.equal(formatInZone(flight.ends_at, NY, 'h:mm a'), '4:00 AM')
+  ok2('the JFK-DUB flight now reads 9:04 PM - 4:00 AM, matching Google exactly')
+
+  // The calendar-level fallback is the door this actually came through: the
+  // event declared no zone of its own, and the subscription's UTC leaked in.
+  const viaCalendar = toAppEventRow({
+    id: 'dl5316', summary: 'DL5316 RIC to JFK',
+    start: { dateTime: '2026-08-06T15:42:00Z' },
+    end: { dateTime: '2026-08-06T17:08:00Z' },
+  }, 'cal-1', 'UTC')
+  assert.equal(viaCalendar.time_zone, null)
+  assert.equal(formatInZone(viaCalendar.starts_at, NY, 'h:mm a'), '11:42 AM')
+  ok2("a UTC calendar default is dropped too — 11:42 AM, not the 3:42 PM GMT+0 we showed")
+
+  // A real zone is untouched. This is the whole per-event feature; it must not
+  // be collateral damage.
+  const dinner = toAppEventRow({
+    id: 'g9', summary: 'Dinner',
+    start: { dateTime: '2026-07-29T18:00:00Z', timeZone: 'Europe/Monaco' },
+    end: { dateTime: '2026-07-29T20:00:00Z', timeZone: 'Europe/Monaco' },
+  }, 'cal-1', 'UTC')
+  assert.equal(dinner.time_zone, 'Europe/Monaco')
+  assert.equal(formatInZone(dinner.starts_at, dinner.time_zone, 'h:mm a'), '8:00 PM')
+  ok2('a genuine zone survives — the Monaco dinner still reads 8:00 PM in Monaco')
+
+  // Every spelling, since feeds are inconsistent about it.
+  for (const alias of ['UTC', 'utc', 'GMT', 'Etc/UTC', 'Etc/GMT', 'Zulu', 'Universal', ' utc ']) {
+    assert.ok(isUtcPlaceholder(alias), `${alias} should count as UTC`)
+  }
+  // Matched by NAME, never by current offset: London is GMT+0 all winter and is
+  // a zone someone can genuinely mean.
+  for (const real of ['Europe/London', 'Europe/Dublin', 'Atlantic/Reykjavik', 'Africa/Abidjan']) {
+    assert.ok(!isUtcPlaceholder(real), `${real} is a real zone, not a placeholder`)
+  }
+  assert.ok(!isUtcPlaceholder(null) && !isUtcPlaceholder(undefined) && !isUtcPlaceholder(''))
+  ok2('8 spellings of UTC are placeholders; Europe/London and friends are not, despite being GMT+0 in winter')
+
+  // ── The regression this deliberately does NOT cause ───────────────────
+  // An all-day row KEEPS its UTC zone. There the zone is not a wall clock, it
+  // only decides which local day the stored midnight falls on. Dropping it would
+  // leave UTC midnight to be read in the device zone — the day-early bug step 3
+  // fixed, back again on the very same feed rows.
+  const allDayFeed = toAppEventRow({
+    id: 'gp', summary: 'Zandvoort Grand Prix',
+    start: { date: '2026-08-06' }, end: { date: '2026-08-07' },
+  }, 'cal-1', 'UTC')
+  assert.equal(allDayFeed.time_zone, 'UTC', 'an all-day row must KEEP its zone')
+  assert.equal(allDayFeed.starts_at, '2026-08-06T00:00:00.000Z')
+  assert.equal(formatInZone(allDayFeed.starts_at, allDayFeed.time_zone, 'yyyy-MM-dd'), '2026-08-06')
+  // Which is the point: it reads 6 August from anywhere, including west of Greenwich.
+  assert.equal(
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC', dateStyle: 'short' })
+      .format(new Date(allDayFeed.starts_at)), '2026-08-06')
+  ok2('an all-day feed row keeps UTC, so it still reads 6 August everywhere rather than the 5th in the US')
 }
 
 // ── The binding constraint on step 5 ────────────────────────────────────

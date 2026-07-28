@@ -418,15 +418,66 @@ export async function sweepUnpushedEvents(timeZone: string, timeMin: string, tim
  * behaviour. Those rows keep a null `time_zone` and render in the device zone,
  * so nothing about them changes in either direction.
  */
+/**
+ * Is this zone just a way of saying "no zone"?
+ *
+ * Every spelling of UTC that IANA and Google between them can produce. Compared
+ * case-insensitively because feeds are inconsistent about it.
+ *
+ * Deliberately NOT a check for "offset zero right now": `Europe/London` is
+ * GMT+0 all winter and is a genuine zone someone can mean. This matches names,
+ * not offsets.
+ */
+export function isUtcPlaceholder(zone: string | null | undefined): boolean {
+  if (!zone) return false
+  return UTC_ALIASES.has(zone.trim().toLowerCase())
+}
+
+const UTC_ALIASES = new Set([
+  'utc', 'gmt', 'z', 'zulu', 'universal', 'greenwich',
+  'etc/utc', 'etc/gmt', 'etc/zulu', 'etc/universal', 'etc/greenwich',
+  'etc/gmt+0', 'etc/gmt-0', 'etc/gmt0', 'gmt+0', 'gmt-0', 'gmt0',
+])
+
 export function toAppEventRow(
   e: GoogleEvent,
   dbCalendarId: string,
   calendarZone?: string
 ) {
-  const zone = e.start?.timeZone ?? calendarZone ?? null
+  const declaredZone = e.start?.timeZone ?? calendarZone ?? null
   const allDay = !!e.start?.date
+
+  // On a TIMED event, a UTC zone is a placeholder rather than an intention, so
+  // it is dropped and the row renders in the reader's zone — which is exactly
+  // what Google Calendar shows.
+  //
+  // Subscribed feeds default to UTC. Kevin's TripIt calendar is one: a JetBlue
+  // flight leaving JFK at 9:04pm arrived here labelled UTC, so we rendered the
+  // UTC wall clock — "1:04 AM GMT+0" against Google's "9:04pm". Faithful to the
+  // field, useless to a person, and worse than the behaviour it replaced.
+  // Nobody schedules a flight meaning Greenwich; the zone is the feed's default
+  // leaking through, not a statement about the event.
+  //
+  // This is the failure the step-1 comment predicted — "a stored 'UTC' would be
+  // a lie that renders as a real wall clock and looks deliberate" — arriving by
+  // a door that comment did not cover: not our own default, but the calendar's,
+  // inherited through the fallback above.
+  //
+  // **All-day events keep it, and that is not an inconsistency.** There the zone
+  // is not a wall clock at all; it only decides which local day the stored
+  // midnight lands on. Dropping it would leave `starts_at` at UTC midnight with
+  // nothing to read it in but the device zone — reviving the day-early bug that
+  // step 3 fixed, on precisely the same feed rows.
+  //
+  // What this does NOT recover: the true local time at the other end of a
+  // journey. Google does not have it either — it renders a 9:00 AM Dublin
+  // arrival as 4:00am Eastern, and TripIt's real times live only in the event
+  // description as prose. Matching Google is the goal here, not beating it.
+  const zone = allDay || !isUtcPlaceholder(declaredZone) ? declaredZone : null
+
+  // Unchanged: the all-day arithmetic still uses whatever Google declared, and
   // UTC when nothing is known, which reproduces the previous mapping exactly.
-  const dayZone = zone ?? 'UTC'
+  const dayZone = declaredZone ?? 'UTC'
 
   // Google's exclusive end back to the last day the event actually covers.
   // `end.date` is absent on some malformed rows; the start is then the only
