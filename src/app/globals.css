@@ -253,6 +253,37 @@
   50%      { transform: rotateY(-8deg) translateY(-7px); }
 }
 
+/* ReadyReel hover, in CSS rather than in React state (Stage 5).
+   `mouseenter` fires on a tap and no `mouseleave` ever follows, so a
+   state-driven hover leaves the cylinder paused and a fan card stuck forward
+   after the first touch — the bug glass.ts's `canHover` comment records from
+   Stage 3. A `(hover: hover)` block cannot match a finger, and unlike a
+   `matchMedia` call it needs no mount effect to know that.
+
+   The fan's resting transform is per-index, so it arrives as a custom property
+   the rule below reads. Setting it inline instead would make the :hover rule
+   unreachable: an inline style beats a stylesheet rule whatever its
+   specificity. Same reason for --face-z. */
+.glass-reel-face {
+  /* Positioned so z-index applies at all — the fan overlaps its cards by 18px
+     and needs them stacked front-to-back, and z-index does nothing to a static
+     element. */
+  position: relative;
+  transform: var(--face-transform);
+  z-index: var(--face-z);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .glass-reel:hover {
+    animation-play-state: paused;
+  }
+
+  .glass-reel-face:hover {
+    transform: translateY(-8px) translateZ(40px) scale(1.05);
+    z-index: 10;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: .001ms !important;

@@ -24,6 +24,15 @@ interface Props {
   post: SocialPost | null
   defaultStage: PostStage
   defaultScheduledAt?: string
+  /**
+   * Seeds a NEW post with a Dropbox export already attached — /home's ReadyReel
+   * opens the dialog this way when a face is clicked, so picking an export and
+   * writing the post are one action rather than two. Ignored when `post` is
+   * set: an existing row's own media always wins.
+   */
+  defaultDropboxPath?: string | null
+  /** Seeds a NEW post's title. Same rule — an existing row keeps its own. */
+  defaultTitle?: string
 }
 
 const PLATFORMS: Platform[] = ['instagram', 'tiktok', 'linkedin']
@@ -92,7 +101,17 @@ function formatSize(bytes: number): string {
   return `${bytes} B`
 }
 
-export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage, defaultScheduledAt }: Props) {
+export function PostDialog({
+  open,
+  onClose,
+  onSave,
+  onDelete,
+  post,
+  defaultStage,
+  defaultScheduledAt,
+  defaultDropboxPath,
+  defaultTitle,
+}: Props) {
   const [platform, setPlatform] = useState<Platform>('instagram')
   const [postType, setPostType] = useState<PostType | ''>('')
   const [stage, setStage] = useState<PostStage>(defaultStage)
@@ -164,19 +183,19 @@ export function PostDialog({ open, onClose, onSave, onDelete, post, defaultStage
       setPlatform('instagram')
       setPostType('')
       setStage(defaultStage)
-      setTitle('')
+      setTitle(defaultTitle ?? '')
       setCaption('')
       setHashtags('')
       setMediaUrl('')
       setScheduledAt(defaultScheduledAt ?? '')
       setNotes('')
-      setMediaDropboxPath(null)
+      setMediaDropboxPath(defaultDropboxPath ?? null)
       setPublishMode('notify') // matches the schema default; auto is opt-in per post
       setPublishRow(null)
       setDropboxOpen(false)
     }
     setPublishNote(null)
-  }, [open, post, defaultStage, defaultScheduledAt])
+  }, [open, post, defaultStage, defaultScheduledAt, defaultDropboxPath, defaultTitle])
 
   // Giving a post a scheduled date advances it to the "scheduled" stage (unless
   // it's already further along), so it shows as scheduled on the calendar and
