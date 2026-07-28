@@ -166,10 +166,16 @@ the week board. What remains of Stage 6 is only whether to restyle it in the
 riviera-glass idiom.
 
 ### Open items, none of them blocking
-- **`deleteEventFromGoogle` has no source guard.** Deleting a synced event in this
-  app deletes it from Google. Pre-existing, arguably correct, and the one way this
-  app can destroy something in a Google calendar. #38 gave it a second surface to
-  be reached from. A decision, not a bug fix.
+- ~~`deleteEventFromGoogle` has no source guard.~~ **Out of date — it is guarded,
+  in two layers.** Corrected 28 July after Kevin made it a merge condition and it
+  was checked rather than assumed. `deleteEvent()` refuses a row whose `source` is
+  not `'app'` *before touching anything*, and fails **closed** — an unrecognised
+  source refuses rather than assuming ownership, so the four-value CHECK covers
+  'tripit' and 'icloud' too, not just Google. Above it, `EventDialog` renders
+  "Synced from Google — delete it there." with **no Delete button** for a
+  non-app row, on both the calendar and `/home` surfaces since they share the
+  dialog. This item described the pre-guard behaviour and was carried forward
+  unverified through several documents.
 - **All-day events could live in a `date` column** rather than `timestamptz` +
   zone. Tidier; deliberately deferred to avoid a second migration mid-workstream.
 - **An app-created event edited *in Google* does not come back.** The app owns what
@@ -192,8 +198,12 @@ riviera-glass idiom.
     window; and a row without an `external_id` is never touched.
   - **Outside the 30/90-day window nothing is reconciled**, so deleting a
     far-future event does not propagate until the window reaches it.
-  - Deletion is now symmetric in both directions — note that deleting in the app
-    still deletes from Google, via the unguarded `deleteEventFromGoogle` above.
+  - **Deletion is deliberately NOT symmetric.** Google → app propagates, as of
+    this change. App → Google does not, for a synced event: `deleteEvent()`
+    refuses it outright. That asymmetry is correct — Google owns those rows, and
+    the alternative of deleting locally only would have the pull re-import the
+    row on the next sync, so the event returns by itself and reads as a bug in
+    whichever direction you were not expecting.
 - **A local edit to a Google-sourced event is reverted by the next pull.** The
   upsert overwrites the mapped fields. This is why sync is on focus rather than a
   background cron — an edit vanishing while you watch is at least attributable.
