@@ -253,6 +253,43 @@
   50%      { transform: rotateY(-8deg) translateY(-7px); }
 }
 
+/* ReadyReel hover, in CSS rather than in React state (Stage 5).
+   `mouseenter` fires on a tap and no `mouseleave` ever follows, so a
+   state-driven hover leaves the cylinder paused and a fan card stuck forward
+   after the first touch — the bug glass.ts's `canHover` comment records from
+   Stage 3. A `(hover: hover)` block cannot match a finger, and unlike a
+   `matchMedia` call it needs no mount effect to know that.
+
+   Each face's resting transform is its own slot on the ring, so it arrives as a
+   custom property the rules below read. Setting it inline instead would make
+   the :hover rule unreachable: an inline style beats a stylesheet rule whatever
+   its specificity. */
+.glass-reel-face {
+  transform: var(--face-transform);
+  /* Without this the far side of the ring shows through the near side as a
+     MIRRORED thumbnail — reversed text, back-to-front footage — because the
+     back of a rotated element is visible by default. Caught by rendering the
+     geometry in Chromium on 28 July; it is unmistakable once seen and easy to
+     miss in a still. The prefixed form is for older iOS Safari, which is
+     exactly the browser this gets looked at on. */
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .glass-reel:hover {
+    animation-play-state: paused;
+  }
+
+  /* Composed with the face's own slot rather than replacing it. A hover that
+     set an absolute transform would rip the card out of the ring and drop it
+     centre-front, which is a different card's position — with the spin paused
+     underneath, the reel would visibly jump. It grows in place instead. */
+  .glass-reel-face:hover {
+    transform: var(--face-transform) scale(1.06);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: .001ms !important;

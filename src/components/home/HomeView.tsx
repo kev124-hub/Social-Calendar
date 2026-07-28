@@ -16,11 +16,21 @@ import { StatTiles } from './StatTiles'
 import { WeekStrip } from './WeekStrip'
 import { NeedsAttention } from './NeedsAttention'
 import { EventsPanel } from './EventsPanel'
+import { ReadyReel } from './ReadyReel'
 import { QuickActions } from './QuickActions'
+import { titleFromFilename, type ReelItem } from '@/lib/ready-reel'
 import { useFocusSync } from '@/lib/use-focus-sync'
 
 const READY_STAGES = new Set(['scheduled', 'published'])
 const QUEUED_STATUSES = new Set(['pending', 'processing'])
+
+// Dropbox temporary links expire in about four hours, and this page is the kind
+// of thing that gets left open all day. A stale link paints nothing, so the reel
+// would sit on placeholder stripes with no error anywhere to explain it. Re-mint
+// when the tab comes back to the front and the links are old enough to be worth
+// worrying about — well inside the four hours, and only on a real return to the
+// page, so it is not a background poll.
+const REEL_LINK_STALE_MS = 3 * 60 * 60 * 1000
 
 function greetingFor(hour: number) {
   if (hour < 12) return 'Good morning'
@@ -60,6 +70,20 @@ export function HomeView() {
   const [eventsFailed, setEventsFailed] = useState(false)
   const [eventsAttempt, setEventsAttempt] = useState(0)
 
+  // Phase C: the ReadyReel's own data — the Dropbox "Ready to Post" folder,
+  // read through our API route because the Dropbox credentials are server-side
+  // only. Its own failure flag for the same reason the events block has one: a
+  // Dropbox outage is no reason to blank the four blocks that never asked it
+  // anything.
+  const [reelItems, setReelItems] = useState<ReelItem[]>([])
+  const [reelLoading, setReelLoading] = useState(true)
+  const [reelFailed, setReelFailed] = useState(false)
+  const [reelAttempt, setReelAttempt] = useState(0)
+  // When the links currently on screen were minted. A ref, not state: nothing
+  // renders from it, and re-rendering the page on a bookkeeping write would be
+  // the only effect of making it state.
+  const reelFetchedAt = useRef(0)
+
   // Dialogs mounted by the quick actions and the events block.
   const [postDialogOpen, setPostDialogOpen] = useState(false)
   const [ideaDialogOpen, setIdeaDialogOpen] = useState(false)
@@ -69,6 +93,11 @@ export function HomeView() {
   // title and fields back to the empty state mid close-animation. Each opener
   // sets it explicitly instead, which is what CalendarView does.
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
+  // Which Dropbox export the post dialog is seeded from, or null for a blank
+  // new post. Same contract as `editingEvent` above and for the same reason:
+  // clearing it on close would swap the dialog's title and attached file back
+  // to empty mid close-animation. Every opener sets it explicitly.
+  const [reelPick, setReelPick] = useState<ReelItem | null>(null)
   const aiInputRef = useRef<AIEventInputHandle>(null)
 
   // `now` is null until after mount, and every clock-dependent string on this
@@ -184,6 +213,60 @@ export function HomeView() {
     }
   }, [eventsAttempt])
 
+  // The Ready-to-Post folder. Same 12s bound as the two Supabase reads above —
+  // this one crosses two networks (us → our route → Dropbox) and mints a
+  // temporary link per file, so it is the read most likely to hang.
+  useEffect(() => {
+    let live = true
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 12_000)
+
+    ;(async () => {
+      try {
+        const res = await fetch('/api/dropbox/ready?links=1', { signal: controller.signal })
+        const data = await res.json()
+        if (!live) return
+        if (!res.ok) throw new Error(data?.error ?? 'Failed to load Dropbox folder')
+        setReelItems(data.files ?? [])
+        setReelFailed(false)
+        reelFetchedAt.current = Date.now()
+      } catch {
+        // Everything here rejects rather than reporting in a body — an aborted
+        // fetch, a network failure and the throw above all land in this catch.
+        if (live) setReelFailed(true)
+      } finally {
+        clearTimeout(timeout)
+        if (live) setReelLoading(false)
+      }
+    })()
+
+    return () => {
+      live = false
+      clearTimeout(timeout)
+    }
+  }, [reelAttempt])
+
+  const refetchReel = useCallback(() => setReelAttempt((a) => a + 1), [])
+
+  // Re-mint expiring links when the tab is brought back to the front. Gated on
+  // age so returning to the page ten times an hour costs one Dropbox call, not
+  // ten. `visibilitychange` rather than `focus`: clicking back into an
+  // already-visible window is not a reason to re-fetch anything.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      // Nothing has succeeded yet, so there is nothing expiring to re-mint. The
+      // zero would otherwise read as "fetched in 1970" and make every return to
+      // a still-loading or failed page fire another request; the panel's own
+      // "Try again" is the retry, and it is the one the user asked for.
+      if (reelFetchedAt.current === 0) return
+      if (Date.now() - reelFetchedAt.current < REEL_LINK_STALE_MS) return
+      setReelAttempt((a) => a + 1)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
+
   const refetchEvents = useCallback(() => setEventsAttempt((a) => a + 1), [])
 
   // Same throttle and the same in-flight guard as the calendar — the interval is
@@ -274,7 +357,12 @@ export function HomeView() {
 
   const quickActions = (
     <QuickActions
-      onNewPost={() => setPostDialogOpen(true)}
+      // Clears the reel's pick explicitly rather than on close — see the
+      // `reelPick` comment. "New post" means a blank one.
+      onNewPost={() => {
+        setReelPick(null)
+        setPostDialogOpen(true)
+      }}
       onCaptureIdea={() => setIdeaDialogOpen(true)}
       onPasteEvent={() => aiInputRef.current?.focus()}
     />
@@ -303,35 +391,68 @@ export function HomeView() {
         <WeekStrip posts={posts} now={now} />
       </div>
 
-      {/* Row 3 — needs-attention + events. Phase A shipped this full-width
-          because the right column had nothing in it yet; Phase B fills it.
-          Both blocks are standalone, so Phase C moving the events panel down
-          to a full-width Row 4 (ReadyReel takes this slot) stays a layout-only
-          change. The single-column case needs the explicit minmax(0,1fr) for
-          the same reason Row 1 does — a bare `grid` sizes an auto column to
-          min-content, and `truncate` reports the whole untruncated string. */}
-      {/* `items-start` rather than the grid default of `stretch`: "All clear —
+      {/* Row 3 — needs-attention over events on the left, ReadyReel on the
+          right. Phase A shipped this row full-width because the right column had
+          nothing in it yet; Phase B put events there; Phase C takes that slot
+          for the reel and stacks events under needs-attention.
+
+          Kevin ruled this on 28 July, and it supersedes the home plan (and this
+          comment's earlier wording), both of which moved events down to a
+          full-width Row 4. There is no Row 4. His reasoning: "At my volume of
+          content its unlikely that the needs attention panel is ever going to be
+          very large" — so the left column has the room, and events does not need
+          a row of its own.
+
+          The single-column case needs the explicit minmax(0,1fr) for the same
+          reason Row 1 does — a bare `grid` sizes an auto column to min-content,
+          and `truncate` reports the whole untruncated string.
+
+          `items-start` rather than the grid default of `stretch`: "All clear —
           nothing needs attention" is the state this page is trying to be in, and
           stretched to the events panel's height it became a 340px empty box that
-          read as a rendering fault. Panels size to their content instead. */}
+          read as a rendering fault. It now governs the reel too, which must not
+          stretch to the height of two stacked panels for the same reason.
+
+          The 1.35/1 ratio is deliberately unchanged. It is worth revisiting now
+          that the bulk moved left and the right cell holds a fixed-size widget,
+          but there is no preview access from the build container, and a ratio is
+          exactly the kind of change that has to be looked at rather than
+          reasoned about. */}
       <div className="mt-3.5 grid items-start gap-3.5 [grid-template-columns:minmax(0,1fr)] lg:[grid-template-columns:minmax(0,1.35fr)_minmax(0,1fr)]">
-        <NeedsAttention posts={posts} now={now} />
-        <EventsPanel
-          events={events}
-          calendars={calendars}
+        <div className="flex min-w-0 flex-col gap-3.5">
+          <NeedsAttention posts={posts} now={now} />
+          <EventsPanel
+            events={events}
+            calendars={calendars}
+            now={now}
+            failed={eventsFailed}
+            onRetry={refetchEvents}
+            onCreate={handleCreateFromParsed}
+            onOpenManual={() => {
+              setEditingEvent(null)
+              setEventDialogOpen(true)
+            }}
+            onOpenEvent={(event) => {
+              setEditingEvent(event)
+              setEventDialogOpen(true)
+            }}
+            focusRef={aiInputRef}
+          />
+        </div>
+        <ReadyReel
+          items={reelItems}
           now={now}
-          failed={eventsFailed}
-          onRetry={refetchEvents}
-          onCreate={handleCreateFromParsed}
-          onOpenManual={() => {
-            setEditingEvent(null)
-            setEventDialogOpen(true)
+          loading={reelLoading}
+          failed={reelFailed}
+          onRetry={refetchReel}
+          // Clicking a face opens the ordinary new-post dialog with the export
+          // already attached. Deliberately not a second write path: PostDialog
+          // owns post creation, media_dropbox_path is the column the publish
+          // worker reads, and the reel only prefills the form.
+          onPick={(item) => {
+            setReelPick(item)
+            setPostDialogOpen(true)
           }}
-          onOpenEvent={(event) => {
-            setEditingEvent(event)
-            setEventDialogOpen(true)
-          }}
-          focusRef={aiInputRef}
         />
       </div>
 
@@ -349,7 +470,14 @@ export function HomeView() {
           setAttempt((a) => a + 1)
         }}
         post={null}
-        defaultStage="idea"
+        // An export sitting in Ready to Post is shot and cut, so it starts at
+        // the last stage before scheduling rather than at "idea". That is also
+        // what makes the next step one field: PostDialog auto-advances any of
+        // the pre-scheduled stages to `scheduled` the moment a date is set
+        // (STAGES_BEFORE_SCHEDULED), so filling in the time is the whole job.
+        defaultStage={reelPick ? 'editing' : 'idea'}
+        defaultDropboxPath={reelPick?.path ?? null}
+        defaultTitle={reelPick ? titleFromFilename(reelPick.name) : ''}
       />
 
       <IdeaDialog
