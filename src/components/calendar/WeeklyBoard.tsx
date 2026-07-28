@@ -35,12 +35,15 @@ import { CSS } from '@dnd-kit/utilities'
 import { addDays, format, isSameDay, isToday, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 import type { SocialPost, Idea } from '@/types/database'
-import { GLASS, INK, MOTION, STAGE, canHover, dayTint, platformStyle, TODAY_BORDER } from '@/lib/glass'
+import { GLASS, INK, MOTION, STAGE, canHover, dayTint, platformStyle, SELECTED_RING, TODAY_BORDER } from '@/lib/glass'
 import { PublishStatusBadge } from '@/components/ui/PublishStatusBadge'
 import { IdeaCard } from './IdeaCard'
 
 interface Props {
   weekStart: Date
+  /** The day the right panel is showing, outlined here so the two agree. */
+  selectedDay?: Date
+  onSelectDay?: (day: Date) => void
   posts: SocialPost[]
   ideas: Idea[]
   onAddPost: (date: Date) => void
@@ -225,7 +228,7 @@ function SortableIdeaCard({ idea }: { idea: Idea }) {
 
 /* ─────────────── Board ─────────────── */
 export function WeeklyBoard({
-  weekStart, posts, ideas, onAddPost, onPostClick, onMovePost, onMoveIdea,
+  weekStart, selectedDay, onSelectDay, posts, ideas, onAddPost, onPostClick, onMovePost, onMoveIdea,
 }: Props) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -355,6 +358,7 @@ export function WeeklyBoard({
           const dayPosts = posts.filter((p) => p.scheduled_at && isSameDay(parseISO(p.scheduled_at), day))
           const dayIdeas = ideas.filter((i) => i.date_start && isSameDay(parseISO(i.date_start), day))
           const todayCol = isToday(day)
+          const selectedCol = selectedDay ? isSameDay(day, selectedDay) : false
           const tint = dayTint(day.getDay())
           const readyCount = dayPosts.filter((p) => p.stage === 'scheduled' || p.stage === 'published').length
           const colItems = colOrder[dateKey] ?? []
@@ -384,11 +388,29 @@ export function WeeklyBoard({
                 borderRadius: 18,
                 backdropFilter: 'blur(12px)',
                 background: tint.bg,
-                border: `1px solid ${todayCol ? TODAY_BORDER : tint.border}`,
+                // 2px for today rather than 1px. At 1px the only difference from
+                // a normal column was rgba(9,66,94,.40) becoming
+                // rgba(20,16,20,.62) — a barely-darker hairline on tinted glass,
+                // which is why "which day is it" was still a puzzle.
+                border: todayCol
+                  ? `2px solid ${TODAY_BORDER}`
+                  : `1px solid ${tint.border}`,
+                // The selection is an outer ring, so it can sit on the same
+                // column as today's border without either being obscured.
+                boxShadow: selectedCol ? `0 0 0 2px ${SELECTED_RING}` : undefined,
               }}
             >
-              {/* Header — big readable date */}
-              <div className="flex items-baseline gap-[7px]">
+              {/* Header — big readable date, and the control that points the
+                  right panel at this day. A button rather than a div: it is
+                  genuinely interactive, and the column is otherwise reachable
+                  only by dragging a card into it. */}
+              <button
+                type="button"
+                onClick={() => onSelectDay?.(day)}
+                aria-pressed={selectedCol}
+                aria-label={`Show ${format(day, 'EEEE d MMMM')} in the day panel`}
+                className="flex w-full items-baseline gap-[7px] text-left"
+              >
                 <span style={{ fontFamily: 'var(--font-playfair)', fontSize: 30, fontWeight: 600, lineHeight: 1, color: INK.primary }}>
                   {format(day, 'd')}
                 </span>
@@ -398,6 +420,20 @@ export function WeeklyBoard({
                 >
                   {format(day, 'EEE').toUpperCase()}
                 </span>
+                {/* Said in words. Shading alone still asks you to compare seven
+                    columns and infer which one is different; a label answers the
+                    question outright, which is the actual need here. */}
+                {todayCol && (
+                  <span
+                    className="rounded-full px-[6px] py-[2px] tracking-[.10em]"
+                    style={{
+                      fontFamily: 'var(--font-mono-num)', fontSize: 9, fontWeight: 700,
+                      color: '#fff', background: TODAY_BORDER,
+                    }}
+                  >
+                    TODAY
+                  </span>
+                )}
                 {dayPosts.length > 0 && (
                   <span
                     className="ml-auto rounded-full px-[6px] py-[2px]"
@@ -406,7 +442,7 @@ export function WeeklyBoard({
                     {dayPosts.length}
                   </span>
                 )}
-              </div>
+              </button>
 
               {/* Ready progress */}
               {dayPosts.length > 0 && (

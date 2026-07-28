@@ -309,4 +309,72 @@ console.log('\nthe guarantee that this never modifies a Google event:')
   ok('step 5 added a field to an existing body rather than a new request')
 }
 
+
+// ── The sync lease ──────────────────────────────────────────────────────
+// Focus-sync makes overlapping syncs ordinary — a phone and a laptop waking to
+// the same calendar share no browser state to throttle against. Two runs both
+// see the same unpushed row and both create it in Google, leaving an orphan
+// duplicate that has to be cleaned up by hand.
+console.log('\nthe sync lease:')
+{
+  const { acquireSyncLease, SYNC_LEASE_MS } =
+    await import('../src/lib/google-calendar.ts')
+
+  // Minimal stand-in for the two calls the lease makes.
+  const leaseClient = ({ value = null, selectError = null, upsertError = null, throwOn = null } = {}) => {
+    const calls = []
+    return {
+      calls,
+      from(table) {
+        if (throwOn === table) throw new Error('table exploded')
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  maybeSingle: async () => {
+                    calls.push('select')
+                    return { data: value ? { value } : null, error: selectError }
+                  },
+                }
+              },
+            }
+          },
+          async upsert(row) {
+            calls.push('upsert')
+            this._row = row
+            return { error: upsertError }
+          },
+        }
+      },
+    }
+  }
+
+  const iso = (msAgo) => new Date(Date.now() - msAgo).toISOString()
+
+  assert.equal(await acquireSyncLease(leaseClient()), true)
+  ok2('no lease held -> acquired')
+
+  assert.equal(await acquireSyncLease(leaseClient({ value: iso(1000) })), false)
+  ok2('a lease taken a second ago -> refused, which is what stops the double push')
+
+  assert.equal(await acquireSyncLease(leaseClient({ value: iso(SYNC_LEASE_MS + 1000) })), true)
+  ok2('a stale lease -> acquired, so a crashed run cannot wedge sync permanently')
+
+  // Fail open, in all three ways it can fail. A duplicate event is recoverable;
+  // a calendar that silently stops syncing is not.
+  assert.equal(await acquireSyncLease(leaseClient({ selectError: { message: 'no such table' } })), true)
+  ok2('unreadable marker table -> proceeds unguarded rather than refusing to sync')
+
+  assert.equal(await acquireSyncLease(leaseClient({ upsertError: { message: 'RLS' } })), true)
+  ok2('un-writable marker -> still proceeds, rather than blocking on bookkeeping')
+
+  assert.equal(await acquireSyncLease(leaseClient({ throwOn: 'app_credentials' })), true)
+  ok2('a thrown client error -> proceeds; the lease is a guard, never a gate')
+
+  // A garbage value must not be read as a fresh lease and lock sync out.
+  assert.equal(await acquireSyncLease(leaseClient({ value: 'not a date' })), true)
+  ok2('an unparseable timestamp is treated as no lease, not as one held forever')
+}
+
 console.log(`\n${pass + p2} checks passed.\n`)

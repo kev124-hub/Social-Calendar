@@ -451,103 +451,188 @@ export function toAppEventRow(
   }
 }
 
+/**
+ * A short lease that stops two syncs running at once.
+ *
+ * `sweepUnpushedEvents` selects rows with a null `external_id` and pushes each
+ * one; nothing marks a row as being pushed. Two overlapping runs therefore both
+ * see the same event and both create it in Google — one row ends up pointing at
+ * one of the two, and the other is an orphan duplicate in a calendar that no
+ * longer matches the app. Cleaning that up is manual.
+ *
+ * That was close to unreachable while sync was a button someone pressed once.
+ * Focus-sync makes it ordinary: a phone and a laptop both waking to the same
+ * calendar is exactly the case, and they share no browser state to throttle
+ * against. So the guard has to live server-side.
+ *
+ * Leased rather than locked, in `app_credentials` — the same key/value store and
+ * the same shape as `warnOncePerInterval`'s markers. A crashed run cannot wedge
+ * sync permanently; the lease simply ages out.
+ *
+ * **Fails open.** If the table cannot be read or written — migration 006 not
+ * applied, RLS refusing — the sync proceeds unguarded rather than refusing to
+ * run at all. That restores exactly the previous behaviour, which is the right
+ * failure direction: a rare duplicate is recoverable, a calendar that silently
+ * stops syncing is not.
+ */
+export const SYNC_LEASE_KEY = 'calendar_sync_lease'
+export const SYNC_LEASE_MS = 2 * 60 * 1000
+
+/** Exported for tests — the fail-open branches are the ones worth pinning. */
+export async function acquireSyncLease(
+  supabase: ReturnType<typeof getServiceClient>
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('app_credentials')
+      .select('value')
+      .eq('key', SYNC_LEASE_KEY)
+      .maybeSingle()
+
+    if (!error && data?.value) {
+      const held = Date.parse(data.value)
+      if (Number.isFinite(held) && Date.now() - held < SYNC_LEASE_MS) return false
+    }
+
+    const { error: writeError } = await supabase
+      .from('app_credentials')
+      .upsert(
+        { key: SYNC_LEASE_KEY, value: new Date().toISOString(), expires_at: null },
+        { onConflict: 'key' }
+      )
+    // Could not take the lease: proceed anyway rather than block syncing.
+    if (writeError) console.warn(`Could not record the sync lease: ${writeError.message}`)
+    return true
+  } catch (err) {
+    console.warn('Sync lease check failed; proceeding unguarded:', err)
+    return true
+  }
+}
+
+/** Released early so a following sync is not made to wait out the whole lease. */
+async function releaseSyncLease(
+  supabase: ReturnType<typeof getServiceClient>
+): Promise<void> {
+  try {
+    await supabase.from('app_credentials').delete().eq('key', SYNC_LEASE_KEY)
+  } catch {
+    // Left to age out, which is what the lease is for.
+  }
+}
+
 export async function syncGoogleCalendar(timeZone?: string) {
   const supabase = getServiceClient()
   const integration = await getGoogleTokens()
   if (!integration) throw new Error('Google Calendar not connected')
 
-  const metadata = (integration.metadata ?? {}) as Record<string, unknown>
-  const selectedIds: string[] = (metadata.calendar_ids as string[]) ?? ['primary']
-  // The caller's zone when a browser triggered this, else the last one we saw.
-  // Only all-day dates depend on it; UTC is the honest fallback.
-  const zone = timeZone ?? (metadata.time_zone as string) ?? 'UTC'
+  // Checked after the connection test so a disconnected account still reports
+  // that clearly rather than as a skipped run.
+  if (!(await acquireSyncLease(supabase))) {
+    return { synced: 0, pushed: 0, pushFailures: [] as string[], skipped: true }
+  }
+  // try/finally so a Google or database failure releases the lease rather
+  // than making the next attempt look like a skipped run for two minutes.
+  try {
+    const metadata = (integration.metadata ?? {}) as Record<string, unknown>
+    const selectedIds: string[] = (metadata.calendar_ids as string[]) ?? ['primary']
+    // The caller's zone when a browser triggered this, else the last one we saw.
+    // Only all-day dates depend on it; UTC is the honest fallback.
+    const zone = timeZone ?? (metadata.time_zone as string) ?? 'UTC'
 
-  const timeMin = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-  const timeMax = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString()
+    const timeMin = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const timeMax = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString()
 
-  // Push before pulling. Anything swept up now comes back tagged and is
-  // filtered out below, rather than being pulled in the same run as a stranger.
-  const swept = await sweepUnpushedEvents(zone, timeMin, timeMax)
+    // Push before pulling. Anything swept up now comes back tagged and is
+    // filtered out below, rather than being pulled in the same run as a stranger.
+    const swept = await sweepUnpushedEvents(zone, timeMin, timeMax)
 
-  let totalUpserted = 0
+    let totalUpserted = 0
 
-  // Fetched once per sync rather than only when a calendar is missing, because
-  // the per-event zone needs it too: an event that carries no `start.timeZone`
-  // falls back to the zone of the calendar it lives on. One extra call on a
-  // manual sync is a fair price for not guessing.
-  const gcals = await listGoogleCalendars()
+    // Fetched once per sync rather than only when a calendar is missing, because
+    // the per-event zone needs it too: an event that carries no `start.timeZone`
+    // falls back to the zone of the calendar it lives on. One extra call on a
+    // manual sync is a fair price for not guessing.
+    const gcals = await listGoogleCalendars()
 
-  for (const calendarId of selectedIds) {
-    const gcal = gcals.find((c) => c.id === calendarId)
-    // The calendar's own zone, used only as that fallback. Left undefined
-    // rather than defaulted to UTC — an honest null beats a plausible lie that
-    // renders as a real wall clock.
-    const calendarZone = gcal?.timeZone
+    for (const calendarId of selectedIds) {
+      const gcal = gcals.find((c) => c.id === calendarId)
+      // The calendar's own zone, used only as that fallback. Left undefined
+      // rather than defaulted to UTC — an honest null beats a plausible lie that
+      // renders as a real wall clock.
+      const calendarZone = gcal?.timeZone
 
-    // Ensure calendar exists in our DB
-    const { data: existingCal } = await supabase
-      .from('calendars')
-      .select('id')
-      .eq('source', 'google')
-      .eq('external_id', calendarId)
-      .single()
-
-    let dbCalendarId = existingCal?.id
-    if (!dbCalendarId) {
-      const { data: newCal } = await supabase
+      // Ensure calendar exists in our DB
+      const { data: existingCal } = await supabase
         .from('calendars')
-        .insert({
-          name: gcal?.summary ?? calendarId,
-          color: gcal?.backgroundColor ?? '#4285F4',
-          source: 'google',
-          external_id: calendarId,
-          is_visible: true,
-        })
         .select('id')
+        .eq('source', 'google')
+        .eq('external_id', calendarId)
         .single()
-      dbCalendarId = newCal?.id
+
+      let dbCalendarId = existingCal?.id
+      if (!dbCalendarId) {
+        const { data: newCal } = await supabase
+          .from('calendars')
+          .insert({
+            name: gcal?.summary ?? calendarId,
+            color: gcal?.backgroundColor ?? '#4285F4',
+            source: 'google',
+            external_id: calendarId,
+            is_visible: true,
+          })
+          .select('id')
+          .single()
+        dbCalendarId = newCal?.id
+      }
+
+      if (!dbCalendarId) continue
+
+      // Fetch events from Google
+      let pageToken: string | undefined
+      do {
+        const data = await listGoogleEvents(calendarId, timeMin, timeMax, pageToken)
+        const items: GoogleEvent[] = data.items ?? []
+        pageToken = data.nextPageToken
+
+        if (!items.length) break
+
+        const rows = items
+          .filter((e) => e.status !== 'cancelled')
+          // Skip anything this app pushed. Without this the upsert below would
+          // overwrite the row's `source` and `calendar_id`, migrating our own
+          // event off its app calendar and blocking every later push.
+          .filter((e) => !isAppPushedEvent(e))
+          .map((e) => toAppEventRow(e, dbCalendarId, calendarZone))
+          .filter((r) => r.starts_at)
+
+        if (rows.length) {
+          const { error, count } = await supabase
+            .from('calendar_events')
+            .upsert(rows, { onConflict: 'external_id', count: 'exact' })
+          if (error) {
+            console.error('Upsert error:', error)
+            throw new Error(`Failed to upsert events: ${error.message}`)
+          }
+          totalUpserted += count ?? rows.length
+        }
+      } while (pageToken)
     }
 
-    if (!dbCalendarId) continue
+    // Update last synced time. `time_zone` is recorded so a sweep triggered
+    // without a browser still dates all-day events correctly.
+    await supabase.from('user_integrations')
+      .update({ metadata: { ...metadata, last_synced: new Date().toISOString(), calendar_ids: selectedIds, time_zone: zone } })
+      .eq('provider', 'google_calendar')
 
-    // Fetch events from Google
-    let pageToken: string | undefined
-    do {
-      const data = await listGoogleEvents(calendarId, timeMin, timeMax, pageToken)
-      const items: GoogleEvent[] = data.items ?? []
-      pageToken = data.nextPageToken
-
-      if (!items.length) break
-
-      const rows = items
-        .filter((e) => e.status !== 'cancelled')
-        // Skip anything this app pushed. Without this the upsert below would
-        // overwrite the row's `source` and `calendar_id`, migrating our own
-        // event off its app calendar and blocking every later push.
-        .filter((e) => !isAppPushedEvent(e))
-        .map((e) => toAppEventRow(e, dbCalendarId, calendarZone))
-        .filter((r) => r.starts_at)
-
-      if (rows.length) {
-        const { error, count } = await supabase
-          .from('calendar_events')
-          .upsert(rows, { onConflict: 'external_id', count: 'exact' })
-        if (error) {
-          console.error('Upsert error:', error)
-          throw new Error(`Failed to upsert events: ${error.message}`)
-        }
-        totalUpserted += count ?? rows.length
-      }
-    } while (pageToken)
+    return {
+      synced: totalUpserted,
+      pushed: swept.pushed,
+      pushFailures: swept.failures,
+      skipped: false,
+    }
+  } finally {
+    await releaseSyncLease(supabase)
   }
-
-  // Update last synced time. `time_zone` is recorded so a sweep triggered
-  // without a browser still dates all-day events correctly.
-  await supabase.from('user_integrations')
-    .update({ metadata: { ...metadata, last_synced: new Date().toISOString(), calendar_ids: selectedIds, time_zone: zone } })
-    .eq('provider', 'google_calendar')
-
-  return { synced: totalUpserted, pushed: swept.pushed, pushFailures: swept.failures }
 }
 
 // ─────────────────────────────────────────────

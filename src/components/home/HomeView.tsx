@@ -17,6 +17,7 @@ import { WeekStrip } from './WeekStrip'
 import { NeedsAttention } from './NeedsAttention'
 import { EventsPanel } from './EventsPanel'
 import { QuickActions } from './QuickActions'
+import { useFocusSync } from '@/lib/use-focus-sync'
 
 const READY_STAGES = new Set(['scheduled', 'published'])
 const QUEUED_STATUSES = new Set(['pending', 'processing'])
@@ -184,6 +185,12 @@ export function HomeView() {
   }, [eventsAttempt])
 
   const refetchEvents = useCallback(() => setEventsAttempt((a) => a + 1), [])
+
+  // Same throttle and the same in-flight guard as the calendar — the interval is
+  // shared through localStorage, so having both views ask does not double the work.
+  // /home is the page most likely to be opened cold in the morning, which is
+  // exactly when a Google-side change is most likely to be waiting.
+  useFocusSync({ onSynced: refetchEvents })
 
   // Throws on a failed write; AIEventInput renders the message. The refetch
   // only runs on success, so the list never implies an event that isn't there.

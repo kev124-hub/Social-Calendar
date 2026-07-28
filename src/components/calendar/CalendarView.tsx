@@ -35,6 +35,7 @@ import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { createEventFromParsed, deleteEvent, parsedLocalDate } from '@/lib/events'
 import { formatInZone, timeWithZone, offsetLabel } from '@/lib/zoned-time'
+import { useFocusSync } from '@/lib/use-focus-sync'
 import type { CalendarEvent, Calendar, SocialPost, Idea } from '@/types/database'
 import { EventDialog } from './EventDialog'
 import { CalendarManageDialog } from './CalendarManageDialog'
@@ -238,6 +239,21 @@ export function CalendarView() {
 
   useEffect(() => { loadData() }, [currentDate])
 
+  /**
+   * The day the right panel is showing, and the day outlined in the week board.
+   *
+   * Held here rather than inside RightPanel because the week board now points at
+   * it: two components cannot disagree about which day is selected if only one of
+   * them owns the answer.
+   */
+  const [panelDate, setPanelDate] = useState<Date>(new Date())
+
+  // Pull from Google on open and whenever you come back to the tab, throttled.
+  // The push side has always been immediate; this closes the other direction so
+  // an event created in Google is not invisible here until someone remembers to
+  // press Sync in Settings.
+  useFocusSync({ onSynced: loadData })
+
   async function loadData() {
     setLoading(true)
     const rangeStart = startOfMonth(subMonths(currentDate, 1)).toISOString()
@@ -436,6 +452,32 @@ export function CalendarView() {
 
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 })
 
+  /**
+   * The selection, snapped into the week actually on screen.
+   *
+   * Navigating to another week would otherwise leave the panel on a day that is
+   * no longer visible — Thursday of a fortnight ago, with nothing to say so.
+   * Today when the new week contains it, since that is what someone means by
+   * "this week", and the first day otherwise.
+   *
+   * Derived rather than corrected in an effect: an effect would need a setState
+   * during render-commit, which this project's lint rules reject, and deriving it
+   * cannot fall out of step with `weekStart` the way stored state can.
+   *
+   * MUST stay below `weekStart`. It first sat with the other state near the top of
+   * the component and read `weekStart` a couple of hundred lines before its
+   * declaration — a temporal dead zone error that crashed /calendar on render.
+   * `tsc` passes it because the read is inside a closure, where TypeScript cannot
+   * prove use-before-declaration; the closure is then invoked immediately, so the
+   * build is clean and the page is white.
+   */
+  const effectivePanelDate = (() => {
+    if (view !== 'week') return panelDate
+    const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+    if (days.some((d) => isSameDay(d, panelDate))) return panelDate
+    return days.find((d) => isToday(d)) ?? days[0]
+  })()
+
   return (
     <div className="flex h-full overflow-hidden">
 
@@ -553,6 +595,11 @@ export function CalendarView() {
           {view === 'week' && (
             <WeeklyBoard
               weekStart={weekStart}
+              selectedDay={effectivePanelDate}
+              // Clicking a day column points the right panel at it, and opens the
+              // panel if it was collapsed — otherwise the click looks broken,
+              // since the only visible result lives in the panel.
+              onSelectDay={(d) => { setPanelDate(d); setRightOpen(true) }}
               posts={posts}
               ideas={ideas}
               onAddPost={openAddPost}
@@ -605,7 +652,8 @@ export function CalendarView() {
           <RightPanel
             events={visibleEvents}
             onEventClick={openEditEvent}
-            initialDate={new Date()}
+            date={effectivePanelDate}
+            onDateChange={setPanelDate}
             calendars={calendars}
             onToggleCalendar={toggleCalendarVisibility}
             onEditCalendar={(cal) => { setEditingCalendar(cal); setManageDialogOpen(true) }}
