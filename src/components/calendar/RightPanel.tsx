@@ -11,7 +11,14 @@ import type { CalendarEvent, Calendar } from '@/types/database'
 interface Props {
   events: CalendarEvent[]
   onEventClick: (event: CalendarEvent) => void
-  initialDate?: Date
+  /**
+   * The day to show. Controlled by the parent rather than held here, so clicking
+   * a day in the week board points this panel at it — the panel and the board
+   * cannot disagree about which day is being looked at if only one of them owns
+   * the answer.
+   */
+  date: Date
+  onDateChange: (date: Date) => void
   calendars: Calendar[]
   onToggleCalendar: (cal: Calendar) => void
   onEditCalendar: (cal: Calendar) => void
@@ -21,13 +28,13 @@ interface Props {
 export function RightPanel({
   events,
   onEventClick,
-  initialDate,
+  date,
+  onDateChange,
   calendars,
   onToggleCalendar,
   onEditCalendar,
   onClose,
 }: Props) {
-  const [date, setDate] = useState<Date>(initialDate ?? new Date())
   const [calendarsOpen, setCalendarsOpen] = useState(false)
 
   const dateKey = format(date, 'yyyy-MM-dd')
@@ -103,7 +110,7 @@ export function RightPanel({
         {/* Day nav */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-border shrink-0">
           <button
-            onClick={() => setDate(subDays(date, 1))}
+            onClick={() => onDateChange(subDays(date, 1))}
             className="text-muted-foreground hover:text-foreground p-0.5 rounded"
           >
             <ChevronLeft size={13} />
@@ -113,11 +120,14 @@ export function RightPanel({
               'text-[11px] font-bold uppercase tracking-wide',
               isToday(date) ? 'text-primary' : 'text-foreground'
             )}>
-              {format(date, 'EEE d')}
+              {format(date, 'EEE d MMM')}
+              {/* Named, because this panel no longer always shows today — it
+                  follows whichever day is selected in the week board. */}
+              {isToday(date) && <span className="ml-1 font-normal normal-case opacity-70">· today</span>}
             </p>
           </div>
           <button
-            onClick={() => setDate(addDays(date, 1))}
+            onClick={() => onDateChange(addDays(date, 1))}
             className="text-muted-foreground hover:text-foreground p-0.5 rounded"
           >
             <ChevronRight size={13} />

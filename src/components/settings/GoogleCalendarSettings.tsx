@@ -56,6 +56,14 @@ export function GoogleCalendarSettings({
       body: JSON.stringify({ timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
     })
     const data = await res.json()
+    if (res.ok && data.skipped) {
+      // A sync was already running — the app now syncs itself when you return to
+      // it, so a manual press can genuinely land on top of one. Saying so beats
+      // reporting "Imported 0 events", which reads as "there was nothing there".
+      setSyncMsg('Sync already running — give it a moment and press again.')
+      setSyncing(false)
+      return
+    }
     if (res.ok) {
       // Report both directions. `pushed` is events created here that Google had
       // not got yet — usually zero, because the push happens at write time; a

@@ -44,6 +44,13 @@ export function dayTint(dow: number) {
 
 export const TODAY_BORDER = 'rgba(20,16,20,.62)'; // today = dark outline, never its own hue
 
+// The day the right panel is showing. Deliberately a different KIND of signal
+// from today's, not a different colour: today is named in words ("TODAY" in the
+// column header) and the selection is an outer ring. A day can be both at once,
+// so two treatments competing for the same border would make neither readable —
+// and a second hue here would break the rule above.
+export const SELECTED_RING = 'rgba(20,16,20,.78)';
+
 export const PLATFORM = {
   instagram: { label: 'Instagram', code: 'IG', fill: '#f1ccff', ink: '#7b2f9e', chip: 'rgba(226,180,246,.55)' },
   tiktok:    { label: 'TikTok',    code: 'TT', fill: '#91e0ff', ink: '#0b4f6c', chip: 'rgba(126,196,231,.50)' },
