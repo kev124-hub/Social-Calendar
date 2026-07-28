@@ -177,9 +177,34 @@ riviera-glass idiom.
 - **A local edit to a Google-sourced event is reverted by the next pull.** The
   upsert overwrites the mapped fields. This is why sync is on focus rather than a
   background cron — an edit vanishing while you watch is at least attributable.
-- The upcoming-events list caps at 5 with **no `+n more`**, unlike NeedsAttention.
+- ~~The upcoming-events list caps at 5 with no `+n more`.~~ **Wrong — it has one.**
+  `EventsPanel.tsx:254` renders `+{extra} more →` (`MAX_ROWS = 5`), confirmed on
+  screen showing "+34 MORE". This item was carried forward from an older handoff
+  without checking the code; corrected 28 July. A real nuance survives: the count
+  is computed off a capped `allUpcoming`, so beyond ~40 upcoming events the "+n"
+  understates — see the comment there.
 - The 24h window on failed posts, and `/home`'s 12s abort not being applied to
   `CalendarView`/`PipelineBoard` — flagged repeatedly, never ruled on.
+- **TripIt-fed events render a `GMT+0` marker — worth investigating.** Seen on
+  `/home` 28 July: "Check-in: TWA Hotel · 12:00 PM GMT+0" and "DL5316 RIC to JFK ·
+  3:42 PM GMT+0", both from the TripIt calendar, while Google-native events on the
+  same list carry no marker. So those rows' `time_zone` resolves to UTC while the
+  device is not UTC, and the marker is doing its job correctly.
+  **The question is whether UTC is the truth or a placeholder.** A flight out of
+  Richmond wants a Richmond wall clock; `3:42 PM GMT+0` is neither the device
+  reading nor the airport's. Two possibilities, and they need different fixes:
+  1. **The feed's instants are right** and the events genuinely carry UTC. Then the
+     display is honest but unhelpful, and the fix is presentational — for a foreign
+     zone on a compact row, showing the device reading may serve better than the
+     event's own.
+  2. **TripIt wrote a floating local wall clock and labelled it UTC.** Then the
+     stored instant is wrong by the offset, which also mis-orders "next up" and the
+     week strip. That is a data problem in the pull, not a rendering one.
+  **How to tell:** open one of those events in Google Calendar and compare its time
+  and zone against TripIt. Before per-event timezones these rendered in the device
+  zone, so this is a visible change in behaviour for TripIt rows specifically —
+  which makes it the most likely place for the timezone work to have made something
+  worse rather than better. Not yet diagnosed; not blocking.
 - **B7's Supabase inactivity question resolves ~1 August 2026.** Before then,
   silence proves nothing and nothing should be built. See § Stage B7.
 

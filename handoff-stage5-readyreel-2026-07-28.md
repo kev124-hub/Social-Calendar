@@ -57,28 +57,50 @@ video faces prove heavy.
 
 ---
 
-## Where it goes
+## Where it goes — Kevin specified this on 28 July, and it differs from the plan
 
-**`/home`, Row 3's right slot.** Not the Today pane.
+**`/home` Row 3's right slot, where the Events panel is now. Events move to sit
+UNDERNEATH "Needs attention", in the left column.**
 
-`src/components/home/HomeView.tsx` around line 300 already anticipates it:
+His reasoning, verbatim: *"At my volume of content its unlikely that the needs
+attention panel is ever going to be very large"* — so the left column has room
+below it, and Events does not need a full-width row of its own.
 
-> *Row 3 — needs-attention + events. Phase A shipped this full-width because the
-> right column had nothing in it yet; Phase B fills it. Both blocks are standalone,
-> so Phase C moving the events panel down to a full-width Row 4 (ReadyReel takes
-> this slot) stays a layout-only change.*
+```
+Row 3   ┌─────────────────────────┬──────────────────┐
+        │ Needs attention         │                  │
+        ├─────────────────────────┤    ReadyReel     │
+        │ Events                  │                  │
+        └─────────────────────────┴──────────────────┘
+```
 
-So the layout move is: **events panel → full-width Row 4; ReadyReel → Row 3's right
-slot.** Keep the explicit `minmax(0,1fr)` on the single-column case — a bare `grid`
-sizes an auto column to min-content, and `truncate` then reports the whole
-untruncated string. That comment is load-bearing; don't drop it.
+**This supersedes the home plan and the `HomeView.tsx` comment**, both of which say
+Phase C moves the events panel down to a *full-width Row 4*. It does not. There is
+no Row 4. Wrap `NeedsAttention` and `EventsPanel` in a stacked left cell and put
+ReadyReel in the right cell.
 
-**⚠️ `docs/design/riviera-glass/README.md` §4 puts ReadyReel inside the Today
-pane instead. That is the older, rejected layout.** The `/home` plan wins. §4 also
-describes a Today pane with no per-calendar toggles and no TimeGrid, which was
-ruled out — see the Stage 6 brief.
+The current markup (`src/components/home/HomeView.tsx`, Row 3) is:
 
----
+```tsx
+<div className="mt-3.5 grid items-start gap-3.5 [grid-template-columns:minmax(0,1fr)]
+                lg:[grid-template-columns:minmax(0,1.35fr)_minmax(0,1fr)]">
+  <NeedsAttention … />
+  <EventsPanel … />
+</div>
+```
+
+Three things in it are load-bearing — read their comments before editing:
+
+- **`items-start`** rather than the grid default of `stretch`. "All clear — nothing
+  needs attention" stretched to the events panel's height became a 340px empty box
+  that read as a rendering fault. Keep it: ReadyReel must not stretch to the left
+  column's height either.
+- **The explicit `minmax(0,1fr)`** on the single-column case. A bare `grid` sizes an
+  auto column to min-content, and `truncate` then reports the whole untruncated
+  string.
+- **The `1.35fr / 1fr` ratio.** Worth revisiting now that the bulkier content moves
+  left and the right cell holds a fixed-size 3D widget — but change it deliberately,
+  not by accident.
 
 ## The design: use v2, which is sparse-first
 
