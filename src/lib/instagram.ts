@@ -310,9 +310,11 @@ export async function debugToken(opts: {
  * Login apps, which is what this app's Meta app is. If Kevin's token instead came
  * from Instagram Login (an instagram.com token rather than a Facebook one), the
  * refresh endpoint is `graph.instagram.com/refresh_access_token` with
- * `grant_type=ig_refresh_token`. Verify against current Meta docs the first time
- * a real refresh runs; the worker treats a failed refresh as non-fatal and emails,
- * so a wrong guess here degrades to "Kevin rotates by hand", never to a lost post.
+ * `grant_type=ig_refresh_token`.
+ *
+ * Observed 13–23 Sept 2026: for this app's token the call succeeds but returns the
+ * remaining lifetime, so it does not extend anything. ig-token.ts checks whether
+ * the expiry actually moved and warns when it did not.
  */
 export async function exchangeLongLivedToken(opts: {
   appId: string
