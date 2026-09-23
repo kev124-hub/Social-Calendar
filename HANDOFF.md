@@ -96,11 +96,21 @@ device zone, which is a **permanently supported path**, not a migration window.
 | Auth + config | Cron returned `{"ok":true,...,"token":{"status":"ok","daysLeft":59}}` — proves CRON_SECRET, all four Meta env vars, a live `debug_token` round trip |
 | **Served quality** | `DbON80djKs7` at ~15 min = 1080×1920 VP9 @2.27 Mbps + 720×1280 VP9 @1.57 Mbps + HE-AAC — full parity with a native upload, birth bitrates byte-identical to the B0 API arm |
 
-### The one path still unproven
-**`fb_exchange_token` token refresh.** It cannot run until ~**13 Sept 2026**, when
-the token crosses the 10-days-remaining threshold. It fails non-fatally by design
-and a missing `META_APP_ID`/`META_APP_SECRET` triggers a daily warning email, so
-the worst case is a manual rotation. **Do not describe it as tested.**
+### Token refresh: exercised 13–23 Sept 2026, and it does NOT extend
+`fb_exchange_token` ran every 5 minutes from ~13 Sept. Each call "succeeded" but
+returned the token's **remaining** lifetime, so the expiry never moved; the app
+recorded each as `refreshed`, sent no warning, and publishing stopped at 08:31 PDT
+on 23 Sept (first email 4 minutes later). Kevin rotated by hand the same day; the
+new token expires **22 Nov 2026**.
+
+Fixed in `src/lib/ig-token.ts` + `src/lib/ig-token-policy.ts`
+(tests: `tests/ig-token.test.mjs`): a refresh counts only if the expiry moves by
+≥1 day; otherwise a daily warning from 10 days out, with the manual steps; a
+changed `INSTAGRAM_USER_ACCESS_TOKEN` env var is adopted automatically (before,
+the stale DB row kept winning, so the email's own fix did nothing).
+
+**Expect a manual rotation about every 60 days** unless the token type changes
+(e.g. a non-expiring system-user token — not researched or tested yet).
 
 ### Stage numbering — check it before acting on a number
 

@@ -241,7 +241,7 @@ See `.env.local.example`.
 | `META_APP_ID` | yes | Meta app id |
 | `META_APP_SECRET` | yes | Meta app secret |
 | `INSTAGRAM_USER_ID` | yes | IG Business/Creator account id |
-| `INSTAGRAM_USER_ACCESS_TOKEN` | bootstrap | Long-lived token. Seeds the DB; after the first refresh the `app_credentials` table wins. |
+| `INSTAGRAM_USER_ACCESS_TOKEN` | yes | Long-lived token. Seeds the DB; the `app_credentials` table wins after that — until this value changes, which the app treats as a manual rotation and adopts. |
 
 `META_APP_ID` / `META_APP_SECRET` are needed not just to refresh the token but to
 *inspect its expiry at all* — without them the app can't tell when publishing is
@@ -359,15 +359,25 @@ cannot use the Content Publishing API.
 
 The app stays in **Development mode** — single user, so no App Review is needed.
 
-**Token lifecycle.** Long-lived tokens last ~60 days. The publish cron refreshes
-the token automatically once fewer than 10 days remain, and stores the result in
-the `app_credentials` table (a Vercel env var can't be rewritten by the running
-app, so env-only storage would mean manual rotation every two months or
-auto-publishing silently stops). The env var is only the bootstrap value; once the
-table has a token, the table wins.
+**Token lifecycle.** Long-lived tokens last ~60 days. Once fewer than 10 days
+remain, the publish cron asks Meta to renew the token and stores the result in the
+`app_credentials` table (a Vercel env var can't be rewritten by the running app).
 
-If refresh ever fails, you get a warning email once a day rather than a surprise
-outage.
+A renewal only counts if the expiry date actually moves. On 23 Sept 2026 it did
+not: Meta answered every renewal with the old token's remaining time, the app
+logged each one as a success, and the token died with no warning. Now, anything
+short of a real extension emails a warning once a day from 10 days out, with the
+manual steps included.
+
+**Renewing by hand** (the email repeats these):
+1. Graph API Explorer → your app → **Get User Access Token** with
+   `instagram_basic` + `instagram_content_publish` → **Generate Access Token**.
+2. That token lasts ~1 hour. Open it in the Access Token Debugger and click
+   **Extend Access Token**; copy the new ~60-day token.
+3. Set `INSTAGRAM_USER_ACCESS_TOKEN` in Vercel and **redeploy**.
+
+No database step: the app keeps a fingerprint of the env token and adopts a
+changed one on the next run (within ~5 minutes).
 
 Meta's documented ceiling is **50 API-published posts per rolling 24 hours**; the
 worker counts against it and defers the remainder rather than erroring.
